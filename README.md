@@ -1,0 +1,2 @@
+# event-store-adapter
+
