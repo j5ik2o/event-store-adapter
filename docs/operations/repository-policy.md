@@ -82,4 +82,6 @@ takt を使うリポジトリは、次の配置にそろえる。テンプレー
 |:--|:--|:--|
 | scala の publish の認証情報 | scala | GPG 鍵は更新後に署名まで通った（2026-10-03）。いまは Central Portal へのアップロードが `Server redirected too many times` で失敗する。`SONATYPE_USERNAME`・`SONATYPE_PASSWORD` が 2023 年の値のままで、成功している java（2025-04 更新）と異なるため、Central Portal のユーザートークンへの更新が要る。オーナー（7 章） |
 | Renovate の PR の棚卸し（5 章） | 全リポジトリ | コーディネーター。初回は 2026-10-03 に実施（Java 11 と両立しないメジャー更新は理由付きでブロック） |
-| ブロック中のメジャー更新の見直し | java・kotlin・scala | Gradle 9 への移行（java #679、kotlin #807）と scala の JDK 25（#848）を 2026-10-03 にオーナーが承認した。マージ後に、Spotless 8・foojay 1.0・sbt 2 などのブロックを見直す。JUnit 6 は Java 11 でのテストを続ける限りブロックのまま。コーディネーター |
+| scala の renovate.json の旧形式のルール | scala | `sbt-ci-release` を止めるルールが旧形式のキー（`managers`・`packageNames`）のままで、検証時に移行の警告が出る。kotlin の Spotless の旧ルールと同じく効いていない可能性があるので、整理する。コーディネーター |
+
+ブロック中のメジャー更新は、Gradle 9 への移行（java #679、kotlin #807）と scala の JDK 25（#848）のあと、2026-10-03 に見直した。java #681・kotlin #815 で Spotless 8（kotlin は ktlint 1.8.0 による整形を含む）と foojay 1.0 のブロックを外し、Gradle を動かす JDK を 25 にした。Gradle 用の JDK の更新は LTS だけを許可する。JUnit 6 と、テスト用の JDK 11 のメジャー更新は、Java 11 でのテストを続ける限りブロックのまま。scala の sbt 2 は、プラグインの対応とビルド定義の移行を待つ理由に書き直して、ブロックを続ける（#850）。
