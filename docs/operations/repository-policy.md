@@ -76,9 +76,10 @@ takt を使うリポジトリは、次の配置にそろえる。テンプレー
 | `.takt/config.yaml` | 言語、並列数、利用上限での切り替え | `tools/takt/config.yaml` |
 | `.claude/settings.json` | takt のステップに `.takt/` の部品を読ませない設定 | インストーラーが既存の設定にマージする |
 | `scripts/run-takt.sh`、`scripts/takt-claude.sh` | claude のアカウントを指定して takt を起動する入口 | `tools/takt/scripts/` |
-| `mise.toml` | takt の版の固定(`"npm:takt" = "0.67.1"`) | 各リポジトリ |
+| `mise.toml` | takt の版の固定(`"npm:takt" = "0.68.0"`) | 各リポジトリ |
 
 - 役割の分担は、設計(計画・再計画)を Opus 5.5、レビュー(裁定・最終ゲート)を GPT-6.1-Sol、実装(テスト・実装)を Sonnet 5.5 とする。GPT-6.1-Sol を使うので、takt は 0.67 以上にする。
+- takt の版は、全リポジトリで同じにする。Renovate では takt を更新しない(各リポジトリの `renovate.json` で、理由を `description` に書いて止める)。新しい版に上げるときは、コーディネーターが上の表の版と全リポジトリの `mise.toml` を同時に上げる。Renovate の自動更新に任せると、リポジトリごとに更新の日がずれて版がばらつくからである(2026-10-03 に 0.67.1 と 0.68.0 が混在した。同日オーナーと合意)。
 - `~/.takt/runtime.yaml`(全体の設定)には何も書かない。全体の設定はすべてのプロジェクトに重ねて読まれるからである。
 - 実行ログやセッションの状態(`.takt/runs/` など)はコミットしない。インストーラーが作る `.takt/.gitignore` に従う。
 - インストーラーが入れる `.takt/tools/`(DDD 向けワークフロー用の ddd-lint。約 13MB で、プラットフォーム固有のバイナリを含む)はコミットしない。標準のワークフロー flash-default では使わないからである。`.takt/.gitignore` の `tools/` の許可を外す。インストーラーを入れ直したときは、この変更をやり直す。
@@ -92,6 +93,7 @@ takt を使うリポジトリは、次の配置にそろえる。テンプレー
 | scala の publish の認証情報 | scala | GPG 鍵は更新後に署名まで通った（2026-10-03）。いまは Central Portal へのアップロードが `Server redirected too many times` で失敗する。`SONATYPE_USERNAME`・`SONATYPE_PASSWORD` が 2023 年の値のままで、成功している java（2025-04 更新）と異なるため、Central Portal のユーザートークンへの更新が要る。オーナー（7 章） |
 | js の npm への公開 | js | 2026-09-16 の v3.1.1 の release から、`NPM_TOKEN` での公開が `404 Not Found - PUT` で失敗している（npm への最後の公開は 2026-06-02）。v3.1.1 は npm に出ておらず、`latest` は `3.1.1-snapshot.5` を指す。2026-10-03 にオーナーが npm の Trusted Publishing（OIDC）への切り替えと、Snapshot を `snapshot` タグで公開することを決め、#983 で workflow を整えた（`id-token: write`、Snapshot の `--tag snapshot`、既存のタグを手動で公開し直す入口）。同日、オーナーの承認を得て npm の CLI（`npm trust github`）で `release.yml` と `snapshot.yml` を信頼済みの公開元に登録し、release の手動起動で v3.1.1 を OIDC で公開した。続けて、spanner を peer 依存にした変更（#986）を含む 4.0.0 を、オーナーの判断でメジャーとしてリリースし（#989 で移行の注記を追加）、タグの push から OIDC と provenance 付きで公開できることを確かめた（`latest` は 4.0.0）。残りは、`NPM_TOKEN` の削除と、npm のパッケージ設定の Publishing access をトークンを許さない設定に切り替えること（オーナー、7 章）、そのあとの workflow からの `NODE_AUTH_TOKEN` の削除（コーディネーター） |
 | rs の crates.io への公開の認証（1 章「公開の workflow」） | rs | タグの push で `CARGO_TOKEN` を使って公開している。crates.io は Trusted Publishing に対応しているので、OIDC に移す（#239。crates.io 側の登録が済むまでマージしない）。crates.io 側の登録はオーナーの承認を得て行い、移したあと `CARGO_TOKEN` は削除する（7 章）。コーディネーターとオーナー |
+| takt の版の統一（8 章） | 全リポジトリ | Renovate の自動マージで rs・java・kotlin・go が 0.68.0、js・scala が 0.67.1 になっていた。全リポジトリを 0.68.0 にそろえ、`renovate.json` で takt の更新を止める。コーディネーター |
 | Renovate の PR の棚卸し（5 章） | 全リポジトリ | コーディネーター。初回は 2026-10-03 に実施（Java 11 と両立しないメジャー更新は理由付きでブロック）。同日の 2 回目で、lint で止まっていた js の biome・jest の minor 更新を #978 で通した。js の mise.toml の sbt は、使っておらず conda-forge に 2.0.10 がなく `mise install` が失敗したので、#984 で外した。同日の 3 回目で、js の pnpm 12 を #982 で取り込み、TypeScript 7 は ts-jest と ts-node が直接対応するまで #987 でブロックした。`@google-cloud/spanner` v9 は、公開 API が利用者の `Database` を受け取るため、オーナーの判断で peerDependencies（`^8.7.1 \|\| ^9.0.0`）に移した（#986） |
 
 ブロック中のメジャー更新は、Gradle 9 への移行（java #679、kotlin #807）と scala の JDK 25（#848）のあと、2026-10-03 に見直した。java #681・kotlin #815 で Spotless 8（kotlin は ktlint 1.8.0 による整形を含む）と foojay 1.0 のブロックを外し、Gradle を動かす JDK を 25 にした。Gradle 用の JDK の更新は LTS だけを許可する。JUnit 6 と、テスト用の JDK 11 のメジャー更新は、Java 11 でのテストを続ける限りブロックのまま。scala の sbt 2 は、プラグインの対応とビルド定義の移行を待つ理由に書き直して、ブロックを続ける（#850）。scala の `sbt-ci-release` を止める旧形式のルールは、効いていなかったので削除した（#852）。
