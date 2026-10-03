@@ -81,7 +81,11 @@ takt を使うリポジトリは、次の配置にそろえる。テンプレー
 | 残っている項目 | 対象 | 担当 |
 |:--|:--|:--|
 | scala の publish の認証情報 | scala | GPG 鍵は更新後に署名まで通った（2026-10-03）。いまは Central Portal へのアップロードが `Server redirected too many times` で失敗する。`SONATYPE_USERNAME`・`SONATYPE_PASSWORD` が 2023 年の値のままで、成功している java（2025-04 更新）と異なるため、Central Portal のユーザートークンへの更新が要る。オーナー（7 章） |
-| Renovate の PR の棚卸し（5 章） | 全リポジトリ | コーディネーター。初回は 2026-10-03 に実施（Java 11 と両立しないメジャー更新は理由付きでブロック） |
-| scala の renovate.json の旧形式のルール | scala | `sbt-ci-release` を止めるルールが旧形式のキー（`managers`・`packageNames`）のままで、検証時に移行の警告が出る。kotlin の Spotless の旧ルールと同じく効いていない可能性があるので、整理する。コーディネーター |
+| js の npm への公開 | js | 2026-09-16 の v3.1.1 の release から、`NPM_TOKEN` での公開が `404 Not Found - PUT` で失敗している（npm への最後の公開は 2026-06-02）。v3.1.1 は npm に出ておらず、`latest` は `3.1.1-snapshot.5` を指す。2026-10-03 にオーナーが npm の Trusted Publishing（OIDC）への切り替えと、Snapshot を `snapshot` タグで公開することを決め、#983 で workflow を整えた（`id-token: write`、Snapshot の `--tag snapshot`、既存のタグを手動で公開し直す入口）。残りは、オーナーによる npmjs.com での信頼済みの公開元の登録（`snapshot.yml` と `release.yml`）と、そのあとの v3.1.1 の手動での再公開、OIDC での公開を確かめたあとの `NPM_TOKEN` の削除。オーナー（7 章）とコーディネーター |
+| js の Snapshot の公開の流れ | js | Snapshot workflow は、公開の前にバージョンを上げるコミットを main に push する。公開に失敗しても main のバージョンだけが上がり、push のたびに開いている PR が main より古くなる。また、ジョブの中で作ったコミットが `GITHUB_SHA` に反映されないので、Snapshot には provenance を付けていない（#983）。流れの見直しはオーナーの判断を待つ |
+| js の `@google-cloud/spanner` のメジャー更新 | js | v9（#979）は Node 22 以上が必要で、js の前提（Node 24 以上）とは両立する。ただし公開 API の `SpannerEventStoreInput` が利用者から `Database` を受け取るので、v9 に上げると利用者も v9 への移行が要る。上げるか、peerDependencies にするか、次のメジャーまでブロックするかはオーナーの判断を待つ |
+| Renovate の PR の棚卸し（5 章） | 全リポジトリ | コーディネーター。初回は 2026-10-03 に実施（Java 11 と両立しないメジャー更新は理由付きでブロック）。同日の 2 回目で、lint で止まっていた js の biome・jest の minor 更新を #978 で通した。js の mise.toml の sbt は、使っておらず conda-forge に 2.0.10 がなく `mise install` が失敗したので、#984 で外した |
 
-ブロック中のメジャー更新は、Gradle 9 への移行（java #679、kotlin #807）と scala の JDK 25（#848）のあと、2026-10-03 に見直した。java #681・kotlin #815 で Spotless 8（kotlin は ktlint 1.8.0 による整形を含む）と foojay 1.0 のブロックを外し、Gradle を動かす JDK を 25 にした。Gradle 用の JDK の更新は LTS だけを許可する。JUnit 6 と、テスト用の JDK 11 のメジャー更新は、Java 11 でのテストを続ける限りブロックのまま。scala の sbt 2 は、プラグインの対応とビルド定義の移行を待つ理由に書き直して、ブロックを続ける（#850）。
+ブロック中のメジャー更新は、Gradle 9 への移行（java #679、kotlin #807）と scala の JDK 25（#848）のあと、2026-10-03 に見直した。java #681・kotlin #815 で Spotless 8（kotlin は ktlint 1.8.0 による整形を含む）と foojay 1.0 のブロックを外し、Gradle を動かす JDK を 25 にした。Gradle 用の JDK の更新は LTS だけを許可する。JUnit 6 と、テスト用の JDK 11 のメジャー更新は、Java 11 でのテストを続ける限りブロックのまま。scala の sbt 2 は、プラグインの対応とビルド定義の移行を待つ理由に書き直して、ブロックを続ける（#850）。scala の `sbt-ci-release` を止める旧形式のルールは、効いていなかったので削除した（#852）。
+
+java と kotlin の Snapshot workflow は、PR のブランチで CI が成功したときにも、そのブランチを checkout して Sonatype に公開していた（2023 年から。2026-10-02 には Renovate のブランチが公開され、マージ後に消えたブランチの checkout で失敗した）。2026-10-03 に java #682、kotlin #817・#818 で、main への push と定期実行の CI が成功し、かつ起動した時点で main の先頭であるコミットだけを、その SHA で公開するように直し、main で公開が成功することを確かめた。js の Snapshot workflow は、もともと main だけで動く。
