@@ -2,13 +2,13 @@
 
 [共通契約](../core-contract.md)を DynamoDB で実現する方法を定める。テーブル構成、キーの導出、属性、トランザクション、読み取り、スナップショット保持、Streams による変更フィードを扱う。
 
-> この文書は、合意済みの事項（P-1〜P-16、ADR-0001〜0004）から導いた部分と、この文書で新たに必要になった判断 D-1〜D-9 からなる。D-1〜D-9 は 2026-10-02 に合意した（1 章）。PR #1 のレビューを受けて足した P-17〜P-22 は、2026-10-03 に合意した（[README の合意状況](../README.md#合意状況)）。「未合意」と書いた箇所は、まだ合意していない。変更するときはオーナーの合意を得る。
+> この文書は、合意済みの事項（P-1〜P-16、ADR-0001〜0004）から導いた部分と、この文書で新たに必要になった判断 D-1〜D-9 からなる。D-1〜D-9 は 2026-10-02 に合意した（1 章）。キーは P-29（2026-10-03 合意）で、論理シャードから aid 文字列に改めた。PR #1 のレビューを受けて足した P-17〜P-22 は、2026-10-03 に合意した（[README の合意状況](../README.md#合意状況)）。「未合意」と書いた箇所は、まだ合意していない。変更するときはオーナーの合意を得る。
 
 ## 1. この文書で決めた判断
 
 | # | 判断 | 草案での案 | 主な代案 | 状態 |
 |:--|:--|:--|:--|:--|
-| D-1 | 設定項目の置き場所と形 | journal テーブルに 1 件置く。キーは予約値。ストアの生成時に書くので、実行時の権限に journal への PutItem / GetItem が要る | head テーブルに置く、専用テーブルを作る | 合意（2026-10-02） |
+| D-1 | 設定項目の置き場所と形 | journal テーブルに 1 件置く。キーは予約値。ストアの生成時に書くので、実行時の権限に journal への PutItem / GetItem が要る | head テーブルに置く、専用テーブルを作る | 合意（2026-10-02）。P-29 で、記録するのを配置の版だけにした |
 | D-2 | ヘッド項目の属性 | aid・type_name・seq_nr・events（リスト） | type_name を持たない、events をリストにしない | 合意（2026-10-02） |
 | D-3 | TTL 待ちの履歴を除外する仕組み | 印のない履歴だけが載る KEYS_ONLY の疎な GSI。旧来の snapshot の `(aid, seq_nr)` GSI は廃止。期限を設けない項目は `ttl` 属性を持たない（rs v3 は 0 を入れていた） | 絞り込み条件（FilterExpression）で除外する | 合意（2026-10-02） |
 | D-4 | Streams のレコード形式 | `NEW_IMAGE` | `NEW_AND_OLD_IMAGES` | 合意（2026-10-02） |
@@ -24,71 +24,46 @@
 
 | テーブル | パーティションキー | ソートキー | GSI | Streams |
 |:--|:--|:--|:--|:--|
-| journal | `pkey` (S) | `skey` (S) | `(aid, seq_nr)`、射影は ALL | 無効 |
-| snapshot | `pkey` (S) | `skey` (S) | `(aid, active_history_seq_nr)`、射影は KEYS_ONLY（D-3、2026-10-02 合意） | 無効 |
-| head | `pkey` (S) | `skey` (S) | なし | 有効（D-4、2026-10-02 合意） |
+| journal | `aid` (S) | `seq_nr` (N) | なし | 無効 |
+| snapshot | `aid` (S) | `skey` (N) | `(aid, active_history_seq_nr)`、射影は KEYS_ONLY（D-3、2026-10-02 合意） | 無効 |
+| head | `aid` (S) | なし | なし | 有効（D-4、2026-10-02 合意） |
 
-- **必須 DY-1**: journal の GSI は、リプレイでペイロードまで読むので射影を ALL にする。
 - **必須 DY-2**: snapshot テーブルでは DynamoDB の TTL を属性 `ttl` で有効にする（TTL 方式の保持を使う場合）。
 - **必須 DY-3**: Streams は head テーブルでだけ有効にする。journal の Streams では集約単位の順序が保証されないので、変更フィードの供給源にしない（[ADR-0002](../../adr/0002-separate-aggregate-head-from-snapshot.md)）。
 
-## 3. キーの導出
+DY-1（journal の GSI の射影）は削除した。journal の GSI をやめたからである（P-29）。
 
-### 3.1 シャード番号とパーティションキー
+## 3. キー（P-29、2026-10-03 合意）
 
-- **必須 DY-4**: シャード番号は、集約 ID の値部分の UTF-8 バイト列に FNV-1a 64 を適用し、符号なし 64bit 整数をシャード数で割った余りとする（[ADR-0003](../../adr/0003-fix-storage-value-representations.md)）。
+- **必須 DY-16**: 3 つのテーブルとも、パーティションキーは aid 文字列（共通契約 T-1）そのものとする。論理シャードもハッシュも使わない（[ADR-0006](../../adr/0006-key-by-aggregate-id-instead-of-logical-shards.md)）。
+- **必須 DY-17**: journal のソートキーは seq_nr（数値）とする。snapshot のソートキー `skey`（数値）は、現在の項目が 0、履歴がその履歴の seq_nr である。head はソートキーを持たない。
 
-```
-h = 0xcbf29ce484222325
-for b in utf8(value):
-    h = (h XOR b) * 0x100000001b3   (mod 2^64)
-shard = h mod shard_count
-```
+型名が `UserAccount`、値が `01H42K4ABWQ5V2XQEP3A48VE0Z` の集約の例を示す。
 
-- **必須 DY-5**: 3 つのテーブルとも、パーティションキーは `${型名}-${シャード番号}` とする。
-- **必須 DY-6**: シャード数は 1 以上で、テーブルを作った後は変えない。
-
-符号付き 64bit 整数しか持たない言語（Java の `long` など）では、剰余に符号なしの演算（`Long.remainderUnsigned` など）を使う。下の入出力表の `a` と `01H42K4ABWQ5V2XQEP3A48VE0Z` はハッシュ値が 2^63 以上なので、符号付きの剰余では誤った値になる。
-
-| 値 | FNV-1a 64 | シャード数 64 | シャード数 10 |
-|:--|:--|:--|:--|
-| `a` | `0xaf63dc4c8601ec8c` | 12 | 6 |
-| `01H42K4ABWQ5V2XQEP3A48VE0Z` | `0xadb103af5fe2a91a` | 26 | 4 |
-| `01H42KBHCW1BZG504J4ZXKA2F2` | `0x0aa990285e0388ca` | 10 | 8 |
-| `ユーザー` | `0x309f20171820053e` | 62 | 0 |
-
-この表の値は Go の `hash/fnv` と Python の独自実装で一致を確かめた。適合テストデータに収録する。
-
-### 3.2 ソートキーと aid
-
-型名が `UserAccount`、値が `01H42K4ABWQ5V2XQEP3A48VE0Z`、シャード数が 64 の集約の例を示す。
-
-| 項目 | pkey | skey |
+| 項目 | パーティションキー | ソートキー |
 |:--|:--|:--|
-| ジャーナル（seq_nr = 3） | `UserAccount-26` | `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z-3` |
-| スナップショット（現在） | `UserAccount-26` | `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z-0` |
-| スナップショット（履歴、seq_nr = 3） | `UserAccount-26` | `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z-3` |
-| ヘッド | `UserAccount-26` | `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z` |
+| ジャーナル（seq_nr = 3） | `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z` | `seq_nr` = 3 |
+| スナップショット（現在） | `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z` | `skey` = 0 |
+| スナップショット（履歴、seq_nr = 3） | `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z` | `skey` = 3 |
+| ヘッド | `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z` | なし |
 
-aid 属性の値は、どの項目でも `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z` である（共通契約 T-1）。
+集約の項目は、パーティションキーの完全一致で読む。前方一致を使わないので、別の集約の項目が混ざることはない。
 
-- **必須 DY-7**: ソートキーの前方一致で検索しない。値に `-` を含む集約があると、前方一致が別の集約の項目にも当たるからである。集約単位の検索は GSI の aid で行う。
+DY-4〜DY-7（シャード番号、`${型名}-${シャード番号}` のパーティションキー、シャード数の不変、ソートキーの前方一致の禁止）は削除した。論理シャードをやめたからである（P-29）。規則の番号は再利用しない。
 
 ## 4. 設定項目と照合（D-1、2026-10-02 合意）
 
-シャード数とハッシュ方式を記録した設定項目を、journal テーブルに 1 件置く。journal テーブルは Streams を使わないので変更フィードに混ざらず、aid と seq_nr を持たないので GSI にも載らない。
+配置の版を記録した設定項目を、journal テーブルに 1 件置く。journal テーブルは Streams を使わないので、変更フィードに混ざらない。
 
 | 属性 | 値 |
 |:--|:--|
-| pkey | `__event-store-adapter__` |
-| skey | `config` |
-| shard_count (N) | シャード数 |
-| hash (S) | `fnv1a64` |
+| aid | `__config__` |
+| seq_nr | `0` |
 | layout_version (N) | この文書が定める配置の版。初版は `1` |
 
-通常の項目の pkey は数字で終わるので、この予約値とは衝突しない。
+aid 文字列は必ず `-` を含むので（共通契約 T-1、T-11）、`-` を含まないこの予約値とは衝突しない。seq_nr の 0 もイベントには使わない（共通契約 W-6）。シャード数とハッシュ方式は、論理シャードをやめたので記録しない（P-29）。
 
-- **必須 DY-8**: ストアを生成するとき、設定項目を `attribute_not_exists(pkey)` の条件付きで書き込む。テーブルの作成はライブラリの外だが、この書き込みはライブラリが行うので、実行時の権限に journal テーブルへの PutItem と GetItem が要る。すでにあれば読み、shard_count・hash・layout_version のどれかが自分の設定と違えば、設定エラーを返して生成を止める（共通契約 4 章）。条件付き書き込みが失敗した後のこの読み取りは、強整合読み取り（`ConsistentRead = true`）で行う。2 つの生成が競合したとき、結果整合の読み取りでは、先に書いた側の設定項目が見えないことがあるからである（P-19、2026-10-03 合意）。
+- **必須 DY-8**: ストアを生成するとき、設定項目を `attribute_not_exists(aid)` の条件付きで書き込む。テーブルの作成はライブラリの外だが、この書き込みはライブラリが行うので、実行時の権限に journal テーブルへの PutItem と GetItem が要る。すでにあれば読み、layout_version が自分の版と違えば、設定エラーを返して生成を止める（共通契約 4 章）。条件付き書き込みが失敗した後のこの読み取りは、強整合読み取り（`ConsistentRead = true`）で行う。2 つの生成が競合したとき、結果整合の読み取りでは、先に書いた側の設定項目が見えないことがあるからである（P-19、2026-10-03 合意）。
 
 ## 5. 項目の属性
 
@@ -96,9 +71,8 @@ aid 属性の値は、どの項目でも `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z
 
 | 属性 | 型 | 内容 |
 |:--|:--|:--|
-| pkey / skey | S | 3 章 |
-| aid | S | aid 文字列 |
-| seq_nr | N | イベントの seq_nr |
+| aid | S | aid 文字列。パーティションキー |
+| seq_nr | N | イベントの seq_nr。ソートキー |
 | occurred_at | N | Unix エポックからのナノ秒 |
 | manifest | S | イベントの manifest（省略時は空文字列） |
 | payload | B | 直列化したペイロード |
@@ -109,8 +83,8 @@ aid 属性の値は、どの項目でも `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z
 
 | 属性 | 型 | 現在 | 履歴 | 内容 |
 |:--|:--|:--|:--|:--|
-| pkey / skey | S | ○ | ○ | 3 章 |
-| aid | S | ○ | ○ | aid 文字列 |
+| aid | S | ○ | ○ | aid 文字列。パーティションキー |
+| skey | N | ○ | ○ | ソートキー。現在は 0、履歴はその履歴の seq_nr |
 | seq_nr | N | ○ | ○ | スナップショットが反映済みの seq_nr |
 | manifest | S | ○ | ○ | スナップショットの manifest（省略時は空文字列） |
 | payload | B | ○ | ○ | 直列化した集約状態 |
@@ -122,8 +96,7 @@ aid 属性の値は、どの項目でも `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z
 
 | 属性 | 型 | 内容 |
 |:--|:--|:--|
-| pkey / skey | S | 3 章 |
-| aid | S | aid 文字列 |
+| aid | S | aid 文字列。パーティションキー |
 | type_name | S | 型名。購読側が型ごとに絞り込むために使う |
 | seq_nr | N | 直近に追記したイベントの seq_nr |
 | events | L | 直前の書き込みで追記したイベントのリスト。要素は M で、seq_nr (N)・occurred_at (N)・manifest (S)・payload (B) を持つ |
@@ -134,12 +107,12 @@ aid 属性の値は、どの項目でも `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z
 
 ### 6.1 トランザクションの構成
 
-1 回の書き込みは 1 つの `TransactWriteItems` で行う（共通契約 H-1）。
+1 回の書き込みは 1 つの `TransactWriteItems` で行う。トランザクションが成功した時点が確定である（共通契約 H-1）。
 
 | アクション | 対象 | 条件 | 含める場合 |
 |:--|:--|:--|:--|
-| Put | ジャーナル項目 | `attribute_not_exists(pkey)` | 常に |
-| Put | ヘッド項目 | `attribute_not_exists(pkey)` | 新規作成（seq_nr = 1） |
+| Put | ジャーナル項目 | `attribute_not_exists(aid)` | 常に |
+| Put | ヘッド項目 | `attribute_not_exists(aid)` | 新規作成（seq_nr = 1） |
 | Update | ヘッド項目 | `seq_nr = :prev`（`:prev` は event.seq_nr − 1） | 更新（seq_nr > 1） |
 | Put | 現在のスナップショット項目 | なし（ヘッドの条件で直列化される） | スナップショットを書く場合 |
 | Put | 履歴のスナップショット項目 | なし | スナップショットを書き、保持件数を設定している場合 |
@@ -174,8 +147,9 @@ D-7 の草案: DynamoDB の項目は 400KB が上限で、ヘッド項目にも�
 
 ### 7.2 イベント
 
-- **必須 DY-11**: journal の GSI を `aid = :aid AND seq_nr >= :seq_nr` で Query し、seq_nr の昇順で返す。`LastEvaluatedKey` が返る間は続きを読み、すべて読み切ってから返す（共通契約 R-5）。
-- **必須 DY-14**: GSI の読み取りは結果整合しか選べず、直前に確定したイベントが含まれないことがある。そこで DY-11 の前に、ヘッド項目を強整合の `GetItem` で読み、その seq_nr を h とする。ヘッドがなければ、空の列を返す。h が seqNr 以上なら、返す列が seqNr から h まで欠けずに並ぶまで、間隔を空けて DY-11 を読み直す（W-8 によりジャーナルに欠番はないので、欠けていれば反映の遅れである）。読み直しの回数の上限は設定で与え、超えたら保存先エラーを返す。h より後に確定したイベントが含まれていてもよい。これで共通契約 R-5 の「読み取りを始めた時点で確定していたイベントをすべて返す」を満たす（2026-10-03 合意、P-26）。
+- **必須 DY-11**: journal を `aid = :aid AND seq_nr >= :seq_nr` で、強整合読み取り（`ConsistentRead = true`）の Query をし、seq_nr の昇順で返す。`LastEvaluatedKey` が返る間は続きを読み、すべて読み切ってから返す。強整合読み取りなので、読み取りを始めた時点で確定していたイベントはすべて含まれる（共通契約 R-5）（P-29、2026-10-03 合意で、GSI の読み取りから本体の読み取りに改めた）。
+
+DY-14（ヘッドを強整合で読み、GSI の結果がその seq_nr に届くまで読み直す。P-26）は削除した。ジャーナルを本体から強整合で読めるようになり、要らなくなったからである（P-29）。
 
 ## 8. スナップショット保持（D-3、2026-10-02 合意）
 
