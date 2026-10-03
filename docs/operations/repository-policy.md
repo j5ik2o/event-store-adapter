@@ -86,12 +86,11 @@ takt を使うリポジトリは、次の配置にそろえる。テンプレー
 
 ## 適合状況（2026-10-03）
 
-1〜4 章と 8 章は、6 リポジトリすべてで適合している。必須チェックは `CI Success` だけで、strict が有効（会話の解決の必須は無効）、マージは squash のみ、CI の全ジョブに `timeout-minutes` があり、workflow で動く AI レビューと独自のスレッドのゲートはない。同日に足した 1 章の「公開の workflow」には、java・kotlin・js・scala が適合している（scala は #853、js は手動実行の CI を除く #990 も含む）。rs は crates.io の OIDC への移行の途中である（下の表）。go はパッケージの登録先に公開しないので対象外。8 章の takt の版は、同日に 6 リポジトリとも 0.68.0 にそろえ、Renovate では更新しない設定にした（rs #240、js #992、java #686、scala #854、kotlin #822、go #383）。
+1〜4 章と 8 章は、6 リポジトリすべてで適合している。必須チェックは `CI Success` だけで、strict が有効（会話の解決の必須は無効）、マージは squash のみ、CI の全ジョブに `timeout-minutes` があり、workflow で動く AI レビューと独自のスレッドのゲートはない。同日に足した 1 章の「公開の workflow」には、java・kotlin・js・scala・rs が適合している（scala は #853、js は手動実行の CI を除く #990、rs は #239 も含む）。go はパッケージの登録先に公開しないので対象外。8 章の takt の版は、同日に 6 リポジトリとも 0.68.0 にそろえ、Renovate では更新しない設定にした（rs #240、js #992、java #686、scala #854、kotlin #822、go #383）。
 
 | 残っている項目 | 対象 | 担当 |
 |:--|:--|:--|
-| scala の v1.0.338 の公開 | scala | 2026-10-03 にオーナーが `SONATYPE_USERNAME`・`SONATYPE_PASSWORD` を Central Portal のユーザートークンに更新し、同日 12:27 UTC の Snapshot で 2.13 と 3 の公開が通った。ただし、更新の前に動いたタグ `v1.0.338` の release（同日 02:38 UTC）は、Central Portal へのアップロードが HTTP 401 で失敗しており、Maven Central に出ていない。失敗したジョブを再実行して公開するかは、オーナーが決める。オーナー |
-| rs の crates.io への公開の認証（1 章「公開の workflow」） | rs | 2026-10-03 にオーナーが crates.io で Trusted Publishing を登録し、#239 をマージした。タグの push で、`rust-lang/crates-io-auth-action` が OIDC で得たトークンを使って公開する。最初の OIDC での公開は v3.0.4 になる（毎日 00:00 UTC の定期実行で、変更があれば作られる）。公開を確かめたら、オーナーが `CARGO_TOKEN` を削除する（7 章）。コーディネーターとオーナー |
+| crates.io の API トークン `CARGO_TOKEN`（7 章） | rs ほか | rs は OIDC に移り、GitHub の Secret `CARGO_TOKEN` はオーナーが削除した（2026-10-03）。crates.io 側の同じ名前のトークンは、グループ外の prop-check-rs・oni-comb-rs・fraktor-rs などの公開の workflow も同じ名前の Secret で使っているとみられる。取り消すと、それらの公開が失敗する。取り消すかどうかはオーナーの判断を待つ。オーナー |
 | Renovate の PR の棚卸し（5 章） | 全リポジトリ | コーディネーター。初回は 2026-10-03 に実施（Java 11 と両立しないメジャー更新は理由付きでブロック）。同日の 2 回目で、lint で止まっていた js の biome・jest の minor 更新を #978 で通した。js の mise.toml の sbt は、使っておらず conda-forge に 2.0.10 がなく `mise install` が失敗したので、#984 で外した。同日の 3 回目で、js の pnpm 12 を #982 で取り込み、TypeScript 7 は ts-jest と ts-node が直接対応するまで #987 でブロックした。`@google-cloud/spanner` v9 は、公開 API が利用者の `Database` を受け取るため、オーナーの判断で peerDependencies（`^8.7.1 \|\| ^9.0.0`）に移した（#986） |
 
 ブロック中のメジャー更新は、Gradle 9 への移行（java #679、kotlin #807）と scala の JDK 25（#848）のあと、2026-10-03 に見直した。java #681・kotlin #815 で Spotless 8（kotlin は ktlint 1.8.0 による整形を含む）と foojay 1.0 のブロックを外し、Gradle を動かす JDK を 25 にした。Gradle 用の JDK の更新は LTS だけを許可する。JUnit 6 と、テスト用の JDK 11 のメジャー更新は、Java 11 でのテストを続ける限りブロックのまま。scala の sbt 2 は、プラグインの対応とビルド定義の移行を待つ理由に書き直して、ブロックを続ける（#850）。scala の `sbt-ci-release` を止める旧形式のルールは、効いていなかったので削除した（#852）。
@@ -101,5 +100,9 @@ java と kotlin の Snapshot workflow は、PR のブランチで CI が成功�
 js の Snapshot workflow は、公開の前にバージョンを上げるコミットを main に push していた（公開に失敗しても版だけが上がり、push のたびに開いている PR が main より古くなり、provenance も付けられなかった）。同日、オーナーの判断で、版をジョブの中だけで決めて（`X.Y.Z-snapshot.<run_number>.<run_attempt>`）main には push しない形にし、公開の条件を java・kotlin とそろえた（#985）。main で `snapshot` タグに provenance 付きで公開され、`latest` が動かないことを確かめた。
 
 js の npm への公開は、2026-09-16 の v3.1.1 の release から、`NPM_TOKEN` での公開が `404 Not Found - PUT` で失敗していた。2026-10-03 に、オーナーの判断で npm の Trusted Publishing（OIDC）に切り替えた。#983 で workflow を整え（`id-token: write`、Snapshot の `--tag snapshot`、既存のタグを手動で公開し直す入口）、オーナーの承認を得て npm の CLI（`npm trust github`）で `release.yml` と `snapshot.yml` を信頼済みの公開元に登録した。v3.1.1 を OIDC で公開し直し、spanner を peer 依存にした変更（#986）を含む 4.0.0 を、オーナーの判断でメジャーとしてリリースした（#989 で移行の注記を追加。`latest` は 4.0.0）。続けてオーナーが `NPM_TOKEN` を削除し、npm の Publishing access をトークンを許さない設定（`mfa=publish`）に切り替えた。workflow からも `NODE_AUTH_TOKEN` を外し（#991）、main でトークンなしに、Snapshot を OIDC と provenance 付きで公開できることを確かめた（`4.0.1-snapshot.5405.1`）。
+
+rs の crates.io への公開は、2026-10-03 にオーナーが crates.io で Trusted Publishing を登録し、#239 で `rust-lang/crates-io-auth-action` が OIDC で得たトークンを使う形に移した。`lib-bump-version` を手動で起動して v3.0.4 を作り、OIDC で公開できることを確かめた（crates.io の版に GitHub の実行の発行元情報が付く）。
+
+scala の publish は、2026-10-03 にオーナーが `SONATYPE_USERNAME`・`SONATYPE_PASSWORD` を Central Portal のユーザートークンに更新して直った（同日 12:27 UTC の Snapshot で 2.13 と 3 の公開が通った）。更新の前に Central Portal へのアップロードが HTTP 401 で失敗していたタグ `v1.0.338` の release は、失敗したジョブを再実行して Maven Central に公開した。また、毎日バージョンを上げる workflow が `fix(ci):` のようなスコープ付きのコミットを数えておらず、v1.0.337（2025-04）から v1.0.338 まで約 300 コミットのあいだ、新しい版が作られていなかった。rs と同じ条件に直した（#855）。
 
 js の Spanner の emulator テスト（任意で実行するもの）は、最新の emulator イメージに shell がなく起動待ちで失敗していた。直す過程で、書き込みが拒否されたときにトランザクションをロールバックしていない実装のバグが見つかり、spanner v8 では待ち続ける原因になっていたので、ロールバックを足して直した（#988。v8・v9 とも全件成功）。
