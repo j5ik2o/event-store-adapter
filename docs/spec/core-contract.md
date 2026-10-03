@@ -55,7 +55,7 @@
 
 ## 2. 集約ヘッド
 
-集約ヘッドは集約ごとに 1 件あり、直近の seq_nr と、直前の書き込みで追記したイベント封筒を持つ（[ADR-0002](../adr/0002-separate-aggregate-head-from-snapshot.md)）。楽観ロックの照合には、ヘッドの seq_nr を使う（[ADR-0004](../adr/0004-use-seq-nr-for-optimistic-locking.md)）。
+集約ヘッドは集約ごとに 1 件あり、直近の seq_nr と、直前の書き込みで追記したイベント封筒を持つ。ヘッドは最初の追記（seq_nr = 1）で作られ、それまでは存在しない（W-3、R-1）（[ADR-0002](../adr/0002-separate-aggregate-head-from-snapshot.md)）。楽観ロックの照合には、ヘッドの seq_nr を使う（[ADR-0004](../adr/0004-use-seq-nr-for-optimistic-locking.md)）。
 
 - **必須 H-1**: 追記は、ジャーナルへの追記と集約ヘッドの更新を 1 つの原子的な書き込みで行う。スナップショットを伴う場合は、それも同じ書き込みに含める。
 - **必須 H-2**: 楽観ロックの照合はヘッドの seq_nr に対して行う。スナップショットは照合に使わない。
