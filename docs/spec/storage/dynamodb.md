@@ -61,16 +61,16 @@ shard = h mod shard_count
 
 ### 3.2 ソートキーと aid
 
-型名が `user-account`、値が `01H42K4ABWQ5V2XQEP3A48VE0Z`、シャード数が 64 の集約の例を示す。
+型名が `UserAccount`、値が `01H42K4ABWQ5V2XQEP3A48VE0Z`、シャード数が 64 の集約の例を示す。
 
 | 項目 | pkey | skey |
 |:--|:--|:--|
-| ジャーナル（seq_nr = 3） | `user-account-26` | `user-account-01H42K4ABWQ5V2XQEP3A48VE0Z-3` |
-| スナップショット（現在） | `user-account-26` | `user-account-01H42K4ABWQ5V2XQEP3A48VE0Z-0` |
-| スナップショット（履歴、seq_nr = 3） | `user-account-26` | `user-account-01H42K4ABWQ5V2XQEP3A48VE0Z-3` |
-| ヘッド | `user-account-26` | `user-account-01H42K4ABWQ5V2XQEP3A48VE0Z` |
+| ジャーナル（seq_nr = 3） | `UserAccount-26` | `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z-3` |
+| スナップショット（現在） | `UserAccount-26` | `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z-0` |
+| スナップショット（履歴、seq_nr = 3） | `UserAccount-26` | `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z-3` |
+| ヘッド | `UserAccount-26` | `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z` |
 
-aid 属性の値は、どの項目でも `user-account-01H42K4ABWQ5V2XQEP3A48VE0Z` である（共通契約 T-1）。
+aid 属性の値は、どの項目でも `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z` である（共通契約 T-1）。
 
 - **必須 DY-7**: ソートキーの前方一致で検索しない。値に `-` を含む集約があると、前方一致が別の集約の項目にも当たるからである。集約単位の検索は GSI の aid で行う。
 
@@ -128,7 +128,7 @@ aid 属性の値は、どの項目でも `user-account-01H42K4ABWQ5V2XQEP3A48VE0
 | seq_nr | N | 直近に追記したイベントの seq_nr |
 | events | L | 直前の書き込みで追記したイベントのリスト。要素は M で、seq_nr (N)・occurred_at (N)・manifest (S)・payload (B) を持つ |
 
-共通契約 H-3 により、events の要素は現状 1 件である。将来の一括追記に備えてリストにしておく。type_name は pkey の前方一致でも求まるが、型名に `-` を含むと別の型にも当たるので、独立した属性にする。
+共通契約 H-3 により、events の要素は現状 1 件である。将来の一括追記に備えてリストにしておく。type_name は aid 文字列の最初の `-` まで（共通契約 T-11）としても求まるが、購読側が文字列を分解せずに型ごとに絞り込めるよう、独立した属性にする。
 
 ## 6. 書き込み
 
@@ -223,7 +223,7 @@ rs v3 の配置からは、全件の書き直しが要る。パーティショ�
 
 1. 新しい 3 つのテーブルを作り、設定項目を書く。
 2. 旧テーブルへの書き込みを止める。書き直しの間に書き込みが続くと取りこぼすからである。
-3. 旧 journal テーブルを Scan し、各項目を新しいキーで新 journal に書く。属性は v3 と同じ形なので、キーと aid の書式（共通契約 T-1）だけを変える。型名と値は、旧 pkey の末尾のシャード番号と、旧 skey の末尾の seq_nr を取り除いて取り出す。Scan は、書き込みを止めた後に強整合読み取り（`ConsistentRead = true`）で行い、`LastEvaluatedKey` が返らなくなるまで続ける。結果整合の読み取りや 1 ページだけの読み取りでは、イベントを取りこぼしたまま旧テーブルを捨てることになるからである（P-20、2026-10-03 合意）。
+3. 旧 journal テーブルを Scan し、各項目を新しいキーで新 journal に書く。属性は v3 と同じ形なので、キーと aid の書式（共通契約 T-1）だけを変える。型名と値は、旧 pkey の末尾のシャード番号と、旧 skey の末尾の seq_nr を取り除いて取り出す。rs v3 は型名に `-` を許していたので、`-` を含む旧型名は、利用者が移行の入力として与える対応表で新しい型名に置き換える（共通契約 T-11）。対応表にない `-` を含む旧型名を見つけたら、移行を止める（P-23、2026-10-03 合意）。Scan は、書き込みを止めた後に強整合読み取り（`ConsistentRead = true`）で行い、`LastEvaluatedKey` が返らなくなるまで続ける。結果整合の読み取りや 1 ページだけの読み取りでは、イベントを取りこぼしたまま旧テーブルを捨てることになるからである（P-20、2026-10-03 合意）。
 4. 集約ごとに、新 journal の最大の seq_nr を求め、ヘッド項目を作る。events には最大の seq_nr のイベントを入れる。rs v3 の current 項目の seq_nr はスナップショットの位置なので、ヘッドの seq_nr には使わない。
 5. 旧 snapshot テーブルを Scan し、現在の項目と履歴を新しいキーで書く。Scan の読み方は手順 3 と同じである（P-20、2026-10-03 合意）。version 属性は捨てる。`ttl` が 0 の項目は属性を持たせず、印のない履歴には `active_history_seq_nr` を付ける。rs v3 の項目は manifest を持たないので、空文字列を入れる（共通契約 T-10 の省略時の値）（P-21、2026-10-03 合意）。
 6. 新しいテーブルを使う版のライブラリで書き込みを再開する。
