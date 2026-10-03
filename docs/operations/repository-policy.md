@@ -103,6 +103,6 @@ js の npm への公開は、2026-09-16 の v3.1.1 の release から、`NPM_TOK
 
 rs の crates.io への公開は、2026-10-03 にオーナーが crates.io で Trusted Publishing を登録し、#239 で `rust-lang/crates-io-auth-action` が OIDC で得たトークンを使う形に移した。`lib-bump-version` を手動で起動して v3.0.4 を作り、OIDC で公開できることを確かめた（crates.io の版に GitHub の実行の発行元情報が付く）。
 
-scala の publish は、2026-10-03 にオーナーが `SONATYPE_USERNAME`・`SONATYPE_PASSWORD` を Central Portal のユーザートークンに更新して直った（同日 12:27 UTC の Snapshot で 2.13 と 3 の公開が通った）。更新の前に Central Portal へのアップロードが HTTP 401 で失敗していたタグ `v1.0.338` の release は、失敗したジョブを再実行して Maven Central に公開した。また、毎日バージョンを上げる workflow が `fix(ci):` のようなスコープ付きのコミットを数えておらず、v1.0.337（2025-04）から v1.0.338 まで約 300 コミットのあいだ、新しい版が作られていなかった。rs と同じ条件に直した（#855）。
+scala の publish は、2026-10-03 にオーナーが `SONATYPE_USERNAME`・`SONATYPE_PASSWORD` を Central Portal のユーザートークンに更新して直った（同日 12:27 UTC の Snapshot で 2.13 と 3 の公開が通った）。更新の前に Central Portal へのアップロードが HTTP 401 で失敗していたタグ `v1.0.338` の release は、失敗したジョブを再実行して Maven Central に公開した。また、毎日バージョンを上げる workflow が `fix(ci):` のようなスコープ付きのコミットを数えておらず、v1.0.337（2025-04）から v1.0.338 まで約 300 コミットのあいだ、新しい版が作られていなかった。rs と同じ条件に直し（#855）、同日に手動で起動して v1.0.339 を作り、Maven Central に公開されることを確かめた。
 
 js の Spanner の emulator テスト（任意で実行するもの）は、最新の emulator イメージに shell がなく起動待ちで失敗していた。直す過程で、書き込みが拒否されたときにトランザクションをロールバックしていない実装のバグが見つかり、spanner v8 では待ち続ける原因になっていたので、ロールバックを足して直した（#988。v8・v9 とも全件成功）。
