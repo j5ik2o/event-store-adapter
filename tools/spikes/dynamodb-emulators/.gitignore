@@ -1,0 +1,4 @@
+.venv/
+__pycache__/
+pr-body.md
+!results/*.log

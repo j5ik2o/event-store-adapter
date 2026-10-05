@@ -1,0 +1,95 @@
+
+LocalStack version: 2.1.0
+LocalStack build date: 2023-05-25
+LocalStack build git hash: 67b55096
+
+2026-10-05T11:01:40.683  INFO --- [-functhread2] hypercorn.error            : Running on https://0.0.0.0:4566 (CTRL + C to quit)
+2026-10-05T11:01:40.683  INFO --- [-functhread2] hypercorn.error            : Running on https://0.0.0.0:4566 (CTRL + C to quit)
+2026-10-05T11:01:41.845  INFO --- [  MainThread] localstack.utils.bootstrap : Execution of "require" took 978.00ms
+2026-10-05T11:01:41.849  INFO --- [  MainThread] localstack.utils.bootstrap : Execution of "preload_services" took 990.73ms
+Ready.
+2026-10-05T11:01:42.153  INFO --- [   asgi_gw_0] localstack.utils.bootstrap : Execution of "require" took 504.65ms
+2026-10-05T11:01:42.334  INFO --- [   asgi_gw_0] localstack.request.aws     : AWS dynamodb.ListTables => 200
+2026-10-05T11:01:42.440  INFO --- [   asgi_gw_1] l.s.k.kinesis_mock_server  : Creating kinesis backend for account 000000000000
+2026-10-05T11:01:44.408  INFO --- [-functhread9] l.s.k.kinesis_mock_server  : [io-compute-blocker-14] INFO  2026-10-05 11:01:44,407 k.m.KinesisMockService contextId=26db15cf-c0ac-11f1-a11c-7321cba30268, cacheConfig={"awsAccountId":"000000000000","awsRegion":"us-east-1","createStreamDuration":{"length":500,"unit":"MILLISECONDS"},"deleteStreamDuration":{"length":500,"unit":"MILLISECONDS"},"deregisterStreamConsumerDuration":{"length":500,"unit":"MILLISECONDS"},"initializeStreams":null,"mergeShardsDuration":{"length":500,"unit":"MILLISECONDS"},"onDemandStreamCountLimit":10,"persistConfig":{"fileName":"000000000000.json","interval":{"length":5,"unit":"SECONDS"},"loadIfExists":true,"path":"/var/lib/localstack/tmp/state/kinesis","shouldPersist":true},"registerStreamConsumerDuration":{"length":500,"unit":"MILLISECONDS"},"shardLimit":100,"splitShardDuration":{"length":500,"unit":"MILLISECONDS"},"startStreamEncryptionDuration":{"length":500,"unit":"MILLISECONDS"},"stopStreamEncryptionDuration":{"length":500,"unit":"MILLISECONDS"},"updateShardCountDuration":{"length":500,"unit":"MILLISECONDS"}} - Logging Cache Config
+2026-10-05T11:01:44.779  INFO --- [-functhread9] l.s.k.kinesis_mock_server  : [io-compute-blocker-16] INFO  2026-10-05 11:01:44,779 k.m.KinesisMockService  - Starting Kinesis TLS Mock Service on port 37011
+2026-10-05T11:01:44.779  INFO --- [-functhread9] l.s.k.kinesis_mock_server  : [io-compute-blocker-16] INFO  2026-10-05 11:01:44,779 k.m.KinesisMockService  - Starting Kinesis Plain Mock Service on port 52451
+2026-10-05T11:01:44.784  INFO --- [-functhread9] l.s.k.kinesis_mock_server  : [io-compute-15] INFO  2026-10-05 11:01:44,784 k.m.KinesisMockService contextId=271538a0-c0ac-11f1-a11c-7321cba30268 - Starting persist data loop
+2026-10-05T11:01:45.066  INFO --- [   asgi_gw_0] localstack.request.aws     : AWS dynamodb.CreateTable => 200
+2026-10-05T11:01:45.085  INFO --- [   asgi_gw_1] localstack.request.aws     : AWS dynamodb.CreateTable => 200
+2026-10-05T11:01:45.106  INFO --- [   asgi_gw_0] localstack.request.aws     : AWS dynamodb.CreateTable => 200
+2026-10-05T11:01:45.145  INFO --- [   asgi_gw_1] localstack.request.aws     : AWS dynamodb.DescribeTable => 200
+2026-10-05T11:01:45.152  INFO --- [   asgi_gw_0] localstack.request.aws     : AWS dynamodb.DescribeTable => 200
+2026-10-05T11:01:45.164  INFO --- [   asgi_gw_1] localstack.request.aws     : AWS dynamodb.DescribeTable => 200
+2026-10-05T11:01:45.199  WARN --- [   asgi_gw_1] l.s.a.i.docker_runtime_exe : WARNING: Docker not available in the LocalStack container but required to run Lambda functions. Please add the Docker volume mount "/var/run/docker.sock:/var/run/docker.sock" to your LocalStack startup. https://docs.localstack.cloud/user-guide/aws/lambda/#docker-not-available
+2026-10-05T11:01:45.423  INFO --- [   asgi_gw_0] localstack.request.aws     : AWS dynamodb.PutItem => 200
+2026-10-05T11:01:45.445  INFO --- [-functhread9] l.s.k.kinesis_mock_server  : [io-compute-5] WARN  2026-10-05 11:01:45,444 k.m.cache.Cache x-amzn-RequestId=2778b564-c0ac-11f1-a11c-7321cba30268, action=PutRecord, contextId=2778b563-c0ac-11f1-a11c-7321cba30268, x-amz-id-2=w/1uwDQ9Sq8Ct5LHiN3Ekxr4l2iwbOWpkU1Q4+C3GYATlgzxhOyHtucRjuRqTpzhPdjthmL6oHxr4cyVih+uLXkqUZagbPqh, contentType=application/x-amz-json-1.1, streamName=__ddb_stream_spike-head - Putting record was unuccessful
+2026-10-05T11:01:45.445  INFO --- [-functhread9] l.s.k.kinesis_mock_server  : kinesis.mock.ResourceInUseException: Stream arn:aws:kinesis:us-east-1:000000000000:stream/__ddb_stream_spike-head is not currently ACTIVE or UPDATING.
+2026-10-05T11:01:45.445  INFO --- [-functhread9] l.s.k.kinesis_mock_server  : at kinesis.mock.validations.CommonValidations$.isStreamActiveOrUpdating(CommonValidations.scala:116)
+2026-10-05T11:01:45.445  INFO --- [-functhread9] l.s.k.kinesis_mock_server  : at kinesis.mock.api.PutRecordRequest.$anonfun$putRecord$4(PutRecordRequest.scala:41)
+2026-10-05T11:01:45.445  INFO --- [-functhread9] l.s.k.kinesis_mock_server  : at scala.util.Either.flatMap(Either.scala:352)
+2026-10-05T11:01:45.445  INFO --- [-functhread9] l.s.k.kinesis_mock_server  : at kinesis.mock.api.PutRecordRequest.$anonfun$putRecord$3(PutRecordRequest.scala:38)
+2026-10-05T11:01:45.445  INFO --- [-functhread9] l.s.k.kinesis_mock_server  : at scala.util.Either.flatMap(Either.scala:352)
+2026-10-05T11:01:45.445  INFO --- [-functhread9] l.s.k.kinesis_mock_server  : at kinesis.mock.api.PutRecordRequest.$anonfun$putRecord$2(PutRecordRequest.scala:35)
+2026-10-05T11:01:45.445  INFO --- [-functhread9] l.s.k.kinesis_mock_server  : at scala.util.Either.flatMap(Either.scala:352)
+2026-10-05T11:01:45.445  INFO --- [-functhread9] l.s.k.kinesis_mock_server  : at kinesis.mock.api.PutRecordRequest.$anonfun$putRecord$1(PutRecordRequest.scala:32)
+2026-10-05T11:01:45.445  INFO --- [-functhread9] l.s.k.kinesis_mock_server  : at cats.effect.kernel.SyncRef.spin$4(SyncRef.scala:90)
+2026-10-05T11:01:45.445  INFO --- [-functhread9] l.s.k.kinesis_mock_server  : at cats.effect.kernel.SyncRef.$anonfun$modify$1(SyncRef.scala:94)
+2026-10-05T11:01:45.445  INFO --- [-functhread9] l.s.k.kinesis_mock_server  : at cats.effect.IOFiber.runLoop(IOFiber.scala:403)
+2026-10-05T11:01:45.445  INFO --- [-functhread9] l.s.k.kinesis_mock_server  : at cats.effect.IOFiber.asyncContinueSuccessfulR(IOFiber.scala:1330)
+2026-10-05T11:01:45.445  INFO --- [-functhread9] l.s.k.kinesis_mock_server  : at cats.effect.IOFiber.run(IOFiber.scala:119)
+2026-10-05T11:01:45.445  INFO --- [-functhread9] l.s.k.kinesis_mock_server  : at cats.effect.unsafe.WorkerThread.run(WorkerThread.scala:585)
+2026-10-05T11:01:45.454  INFO --- [functhread22] localstack.utils.threads   : Thread run method <function EventForwarder.forward_to_targets.<locals>._forward at 0xffff871dadd0>(None) failed: An error occurred (ResourceInUseException) when calling the PutRecord operation: Stream arn:aws:kinesis:us-east-1:000000000000:stream/__ddb_stream_spike-head is not currently ACTIVE or UPDATING. Traceback (most recent call last):
+  File "/opt/code/localstack/localstack/utils/threads.py", line 58, in run
+    result = self.func(self.params, **kwargs)
+  File "/opt/code/localstack/localstack/services/dynamodb/provider.py", line 176, in _forward
+    cls.forward_to_ddb_stream(records_to_ddb)
+  File "/opt/code/localstack/localstack/services/dynamodb/provider.py", line 184, in forward_to_ddb_stream
+    dynamodbstreams_api.forward_events(records)
+  File "/opt/code/localstack/localstack/services/dynamodbstreams/dynamodbstreams_api.py", line 79, in forward_events
+    kinesis.put_record(
+  File "/opt/code/localstack/.venv/lib/python3.10/site-packages/botocore/client.py", line 530, in _api_call
+    return self._make_api_call(operation_name, kwargs)
+  File "/opt/code/localstack/.venv/lib/python3.10/site-packages/botocore/client.py", line 964, in _make_api_call
+    raise error_class(parsed_response, operation_name)
+botocore.errorfactory.ResourceInUseException: An error occurred (ResourceInUseException) when calling the PutRecord operation: Stream arn:aws:kinesis:us-east-1:000000000000:stream/__ddb_stream_spike-head is not currently ACTIVE or UPDATING.
+
+2026-10-05T11:01:45.498  INFO --- [   asgi_gw_0] localstack.request.aws     : AWS dynamodb.TransactWriteItems => 400 (TransactionCanceledException)
+2026-10-05T11:01:45.505  INFO --- [   asgi_gw_1] localstack.request.aws     : AWS dynamodb.GetItem => 200
+2026-10-05T11:01:45.511  INFO --- [   asgi_gw_0] localstack.request.aws     : AWS dynamodb.GetItem => 200
+2026-10-05T11:01:45.530  INFO --- [   asgi_gw_1] localstack.request.aws     : AWS dynamodb.PutItem => 200
+2026-10-05T11:01:45.563  INFO --- [   asgi_gw_1] localstack.request.aws     : AWS dynamodb.TransactWriteItems => 400 (TransactionCanceledException)
+2026-10-05T11:01:45.569  INFO --- [   asgi_gw_2] localstack.request.aws     : AWS dynamodb.GetItem => 200
+2026-10-05T11:01:45.576  INFO --- [   asgi_gw_1] localstack.request.aws     : AWS dynamodb.GetItem => 200
+2026-10-05T11:01:45.582  INFO --- [   asgi_gw_2] localstack.request.aws     : AWS dynamodb.DescribeTable => 200
+2026-10-05T11:01:45.617  INFO --- [   asgi_gw_1] localstack.request.aws     : AWS dynamodbstreams.DescribeStream => 200
+2026-10-05T11:01:45.644  INFO --- [   asgi_gw_2] localstack.request.aws     : AWS dynamodbstreams.DescribeStream => 200
+2026-10-05T11:01:45.674  INFO --- [   asgi_gw_1] localstack.request.aws     : AWS dynamodbstreams.GetShardIterator => 200
+2026-10-05T11:01:45.695  INFO --- [   asgi_gw_0] localstack.request.aws     : AWS dynamodb.PutItem => 200
+2026-10-05T11:01:45.728  INFO --- [   asgi_gw_0] localstack.request.aws     : AWS dynamodb.UpdateItem => 200
+2026-10-05T11:01:45.754  INFO --- [   asgi_gw_0] localstack.request.aws     : AWS dynamodbstreams.DescribeStream => 200
+2026-10-05T11:01:45.778  INFO --- [   asgi_gw_2] localstack.request.aws     : AWS dynamodbstreams.GetRecords => 200
+2026-10-05T11:01:45.797  INFO --- [   asgi_gw_1] localstack.request.aws     : AWS dynamodb.PutItem => 200
+2026-10-05T11:01:45.813  INFO --- [   asgi_gw_0] localstack.request.aws     : AWS dynamodb.PutItem => 200
+2026-10-05T11:01:45.831  INFO --- [   asgi_gw_2] localstack.request.aws     : AWS dynamodb.PutItem => 200
+2026-10-05T11:01:45.844  INFO --- [   asgi_gw_1] localstack.request.aws     : AWS dynamodb.PutItem => 200
+2026-10-05T11:01:45.857  INFO --- [   asgi_gw_0] localstack.request.aws     : AWS dynamodb.PutItem => 200
+2026-10-05T11:01:45.871  INFO --- [   asgi_gw_2] localstack.request.aws     : AWS dynamodb.PutItem => 200
+2026-10-05T11:01:45.884  INFO --- [   asgi_gw_1] localstack.request.aws     : AWS dynamodb.PutItem => 200
+2026-10-05T11:01:45.897  INFO --- [   asgi_gw_0] localstack.request.aws     : AWS dynamodb.PutItem => 200
+2026-10-05T11:01:45.911  INFO --- [   asgi_gw_2] localstack.request.aws     : AWS dynamodb.PutItem => 200
+2026-10-05T11:01:45.922  INFO --- [   asgi_gw_1] localstack.request.aws     : AWS dynamodb.PutItem => 200
+2026-10-05T11:01:45.934  INFO --- [   asgi_gw_0] localstack.request.aws     : AWS dynamodb.PutItem => 200
+2026-10-05T11:01:45.947  INFO --- [   asgi_gw_2] localstack.request.aws     : AWS dynamodb.PutItem => 200
+2026-10-05T11:01:45.968  INFO --- [   asgi_gw_1] localstack.request.aws     : AWS dynamodb.Query => 200
+2026-10-05T11:01:45.983  INFO --- [   asgi_gw_2] localstack.request.aws     : AWS dynamodb.Query => 200
+2026-10-05T11:01:46.008  INFO --- [   asgi_gw_1] localstack.request.aws     : AWS dynamodb.PutItem => 200
+2026-10-05T11:01:46.022  INFO --- [   asgi_gw_1] localstack.request.aws     : AWS dynamodb.PutItem => 200
+2026-10-05T11:01:46.034  INFO --- [   asgi_gw_0] localstack.request.aws     : AWS dynamodb.PutItem => 200
+2026-10-05T11:01:46.044  INFO --- [   asgi_gw_1] localstack.request.aws     : AWS dynamodb.BatchGetItem => 200
+2026-10-05T11:01:46.057  INFO --- [   asgi_gw_0] localstack.request.aws     : AWS dynamodb.PutItem => 200
+2026-10-05T11:01:46.068  INFO --- [   asgi_gw_2] localstack.request.aws     : AWS dynamodb.PutItem => 200
+2026-10-05T11:01:46.078  INFO --- [   asgi_gw_1] localstack.request.aws     : AWS dynamodb.PutItem => 200
+2026-10-05T11:01:46.090  INFO --- [   asgi_gw_0] localstack.request.aws     : AWS dynamodb.Query => 200
+2026-10-05T11:01:46.093  INFO --- [   asgi_gw_2] localstack.request.aws     : AWS dynamodb.UpdateTimeToLive => 200
+2026-10-05T11:01:46.096  INFO --- [   asgi_gw_0] localstack.request.aws     : AWS dynamodb.DescribeTimeToLive => 200

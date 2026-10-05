@@ -1,0 +1,9 @@
+Initializing DynamoDB Local with the following configuration:
+Port:	8000
+InMemory:	true
+Version:	3.3.1
+DbPath:	null
+SharedDb:	true
+shouldDelayTransientStatuses:	false
+CorsParams:	null
+

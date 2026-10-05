@@ -1,0 +1,323 @@
+{
+  "observed_at_utc": "2026-10-05T10:59:24.142404+00:00",
+  "localstack_4x_tag_api_urls": [
+    "https://hub.docker.com/v2/repositories/localstack/localstack/tags/?name=4.&page_size=100",
+    "https://hub.docker.com/v2/repositories/localstack/localstack/tags/?name=4.&page=2&page_size=100"
+  ],
+  "localstack_4x_releases_descending": [
+    {
+      "name": "4.14.0",
+      "last_updated": "2026-02-26T10:41:15.725761Z",
+      "digest": "sha256:3ebc37595918b8accb852f8048fef2aff047d465167edd655528065b07bc364a"
+    },
+    {
+      "name": "4.13.1",
+      "last_updated": "2026-02-02T11:57:12.145949Z",
+      "digest": "sha256:46302bcb91a7e8008e6394be8afafdbfa40fb77a54d4046a38be35992042d5de"
+    },
+    {
+      "name": "4.13.0",
+      "last_updated": "2026-01-29T08:19:31.983028Z",
+      "digest": "sha256:7854e1da9cf4a933228035a5389d8b5f59e9aae78ae7851a0e4de81da792d2ae"
+    },
+    {
+      "name": "4.12.0",
+      "last_updated": "2025-12-11T13:23:35.751488Z",
+      "digest": "sha256:0df3a97da57de03a588c05d9b8f390f15c7033fc7c4512f94619d344bc3cd317"
+    },
+    {
+      "name": "4.11.1",
+      "last_updated": "2025-11-26T11:30:36.541276Z",
+      "digest": "sha256:3071c9c72a1e9dbc23ad33540617ad7825ffeba80a8f421eff798b97850f9de5"
+    },
+    {
+      "name": "4.11.0",
+      "last_updated": "2025-11-26T09:37:38.75431Z",
+      "digest": "sha256:e74a786298348a5f6dc03d811fcdad6223ab75d35586d502779a13e551608e78"
+    },
+    {
+      "name": "4.10.0",
+      "last_updated": "2025-10-30T11:58:26.657155Z",
+      "digest": "sha256:a65ee2a9d45a7a34a1f1faae515d2e577ce11210312c077700ccc82daefec238"
+    },
+    {
+      "name": "4.9.2",
+      "last_updated": "2025-10-06T08:56:59.491357Z",
+      "digest": "sha256:59373b4a27dba3ec15c4db0b7455f0cb68c8a42300e2cbbe362b440f9a131697"
+    },
+    {
+      "name": "4.9.1",
+      "last_updated": "2025-10-03T11:50:23.556102Z",
+      "digest": "sha256:ef90c3d6d69e36752d0154f9bc21099fc70dfbffc99a0145a6d7d04a721a6124"
+    },
+    {
+      "name": "4.9.0",
+      "last_updated": "2025-10-02T08:10:27.311497Z",
+      "digest": "sha256:e74aa0e3dad049db6a6a86dd0d4187e054a63ec4e4273d91959b2c41093bf566"
+    },
+    {
+      "name": "4.8.1",
+      "last_updated": "2025-09-16T15:35:54.953286Z",
+      "digest": "sha256:8c9756bddc44625cd6e890f5e4bcc29b045eebe108b268482b848f4f832ec153"
+    },
+    {
+      "name": "4.8.0",
+      "last_updated": "2025-09-11T07:30:32.706549Z",
+      "digest": "sha256:fe24345d30a3cdc3cead7d88ebbdf39ae480fa3fe4de1765b98a9a066b8515cf"
+    },
+    {
+      "name": "4.7.0",
+      "last_updated": "2025-07-31T08:12:15.879376Z",
+      "digest": "sha256:12253acd9676770e9bd31cbfcf17c5ca6fd7fb5c0c62f3c46dd701f20304260c"
+    },
+    {
+      "name": "4.6.0",
+      "last_updated": "2025-07-03T08:23:29.621341Z",
+      "digest": "sha256:5a97e0f9917a3f0d9630bb13b9d8ccf10cbe52f33252807d3b4e21418cc21348"
+    },
+    {
+      "name": "4.5.0",
+      "last_updated": "2025-06-05T07:45:17.920038Z",
+      "digest": "sha256:9d4253786e0effe974d77fe3c390358391a56090a4fff83b4600d8a64404d95d"
+    },
+    {
+      "name": "4.4.0",
+      "last_updated": "2025-05-08T07:20:21.081314Z",
+      "digest": "sha256:b52c16663c70b7234f217cb993a339b46686e30a1a5d9279cb5feeb2202f837c"
+    },
+    {
+      "name": "4.3.0",
+      "last_updated": "2025-03-27T09:27:11.976782Z",
+      "digest": "sha256:f3cb1a79f3add997575e859c3a2808e6dae4b0de836661de255baa2b576868f8"
+    },
+    {
+      "name": "4.2.0",
+      "last_updated": "2025-02-27T08:32:21.360874Z",
+      "digest": "sha256:b5a68908bafbb56468bb1dd6ea0d0d333149c084c63e84a8de95d9059ad7e96d"
+    },
+    {
+      "name": "4.1.1",
+      "last_updated": "2025-02-05T09:45:38.827734Z",
+      "digest": "sha256:97ccc65daec3542bd2cb3160d7355f11e89ad8027fd3c834b9d1197d197d866f"
+    },
+    {
+      "name": "4.1.0",
+      "last_updated": "2025-01-30T10:13:27.885391Z",
+      "digest": "sha256:cd576d5d92a8506702a920e7fbc97bf3c8452143f2487ae421ad16e37d2d3fab"
+    },
+    {
+      "name": "4.0.3",
+      "last_updated": "2024-11-29T20:59:10.9546Z",
+      "digest": "sha256:17c2f79ca4e1f804eb912291a19713d4134806325ef0d21d4c1053161dfa72d0"
+    },
+    {
+      "name": "4.0.2",
+      "last_updated": "2024-11-23T21:53:19.213817Z",
+      "digest": "sha256:d23394b09e476a9078c0a1d9340a01894804e238874fc5ff4264fca91491f8db"
+    },
+    {
+      "name": "4.0.1",
+      "last_updated": "2024-11-22T19:56:12.387815Z",
+      "digest": "sha256:b413fb0c9a826a0cbab8e7b44514311ab9033930b23e0ec61926ad8ef0839b51"
+    },
+    {
+      "name": "4.0.0",
+      "last_updated": "2024-11-21T14:25:37.056281Z",
+      "digest": "sha256:fae7a9a2c3eb86fc102df0fdb78b0a8624617734052bc163cb14ebb64d70a047"
+    }
+  ],
+  "selected_tags": {
+    "A": {
+      "source": "https://hub.docker.com/v2/repositories/localstack/localstack/tags/2.1.0",
+      "name": "2.1.0",
+      "last_updated": "2023-05-25T10:38:15.700793Z",
+      "digest": "sha256:74c3cb7cfa3d8a8ea9e786c0974dddf6ea60e7cea91e7a739f93cecafc09a9e2",
+      "images": [
+        {
+          "architecture": "amd64",
+          "features": "",
+          "variant": null,
+          "digest": "sha256:fcd9666ed531f749ebfa2b9b5d6e24cf4f5d99ae71969d4496e2c0c94220f78e",
+          "os": "linux",
+          "os_features": "",
+          "os_version": null,
+          "size": 389695613,
+          "status": "active",
+          "last_pulled": "2026-10-05T10:42:20.072625636Z",
+          "last_pushed": "2023-05-25T10:36:43Z"
+        },
+        {
+          "architecture": "arm64",
+          "features": "",
+          "variant": "v8",
+          "digest": "sha256:ab6866c0368632a533a0ff6003f15a8fbf50568e02d4542658b9634167900c2a",
+          "os": "linux",
+          "os_features": "",
+          "os_version": null,
+          "size": 375172960,
+          "status": "active",
+          "last_pulled": "2026-10-05T10:48:51.817028444Z",
+          "last_pushed": "2023-05-25T10:37:54Z"
+        }
+      ]
+    },
+    "B": {
+      "source": "https://hub.docker.com/v2/repositories/localstack/localstack/tags/4.14.0",
+      "name": "4.14.0",
+      "last_updated": "2026-02-26T10:41:15.725761Z",
+      "digest": "sha256:3ebc37595918b8accb852f8048fef2aff047d465167edd655528065b07bc364a",
+      "images": [
+        {
+          "architecture": "amd64",
+          "features": "",
+          "variant": null,
+          "digest": "sha256:75ba7a4bda54a3020019fba23e99c61bbff7dbf23eea12919e5b75b15c6f03f2",
+          "os": "linux",
+          "os_features": "",
+          "os_version": null,
+          "size": 457412070,
+          "status": "active",
+          "last_pulled": "2026-10-05T10:56:46.342104718Z",
+          "last_pushed": "2026-02-26T10:37:59.254093184Z"
+        },
+        {
+          "architecture": "arm64",
+          "features": "",
+          "variant": null,
+          "digest": "sha256:8f29a09351da8dd4fb25557ef4d10adcf3df71c3c65d99dbc483301b0c48b5b9",
+          "os": "linux",
+          "os_features": "",
+          "os_version": null,
+          "size": 456270042,
+          "status": "active",
+          "last_pulled": "2026-10-05T10:49:21.821578653Z",
+          "last_pushed": "2026-02-26T10:40:06.061912654Z"
+        }
+      ]
+    },
+    "C": {
+      "source": "https://hub.docker.com/v2/repositories/amazon/dynamodb-local/tags/latest",
+      "name": "latest",
+      "last_updated": "2026-07-31T17:16:01.769296Z",
+      "digest": "sha256:ff89bd48ff32cd8d9be5fee8873b65b8854dc408f1afe881be6eb00247bc0dab",
+      "images": [
+        {
+          "architecture": "amd64",
+          "features": "",
+          "variant": null,
+          "digest": "sha256:744bf7138f0e893a6438de89bc3374501105b42bc7473cef6d561f30ff2dec6a",
+          "os": "linux",
+          "os_features": "",
+          "os_version": null,
+          "size": 238997978,
+          "status": "active",
+          "last_pulled": "2026-10-05T10:50:59.907592639Z",
+          "last_pushed": "2026-07-31T17:09:02.580354891Z"
+        },
+        {
+          "architecture": "arm64",
+          "features": "",
+          "variant": null,
+          "digest": "sha256:0b8779f3e5a761cb41c7b7610d1a67518964a22a9ca063b4a53c8c312b933485",
+          "os": "linux",
+          "os_features": "",
+          "os_version": null,
+          "size": 237412728,
+          "status": "active",
+          "last_pulled": "2026-10-05T10:50:40.826261772Z",
+          "last_pushed": "2026-07-31T17:09:02.508396918Z"
+        },
+        {
+          "architecture": "unknown",
+          "features": "",
+          "variant": null,
+          "digest": "sha256:b5ed446d94b865f4cd55677c509aa81aa6143cb624b78bbfa85b6596c9810a93",
+          "os": "unknown",
+          "os_features": "",
+          "os_version": null,
+          "size": 1329,
+          "status": "active",
+          "last_pulled": "2026-10-05T10:49:24.972836269Z",
+          "last_pushed": "2026-07-31T17:09:02.432743237Z"
+        },
+        {
+          "architecture": "unknown",
+          "features": "",
+          "variant": null,
+          "digest": "sha256:54270720f00f50b4856bf3ea5fdb934f8d3ae00202c03d00de2c4384dceff916",
+          "os": "unknown",
+          "os_features": "",
+          "os_version": null,
+          "size": 1329,
+          "status": "active",
+          "last_pulled": "2026-10-05T10:50:23.397544855Z",
+          "last_pushed": "2026-07-31T17:09:02.570204149Z"
+        }
+      ]
+    },
+    "C_version": {
+      "source": "https://hub.docker.com/v2/repositories/amazon/dynamodb-local/tags/3.3.1",
+      "name": "3.3.1",
+      "last_updated": "2026-07-31T17:09:03.474913Z",
+      "digest": "sha256:ff89bd48ff32cd8d9be5fee8873b65b8854dc408f1afe881be6eb00247bc0dab",
+      "images": [
+        {
+          "architecture": "amd64",
+          "features": "",
+          "variant": null,
+          "digest": "sha256:744bf7138f0e893a6438de89bc3374501105b42bc7473cef6d561f30ff2dec6a",
+          "os": "linux",
+          "os_features": "",
+          "os_version": null,
+          "size": 238997978,
+          "status": "active",
+          "last_pulled": "2026-10-05T10:50:59.907592639Z",
+          "last_pushed": "2026-07-31T17:09:02.580354891Z"
+        },
+        {
+          "architecture": "arm64",
+          "features": "",
+          "variant": null,
+          "digest": "sha256:0b8779f3e5a761cb41c7b7610d1a67518964a22a9ca063b4a53c8c312b933485",
+          "os": "linux",
+          "os_features": "",
+          "os_version": null,
+          "size": 237412728,
+          "status": "active",
+          "last_pulled": "2026-10-05T10:50:40.826261772Z",
+          "last_pushed": "2026-07-31T17:09:02.508396918Z"
+        },
+        {
+          "architecture": "unknown",
+          "features": "",
+          "variant": null,
+          "digest": "sha256:b5ed446d94b865f4cd55677c509aa81aa6143cb624b78bbfa85b6596c9810a93",
+          "os": "unknown",
+          "os_features": "",
+          "os_version": null,
+          "size": 1329,
+          "status": "active",
+          "last_pulled": "2026-10-05T10:49:24.972836269Z",
+          "last_pushed": "2026-07-31T17:09:02.432743237Z"
+        },
+        {
+          "architecture": "unknown",
+          "features": "",
+          "variant": null,
+          "digest": "sha256:54270720f00f50b4856bf3ea5fdb934f8d3ae00202c03d00de2c4384dceff916",
+          "os": "unknown",
+          "os_features": "",
+          "os_version": null,
+          "size": 1329,
+          "status": "active",
+          "last_pulled": "2026-10-05T10:50:23.397544855Z",
+          "last_pushed": "2026-07-31T17:09:02.570204149Z"
+        }
+      ]
+    }
+  },
+  "sources": [
+    "https://docs.localstack.cloud/aws/customization/other-installations/docker-images/",
+    "https://blog.localstack.cloud/localstack-for-aws-release-2026-03-0/"
+  ]
+}
