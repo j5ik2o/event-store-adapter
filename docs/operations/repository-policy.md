@@ -90,11 +90,10 @@ takt を使うリポジトリは、次の配置にそろえる。テンプレー
 
 2026-10-03 の時点で、1〜4 章と 8 章は、6 リポジトリすべてで適合していた。必須チェックは `CI Success` だけで、strict が有効（会話の解決の必須は無効）、マージは squash のみ、CI の全ジョブに `timeout-minutes` があり、workflow で動く AI レビューと独自のスレッドのゲートはない。同日に足した 1 章の「公開の workflow」には、java・kotlin・js・scala・rs が適合している（scala は #853、js は手動実行の CI を除く #990、rs は #239 も含む）。go はパッケージの登録先に公開しないので対象外。8 章の takt の版は、同日に 6 リポジトリとも 0.68.0 にそろえ、Renovate では更新しない設定にした（rs #240、js #992、java #686、scala #854、kotlin #822、go #383）。
 
-2026-10-05 に 8 章の役割の分担を改め（設計と既定を Opus 5.5 から GPT-6.1-Sol に）、テンプレートを直した。各リポジトリの `.takt/` に配り終えるまで、8 章は 6 リポジトリとも未適合である（下の表の最初の項目）。
+2026-10-05 に 8 章の役割の分担を改め（設計と既定を Opus 5.5 から GPT-6.1-Sol に）、テンプレートを直して 6 リポジトリの `.takt/` に配った（rs #242、js #998、java #689、scala #857、kotlin #824、go #385）。8 章は、6 リポジトリとも再び適合している。
 
 | 残っている項目 | 対象 | 担当 |
 |:--|:--|:--|
-| takt の役割の分担の変更（8 章、2026-10-05）を、各リポジトリの `.takt/runtime.yaml`・`.takt/config.yaml` に配る | 6 リポジトリ | コーディネーター（作業者に指示） |
 | crates.io の API トークン `CARGO_TOKEN`（7 章） | rs ほか | rs は OIDC に移り、GitHub の Secret `CARGO_TOKEN` はオーナーが削除した（2026-10-03）。crates.io 側の同じ名前のトークンは、グループ外の prop-check-rs・oni-comb-rs・fraktor-rs などの公開の workflow も同じ名前の Secret で使っているとみられる。取り消すと、それらの公開が失敗するので、同日オーナーの判断で残すことにした。それらのリポジトリを OIDC に移したあとで取り消す。オーナー |
 | Renovate の PR の棚卸し（5 章） | 全リポジトリ | コーディネーター。初回は 2026-10-03 に実施（Java 11 と両立しないメジャー更新は理由付きでブロック）。同日の 2 回目で、lint で止まっていた js の biome・jest の minor 更新を #978 で通した。js の mise.toml の sbt は、使っておらず conda-forge に 2.0.10 がなく `mise install` が失敗したので、#984 で外した。同日の 3 回目で、js の pnpm 12 を #982 で取り込み、TypeScript 7 は ts-jest と ts-node が直接対応するまで #987 でブロックした。`@google-cloud/spanner` v9 は、公開 API が利用者の `Database` を受け取るため、オーナーの判断で peerDependencies（`^8.7.1 \|\| ^9.0.0`）に移した（#986） |
 
