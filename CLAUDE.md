@@ -12,9 +12,9 @@
 
 ### ワークフローの選び方
 
-- 標準は flash-default とする。計画、試験の先行作成、実装、複数の観点のレビュー、修正、最終判定まで行う（上限 51 段）。コードと試験を伴う作業（段階 2 の書き直しなど）に使う。
-- 文書、CI の設定、依存の更新、データの配布のような小さな作業には、flash-default は重い。そこで、組み込みの mini-core（計画 → 実装 → レビュー → 修正、上限 21 段）をもとにした軽いカスタムワークフローを `tools/takt/` に作る（2026-10-05 にユーザーと合意）。計画とレビューは GPT-6.1-Sol、実装は Sonnet 5.5 になるよう、`runtime.yaml` の割り当ても足す。最初の小さな実作業で試してから、6 リポジトリに配る。それまでは flash-default を使う。
-- 組み込みのワークフローをそのまま使わない。段の名前が `runtime.yaml` の割り当てに合わず、実装まで既定の GPT-6.1-Sol で動いてしまうからである。
+- 標準は flash-default とする。takt-workflows のバンドルが入れるワークフローで、takt に組み込みの `default` とは別物である。計画、試験の先行作成、実装、複数の観点のレビュー、修正、最終判定まで行う（上限 51 段）。コードと試験を伴う作業（段階 2 の書き直しなど）に使う。
+- 文書、CI の設定、依存の更新、データの配布のような小さな作業には、軽いカスタムワークフロー light-change を使う。組み込みの mini-core（計画 → 実装 → 並列レビュー → 修正、上限 21 段）を呼ぶ。計画とレビューは GPT-6.1-Sol、実装と修正は Sonnet 5.5 になるよう、`runtime.yaml` に mini-core/* の割り当てがある。テンプレートは `tools/takt/workflows/light-change.yaml`（2026-10-05 にユーザーと合意）。
+- 組み込みのワークフロー（全体の規則が挙げる `simple-mini` を含む）をそのまま使わない。段の名前が `runtime.yaml` の割り当てに合わず、実装まで既定の GPT-6.1-Sol で動いてしまうからである。計画から要る大きめの作業も、flash-default か light-change で賄う。
 
 ## takt の起動と監督
 
@@ -22,10 +22,26 @@ takt はエージェントとして Orca に認識されないので、指示の
 
 1. 作業管理の Run に `orca orchestration task-create` で課題を登録する。課題の本文は下の「指示書」の形で書く。
 2. `orca worktree create --repo <リポジトリ> --name <名前> --no-parent` で、課題ごとにワークツリーを分ける。
-3. そのワークツリーで、`orca terminal create --worktree id:<repoId>::<path> --command '<takt の起動>'` で takt を起動する。起動は pipeline モードで、対話なしで最後まで走らせる（`scripts/run-takt.sh --claude-account <アカウントの設定ディレクトリ> --pipeline -w <ワークフロー> -b <ブランチ> -t "<指示書>"`）。
+3. そのワークツリーで、Orca の端末に takt を起動させる。指示書はワークツリーの外（指揮役の scratchpad など）のファイルに書く。起動は pipeline モードで、対話なしで最後まで走らせる。`--skip-git` は付けない。
+
+   ```sh
+   orca terminal create --worktree id:<repoId>::<path> --title "<作業名>" --command \
+     "scripts/run-takt.sh --claude-account <claude の設定> --codex-account <codex の設定> --pipeline --auto-pr -w <ワークフロー> -b <ブランチ> -t \"\$(cat <指示書>)\"; exit" --json
+   ```
+
+   - 起動の入口は `scripts/run-takt.sh` とする（2026-10-05 にユーザーが、takt-workflows の run-takt.sh を各リポジトリに配るよう指示）。全体の規則（`~/.claude/CLAUDE.md`）は takt を直接起動してラッパーを挟まないとするが、このグループでは、このスクリプトがアカウントの選択と `TAKT_CONFIG_DIR`（プロジェクトの `.takt/home`）の設定を担うので、例外として使う。これ以外のラッパーは挟まない。
+   - アカウントの設定ディレクトリはマシンごとの事情なので、リポジトリには書かず、指揮役の memory に記録してある。
+   - 出力はファイルにリダイレクトしない。takt は `.takt/runs/<run>/` に記録を残す。
+   - 最後の `exit` は、`orca terminal wait --for exit` で終わりを検知するためのものである。終わると端末は閉じ、出力は読めなくなる。takt の終了コードも伝わらない（2026-10-05 に確かめた）。成否は `.takt/runs/` と PR で判断する。
+   - 起動の直後に `orca terminal read` で、`run-takt: TAKT_CONFIG_DIR:` がワークツリーの `.takt/home` を指していることを確かめる。`~/.takt/` は読ませず、書き換えもしない。
 4. `orca orchestration dispatch --task <課題> --to <端末>` で、課題を端末に結び付ける。注入（`--inject`）はしない。
-5. 監督: `orca terminal read` と takt の実行記録（`.takt/runs/`）で、範囲の外の作業や長引きを見る。見つけたら takt を止めて、範囲を絞って起動し直す。`orca terminal wait --for exit` で終了を待つ。
+5. 監督: 実行中は `orca terminal read --terminal <端末>` と takt の実行記録（`.takt/runs/`）で、段の切り替わり・使ったモデル・エラーを見る。終わりは `orca terminal wait --terminal <端末> --for exit` で待つ。範囲の外の作業や長引きを見つけたら、`orca terminal send --terminal <端末> --text $'\x03' --interrupt` で止め、範囲を絞って起動し直す。同じマシンで別の takt が動いていることがあるので、プロセスを直接止めるときは、ブランチ名などで自分の takt だと確かめてからにする。
 6. 受け入れ: 差分・成果物・CI を指示書の受け入れの条件と照らして確かめる。結果は `orca orchestration task-update --status completed|failed --result <要約>` で記録する。その後、端末とワークツリーを閉じる（下の「後片付け」）。
+
+### takt にできないこと
+
+- takt の中の Claude は、`.takt/` の下に書き込めない。takt-workflows のインストーラーが `.claude/settings.json` に入れる拒否の規則（段に `.takt/` の部品を読ませないためのもの）が、書き込みも止めるからである。`.takt/` の下のファイル（ワークフロー、`runtime.yaml`、`config.yaml`）を作る・配る作業は、指揮役が小さな作業として行う。
+- takt は途中で質問できない。判断がつかないときは ABORT して、レポートに理由を残す。
 
 ## 指示書
 
