@@ -21,17 +21,17 @@
 takt はエージェントとして Orca に認識されないので、指示の注入も worker_done の報告もない。次の手順で、作業管理のタスクと takt の端末を結び付け、指揮役が監督する。この手順は、最初の実行で確かめて直す。
 
 1. 作業管理の Run に `orca orchestration task-create` で課題を登録する。課題の本文は下の「指示書」の形で書く。
-2. `orca worktree create --repo <リポジトリ> --name <名前> --no-parent` で、課題ごとにワークツリーを分ける。
+2. `orca worktree create --repo <リポジトリ> --name <名前> --no-parent` で、課題ごとにワークツリーを分ける。作ったワークツリーで `mise trust` を実行する。`run-takt.sh` は、プロジェクトの mise の設定を信頼していないと、takt を起動せずに止まる。
 3. 指示書は、対象のリポジトリの GitHub Issue に書く（タイトルは短く、本文に指示書）。そのワークツリーで、Orca の端末に takt を起動させ、`-i <Issue の番号>` で指示書を渡す。起動は pipeline モードで、対話なしで最後まで走らせる。`--skip-git` は付けない。
 
    ```sh
    orca terminal create --worktree id:<repoId>::<path> --title "<作業名>" --command \
-     'scripts/run-takt.sh --claude-account <claude の設定> --codex-account <codex の設定> --pipeline --auto-pr -w <ワークフロー> -b <ブランチ> -i <Issue の番号>; echo "takt-exit: $?"' --json
+     '.takt/bin/run-takt.sh --claude-account <claude の設定> --codex-account <codex の設定> --pipeline --auto-pr -w <ワークフロー> -b <ブランチ> -i <Issue の番号>; echo "takt-exit: $?"' --json
    ```
 
-   - 起動の入口は `scripts/run-takt.sh` とする（2026-10-05 にユーザーが、takt-workflows の run-takt.sh を各リポジトリに配るよう指示）。全体の規則（`~/.claude/CLAUDE.md`）は takt を直接起動してラッパーを挟まないとするが、このグループでは、このスクリプトがアカウントの選択と `TAKT_CONFIG_DIR`（プロジェクトの `.takt/home`）の設定を担うので、例外として使う。これ以外のラッパーは挟まない。
+   - 起動の入口は `.takt/bin/run-takt.sh` とする（2026-10-05 にユーザーが、takt-workflows の run-takt.sh を各リポジトリに配るよう指示。置き場所は 2026-10-06 に、takt-workflows のインストーラーに合わせて `.takt/bin/` とすることで合意）。全体の規則（`~/.claude/CLAUDE.md`）は takt を直接起動してラッパーを挟まないとするが、このグループでは、このスクリプトがアカウントの選択と `TAKT_CONFIG_DIR`（プロジェクトの `.takt/home`）の設定を担うので、例外として使う。これ以外のラッパーは挟まない。
    - アカウントの設定ディレクトリはマシンごとの事情なので、リポジトリには書かず、指揮役の memory に記録してある。
-   - 指示書を `-t "$(cat <指示書>)"` で渡さない。takt は `-t` の文字列をそのまま PR のタイトルとコミットのメッセージ（`takt: <全文>`）にするので、長い指示書では PR のタイトルが長すぎて PR を作れない（2026-10-06 の試運転で、push の後に PR の作成だけが失敗した）。`-i` なら、PR のタイトルは `[#<番号>] <Issue のタイトル>`、コミットは `feat: <Issue のタイトル> (#<番号>)` になる。squash でマージするときに、指揮役が Conventional Commits のタイトルに付け直す。
+   - 指示書を `-t "$(cat <指示書>)"` で渡さない。takt は `-t` の文字列をそのまま PR のタイトルとコミットのメッセージ（`takt: <全文>`）にするので、長い指示書では PR のタイトルが長すぎて PR を作れない（2026-10-06 の試運転で、push の後に PR の作成だけが失敗した）。`-i` なら、PR のタイトルは `[#<番号>] <Issue のタイトル>`、コミットは `feat: <Issue のタイトル> (#<番号>)` になる（2026-10-06 に ideo-plus/takt-workflows#65 で、PR まで自動で作られることを確かめた）。squash でマージするときに、指揮役が Conventional Commits のタイトルに付け直す。
    - 出力はファイルにリダイレクトしない。takt は `.takt/runs/<run>/` に記録を残す。最後の `echo "takt-exit: $?"` で、端末に takt の終了コードを残す。端末は閉じないので、終わった後も `orca terminal read` で出力を読める。
    - 起動の直後に `orca terminal read` で、`run-takt: TAKT_CONFIG_DIR:` がワークツリーの `.takt/home` を指していることを確かめる。`~/.takt/` は読ませず、書き換えもしない。
 4. `orca orchestration dispatch --task <課題> --to <端末>` で、課題を端末に結び付ける。注入（`--inject`）はしない。

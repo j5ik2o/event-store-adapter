@@ -95,13 +95,13 @@ takt を使うリポジトリは、次の配置にそろえる。テンプレー
 | `.takt/config.yaml` | 言語、並列数、利用上限での切り替え | `tools/takt/config.yaml` |
 | `.takt/workflows/light-change.yaml` | 小さな変更向けの軽いワークフロー（組み込みの mini-core を呼ぶ、上限 21 段）。2026-10-05 にユーザーと合意 | `tools/takt/workflows/light-change.yaml` |
 | `.claude/settings.json` | takt のステップに `.takt/` の部品を読ませない設定 | インストーラーが既存の設定にマージする |
-| `scripts/run-takt.sh`、`scripts/takt-claude.sh`、`scripts/takt-codex.sh` | takt を起動する入口（`run-takt.sh --claude-account <設定> --codex-account <設定>`）と、takt が claude・codex を起動するときの入口。`TAKT_CONFIG_DIR` をプロジェクトの `.takt/home` に向ける | `tools/takt/scripts/`。[ideo-plus/takt-workflows](https://github.com/ideo-plus/takt-workflows) の `scripts/` をコミット `7a53f8a33849de93425fc3cd1f5694ecaa4fcae`（PR #60 のマージ）のまま写す（2026-10-05 にユーザーが指示）。同じ場所の `run-codex.sh` は、`run-takt.sh` が codex のアカウントも選ぶようになり役目が重なるので配らない |
+| `.takt/bin/run-takt.sh`、`.takt/bin/takt-claude.sh`、`.takt/bin/takt-codex.sh` | takt を起動する入口（`run-takt.sh --claude-account <設定> --codex-account <設定>`）と、takt が claude・codex を起動するときの入口。`TAKT_CONFIG_DIR` をプロジェクトの `.takt/home` に向ける | `tools/takt/bin/`。[ideo-plus/takt-workflows](https://github.com/ideo-plus/takt-workflows) の `scripts/` をコミット `1a1dc868d0961d72dc4d7a45861588e86993d5bf` のまま写す（2026-10-05 にユーザーが指示）。置き場所は、takt-workflows のインストーラー（`use-lang.sh --launchers-only`）に合わせて `.takt/bin/` とし、`.takt/.gitignore` に `!bin/` と `!bin/**` を足す（2026-10-06 にユーザーと合意）。`scripts/` には置かない |
 | `mise.toml` | takt の版の固定(`"npm:takt" = "0.68.0"`) | 各リポジトリ |
 
 - 役割の分担は、設計(計画・再計画)を GPT-6.1-Sol、レビュー(裁定・最終ゲート)を GPT-6.1-Sol、実装(テスト・実装)を Sonnet 5.5 とする。割り当てのないステップも GPT-6.1-Sol で動かす。利用上限に当たったときは、Sonnet 5.5 と GPT-6.1-Sol のあいだで切り替える。takt を動かすのは作業者なので、Opus 5.5 は使わない（6 章）。2026-10-03 には設計と既定を Opus 5.5 にしていたが、2026-10-05 にオーナーと合意して改めた。GPT-6.1-Sol を使うので、takt は 0.67 以上にする。
 - takt の版は、全リポジトリで同じにする。Renovate では takt を更新しない(各リポジトリの `renovate.json` で、理由を `description` に書いて止める)。新しい版に上げるときは、コーディネーターが上の表の版と全リポジトリの `mise.toml` を同時に上げる。Renovate の自動更新に任せると、リポジトリごとに更新の日がずれて版がばらつくからである(2026-10-03 に 0.67.1 と 0.68.0 が混在した。同日オーナーと合意)。
 - `~/.takt/`(全体の設定)には何も書かず、読ませもしない。全体の設定はすべてのプロジェクトに重ねて読まれるからである。`run-takt.sh` が `TAKT_CONFIG_DIR` をプロジェクトの `.takt/home` に向けるので、takt は `run-takt.sh` から起動する。`.takt/home` は `.takt/.gitignore` で追跡の外にある。
-- 起動の入口は takt-workflows のものをそのまま使い、独自に改変しない（2026-10-05 にユーザーが指示）。2026-10-03 にこのリポジトリで足していた環境変数の除去（外部プロバイダーへの切り替え、接続先・モデルの指定、サブエージェントのモデルの上書きなど）は、このとき外れた。必要になったら takt-workflows に入れてから写す。
+- 起動の入口は takt-workflows のものをそのまま使い、独自に改変しない（2026-10-05 にユーザーが指示）。直す必要があるときは、takt-workflows に入れてから写す。呼び出し元のシェルに残る環境変数の除去は、2026-10-06 に takt-workflows に入った（ideo-plus/takt-workflows#65）。`takt-claude.sh` は認証・組織・提供元の選択・接続先・モデル・サブエージェントのモデルの変数を、`takt-codex.sh` は認証・トークン・接続先・外部認証の変数を、`run-takt.sh` は takt に渡る API キーを外してから起動する。
 - 実行ログやセッションの状態(`.takt/runs/` など)はコミットしない。インストーラーが作る `.takt/.gitignore` に従う。
 - インストーラーが入れる `.takt/tools/`(DDD 向けワークフロー用の ddd-lint。約 13MB で、プラットフォーム固有のバイナリを含む)はコミットしない。標準のワークフロー flash-default では使わないからである。`.takt/.gitignore` の `tools/` の許可を外す。インストーラーを入れ直したときは、この変更をやり直す。
 
