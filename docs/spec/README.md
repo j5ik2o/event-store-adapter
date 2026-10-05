@@ -101,13 +101,13 @@ SQLite は同じホストのローカルファイル、WAL と synchronous=FULL�
 
 ## 適合対象の実装
 
-2026-10-02 時点で、この仕様に適合している実装はない。
+2026-10-05 時点で、この仕様に適合している実装はない。各実装を適合させる計画は [実装計画](../plan/implementation-plan.md) にある（計画の判断 IP-D1〜IP-D8 は 2026-10-05 に合意）。
 
 | 実装 | 現行の契約 | 主な乖離 |
 |:--|:--|:--|
-| [event-store-adapter-rs](https://github.com/j5ik2o/event-store-adapter-rs) v3.0.2 | 封筒モデル | 集約ヘッドが未分離、ハッシュが `DefaultHasher`、ジャーナル読み取りのページ送りなし、保持で新しい履歴を消す |
-| [event-store-adapter-js](https://github.com/j5ik2o/event-store-adapter-js) 3.1.2-snapshot.0 | 旧来の契約 | 封筒モデル未導入、occurred_at がミリ秒、ページ送りなし |
-| [event-store-adapter-java](https://github.com/j5ik2o/event-store-adapter-java) 1.2.87 | 旧来の契約 | 封筒モデル未導入、ハッシュが `Math.abs(hashCode)`、ページ送りなし |
-| [event-store-adapter-kotlin](https://github.com/j5ik2o/event-store-adapter-kotlin) / [scala](https://github.com/j5ik2o/event-store-adapter-scala) | 旧来の契約（java のラッパー） | java に同じ |
-| [event-store-adapter-go](https://github.com/j5ik2o/event-store-adapter-go) v1.0.193 | 旧来の契約 | 封筒モデル未導入、ページ送りなし |
+| [event-store-adapter-rs](https://github.com/j5ik2o/event-store-adapter-rs) v3.0.5 | 封筒モデル | 集約ヘッドが未分離、ハッシュが `DefaultHasher`、ジャーナル読み取りのページ送りなし、保持で新しい履歴を消す |
+| [event-store-adapter-js](https://github.com/j5ik2o/event-store-adapter-js) v4.0.0 | 旧来の契約 | 封筒モデル未導入、occurred_at がミリ秒、ページ送りなし |
+| [event-store-adapter-java](https://github.com/j5ik2o/event-store-adapter-java) v1.2.90 | 旧来の契約 | 封筒モデル未導入、ハッシュが `Math.abs(hashCode)`、ページ送りなし |
+| [event-store-adapter-kotlin](https://github.com/j5ik2o/event-store-adapter-kotlin) v1.0.510 / [scala](https://github.com/j5ik2o/event-store-adapter-scala) v1.0.340 | 旧来の契約（java のラッパー） | java に同じ |
+| [event-store-adapter-go](https://github.com/j5ik2o/event-store-adapter-go) v1.0.196 | 旧来の契約 | 封筒モデル未導入、ページ送りなし |
 | php / swift / dotnet | 未調査 | 未調査 |
