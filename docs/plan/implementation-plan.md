@@ -88,15 +88,30 @@ scala は `mathieudutour/github-tag-action` で版を上げるので、判定の
 - kotlin・scala が java の新 API を参照するには、統合ブランチから java の pre-release（`2.0.0-RC.1` など）をタグで出す。運用方針の 1 章は、タグからの公開を main の先頭という条件から外しているので、この公開は方針の範囲内である。
 - 最後に、統合ブランチの全変更を 1 つの大きな PR で main に入れる。
 
+### 結果（2026-10-05）
+
+手順 1 のパッチ版（8 章）を出した後に、手順 2 を全リポジトリで行った。rs・java・kotlin・scala・go の版上げの workflow から定期実行を外し、手動の起動に段階を選ぶ入力 `level`（auto・patch・minor・major）を足した。判定は、`!` 付きの件名と本文の `BREAKING CHANGE:`（`BREAKING-CHANGE:`）を major、`feat`・`revert` を minor、`perf` を含むそれ以外を patch にする。判定の対象がないときは失敗で終える。判定の単体試験と actionlint を各リポジトリの CI に足し、`CI Success` の依存に含めた。js は定期実行がないので、判定の修正と `level` の入力だけを入れた。scala は `mathieudutour/github-tag-action` の設定で同じ規則にした。ワークフロー側で `!` 付きの件名と本文の `BREAKING CHANGE:`・`BREAKING-CHANGE:` を検出して major を指定し、それ以外は action の conventionalcommits の規則（perf は patch）に、revert を minor にする追加の規則を足した。
+
+| 実装 | PR |
+|:--|:--|
+| rs | [#244](https://github.com/j5ik2o/event-store-adapter-rs/pull/244) |
+| js | [#1000](https://github.com/j5ik2o/event-store-adapter-js/pull/1000) |
+| java | [#691](https://github.com/j5ik2o/event-store-adapter-java/pull/691) |
+| kotlin | [#827](https://github.com/j5ik2o/event-store-adapter-kotlin/pull/827) |
+| scala | [#860](https://github.com/j5ik2o/event-store-adapter-scala/pull/860) |
+| go | [#387](https://github.com/j5ik2o/event-store-adapter-go/pull/387) |
+
+これで、main に入れた変更が自動で公開されることはない。次のメジャーは、5 章の受け入れ条件を満たした後に、オーナーの承認を得て `level` を major にして手動で出す。
+
 ## 4. 進め方
 
-段階ごとに進める。同じ段階の中のリポジトリは並行して進める。
+段階ごとに進める。同じ段階の中のリポジトリは並行して進める。段階 0 と段階 1 は、2026-10-05 にマイルストーン M1 として完了した（8 章・3 章・4.1・6 章の結果を参照）。適合テストデータの実行器は、場面を実行する相手（新しい API）が段階 2 でできるので、段階 2 に移した。
 
 | 段階 | 場所 | 内容 | 前提 |
 |:--|:--|:--|:--|
 | 0 | 本リポジトリ | 適合テストデータ（6 章）。メモリのプロファイルの草案の作成と合意（IP-D4） | IP-D4・IP-D6・IP-D7 の合意 |
-| 1 | 各リポジトリ | 現行メジャーの修正（8 章）→ リリース制御の変更（3 章）。並行して、試験基盤の確認（4.1）と適合テストデータの実行器 | 修正とリリース制御は IP-D1・IP-D2 の合意だけで始められ、段階 0 と並行して進める。実行器は段階 0 の後 |
-| 2 | rs・js・go・java | 中核（封筒・照合・検査・エラー分類）→ メモリ → DynamoDB → 文書。rs は v3 からの移行ツールも | 段階 1 |
+| 1 | 各リポジトリ | 現行メジャーの修正（8 章）→ リリース制御の変更（3 章）。並行して、試験基盤の確認（4.1）と、適合テストデータを写して CI で照合する（6 章） | 修正とリリース制御は IP-D1・IP-D2 の合意だけで始められ、段階 0 と並行して進める。データの配布は段階 0 の後 |
+| 2 | rs・js・go・java | 適合テストデータの実行器 → 中核（封筒・照合・検査・エラー分類）→ メモリ → DynamoDB → 文書。rs は v3 からの移行ツールも | 段階 1 |
 | 3 | kotlin・scala | java の Snapshot を参照し、包む層を新 API に作り直す | java の段階 2 |
 | 4 | 各リポジトリ | 受け入れ条件（5 章）を満たしたものから、オーナーの承認を得てメジャーを出す。java を先に出し、kotlin・scala は java への依存を Snapshot から正式版に差し替えてから出す | 段階 2・3 |
 | 5 | rs・js | rs の SQLite・Bigtable と js の Spanner を、新契約で出し直す（IP-D3）。旧配置からの移行ツールも | 各プロファイルの実現方法の確認 |
@@ -105,7 +120,7 @@ IP-D3（2026-10-05 合意）で 3 つの保存先をいったん外す理由は�
 
 ### 4.1 試験基盤の確認
 
-仕様は、トランザクションの取り消し理由に旧項目を載せる `ReturnValuesOnConditionCheckFailure`（D-5）と、head テーブルの Streams（DY-12）を前提にする。これらが試験環境で再現できるかは、まだ確かめていない。
+仕様は、トランザクションの取り消し理由に旧項目を載せる `ReturnValuesOnConditionCheckFailure`（D-5）と、head テーブルの Streams（DY-12）を前提にする。これらが試験環境で再現できるかを、2026-10-05 に下の 3 案で確かめた。
 
 また、Docker Hub の LocalStack のイメージは、2026-03-23 から利用者のアカウントと認証トークン（`LOCALSTACK_AUTH_TOKEN`）がないと動かない（[LocalStack の告知](https://blog.localstack.cloud/2026-upcoming-pricing-changes/)）。オープンソースのプロジェクトと CI には無料の枠がある。今の試験が固定している版（5 つは 2.1.0、scala は 1.0.3）が今後もトークンなしで動くかは、次の比較で確かめる。
 
@@ -116,6 +131,26 @@ IP-D3（2026-10-05 合意）で 3 つの保存先をいったん外す理由は�
 - AWS が配布する DynamoDB Local に切り替える。
 
 どの案でも再現できない規則は、実サービスで確かめる手順を別に定める。
+
+#### 比べた結果と決定（2026-10-05）
+
+LocalStack 2.1.0、トークンなしで動く LocalStack の最新の正式版 4.14.0、DynamoDB Local 3.3.1 の 3 つで、次の 6 項目を実際に動かして確かめた。比較のスクリプトと実測の記録は [tools/spikes/dynamodb-emulators/](../../tools/spikes/dynamodb-emulators/README.md) にある。
+
+- 条件付きの Update と Put を含む TransactWriteItems の取り消しで、CancellationReasons の該当要素に旧項目が載る（D-5）
+- head テーブルの Streams（NEW_IMAGE）で、INSERT と MODIFY を順に読める（DY-12）
+- 1 つのパーティションで 1MB を超える強整合の Query を、LastEvaluatedKey で読み切れる（DY-11）
+- BatchGetItem の強整合読み取り（DY-8・DY-9）
+- 疎な KEYS_ONLY の GSI（D-3）
+- 属性 ttl の TTL を有効にできる（DY-2）
+
+3 つとも 6 項目すべてが成功した。そこで、各言語の試験環境は **DynamoDB Local 3.3.1 に統一し、イメージを digest（`sha256:ff89bd48ff32cd8d9be5fee8873b65b8854dc408f1afe881be6eb00247bc0dab`）で固定する**。AWS 公式のイメージで、トークンが要らず、LocalStack が独自に実装する Streams にも頼らないからである。LocalStack の DynamoDB は内部で DynamoDB Local を使うので、D-5 の結果は同梱の DynamoDB Local の版で決まる。
+
+トークンが要る LocalStack の最新版は動かしていない。トークンなしの 2 案で全項目を再現できたので、Secret を用意してまで比べる必要がないと判断した。試験を書くときは次に注意する。
+
+- DynamoDB Local の Streams の ARN はリージョンが `ddblocal` になる。ARN から AWS のリージョンを推測せず、Streams のクライアントにも endpoint を明示する。
+- LocalStack を使い続ける場合は、テーブルが ACTIVE になった後も、Streams が ENABLED になり iterator を取れるまで待つ。
+
+今のリポジトリの試験（LocalStack 2.1.0 など）は、段階 2 で試験を書き直すときに DynamoDB Local へ移す。
 
 ### 4.2 言語ごとの主な作業
 
@@ -148,8 +183,12 @@ IP-D3（2026-10-05 合意）で 3 つの保存先をいったん外す理由は�
 - **値の表**: aid 文字列の組み立てと T-11・T-12 の境界、T-13 の両端、T-9 の上限。
 - **操作の場面**: 書き込みと読み取りの列と、期待する結果（返る値、エラーの分類、エラーのメッセージに含む規則番号）。共通契約の W-3〜W-9、R-1〜R-8、S-1〜S-3、E-1〜E-3 を中心にする。保存先の障害を必要とする場面（S-4 など）も、DynamoDB とメモリの両方で行う。DynamoDB では、SDK のクライアントに差し込む仕組み（インターセプターやミドルウェア）で、保持処理の要求だけを失敗させる。
 - **DynamoDB の場面**: 設定項目の照合（DY-8）、外れ方の判別（D-5）、競合の分類（D-6）、項目サイズの事前検査（D-7）、ページ送りを伴う読み取り（DY-11）、保持処理（dynamodb.md 8 章）。journal・snapshot・head と設定項目の、属性の名前と型の期待値も持つ。
-- **段階 5 の値の表**: hash.md の FNV-1a 64 と、ADR-0008 の封筒の固定バイナリ形式。最初のメジャーの DynamoDB とメモリでは使わないので、段階 5 の前に足せばよい。
+- **段階 5 の値の表**: hash.md の FNV-1a 64 は、hash.md が収録を求めているので v1 に入れた（K-1）。ADR-0008 の封筒の固定バイナリ形式は、最初のメジャーの DynamoDB とメモリでは使わないので、段階 5 の前に足す。
 - **配り方（IP-D7、2026-10-05 合意）**: [運用方針](../operations/repository-policy.md) 8 章の takt のテンプレートと同じく、各リポジトリに同じ内容を写す。写した版とハッシュを CI で照合する。本リポジトリのデータを変えたら、コーディネーターが全リポジトリに配る。
+
+v1.0.0 を 2026-10-05 に [conformance/](../../conformance/README.md) に置いた。値の表 30 件、操作の場面 85 件（共通契約 42 件、DynamoDB 43 件）、配置 1 件で、54 の規則を網羅する。対象外は、削除した W-5 と、呼び出し側の推奨である R-7 である。`tools/conformance/` の検証の道具は、スキーマ・参照・規則番号・manifest に加えて、書き込みと読み取りの場面を状態機械で再生する参照モデルで期待値を確かめる。S-3（期限切れ方式）の場面は DynamoDB だけを対象にしており、メモリのプロファイルの合意（期限切れ方式と変更フィードを提供しない）と合っている。
+
+各リポジトリには `conformance/`（`.gitattributes` で改行の変換を止める）と `tools/conformance/manifest.py` を写し、CI で `manifest.py verify` と、`conformance/manifest.json` の SHA-256（v1.0.0 は `61c26614dbbfba88eebce72cc1d2b0220218839e74dcfb64c19268f7ee2302ce`）の照合を行う。データを配り直すときは、この値も更新する。
 
 ## 7. 旧データの移行（IP-D8、2026-10-05 合意）
 
@@ -175,6 +214,23 @@ IP-D3（2026-10-05 合意）で 3 つの保存先をいったん外す理由は�
 - rs v3 の Bigtable の欠番は、今の配置のままでは直せない。README で注意を促し、段階 5 の新しい配置で解消する。
 
 出すのは、3 章の手順 1（版上げの定期実行を外す前）である。rs の試験は、新しい履歴が残らない誤った挙動を正しいものとして確かめているので、直すときは試験も改める。2.2 の表のそれ以外の不具合は、新しいメジャーで解消する。
+
+### 結果（2026-10-05）
+
+各不具合を、直す前に LocalStack の試験で再現してから直し、次のパッチ版を公開した。
+
+| 実装 | 版 | PR |
+|:--|:--|:--|
+| rs | 3.0.6（crates.io） | [#243](https://github.com/j5ik2o/event-store-adapter-rs/pull/243) |
+| js | 4.0.1（npm） | [#999](https://github.com/j5ik2o/event-store-adapter-js/pull/999) |
+| java | 1.2.91（Maven Central） | [#690](https://github.com/j5ik2o/event-store-adapter-java/pull/690) |
+| kotlin | 1.0.511（java 1.2.91 に依存） | [#825](https://github.com/j5ik2o/event-store-adapter-kotlin/pull/825) |
+| scala | 1.0.341（java 1.2.91 に依存） | [#859](https://github.com/j5ik2o/event-store-adapter-scala/pull/859) |
+| go | v1.0.197 | [#386](https://github.com/j5ik2o/event-store-adapter-go/pull/386) |
+
+レビュー（CodeRabbit）で、TTL 方式の保持が「期限の印を付け済みの履歴」まで件数に数えることが分かった。旧版が新しい履歴に印を付けた状態から書くと、残すべき履歴にまで印が付く。残すべき新しい履歴を失う不具合なので、rs・java・go で、印のない履歴だけを数えて古い順に選び、印を付け済みの履歴の期限を延ばさないように直した（共通契約 S-3 の性質に合う）。js は 1 ページで読み終えるかの判定に、空の `LastEvaluatedKey` も含めた。rs の `docs/DATABASE_SCHEMA` の、旧来の保持の説明も直した。
+
+範囲外として報告を受け、直さなかったものは次のとおりで、新しいメジャーで解消する。java の `:seq_nr` 属性の誤り、java・go の BatchWriteItem の 25 件の上限への未分割、go の staticcheck の既存の警告 8 件。
 
 ## 9. 実行体制
 
@@ -204,3 +260,5 @@ IP-D3（2026-10-05 合意）で 3 つの保存先をいったん外す理由は�
 | 移行の間、main から現行メジャーを出せない | 主な修正は定期実行を外す前に出す。その後に要る修正は、保守ブランチで出す（3 章） |
 | Renovate の更新が、書き直しの PR と衝突する | 段階 2 の間は、メジャー更新の取り込みを書き直しの後に回す |
 | java・go・js の作業量が大きい | 4 章の段階ごとに PR を分け、並行して進める |
+| CodeRabbit の無料枠の上限で、レビューが止まる（2026-10-05 に何度も起きた） | コードの PR は CodeRabbit の結果を待つ。文書の PR は、コーディネーターのレビューと独立したレビュー（Opus 以外のサブエージェント）で進める |
+| Claude Code の作業者が、新しいワークツリーで `.claude/settings.json` の事前許可の確認画面に止まる | 作業者は Codex（GPT-6.1-Sol）で起動する。Sonnet 5.5 を使うなら、この確認を通す方法を先に決める |
