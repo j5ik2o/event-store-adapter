@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "files": [
     {
+      "path": ".gitattributes",
+      "sha256": "94afb46257ad1feef5b9ef4db40e3be199e4fa7e0847a43fc59f4c5524c384af"
+    },
+    {
       "path": "COVERAGE.md",
       "sha256": "b3e0928150450d2b52eca21ab2148da569dd704c931f7ecb6a0ca6fb8b2371ae"
     },
