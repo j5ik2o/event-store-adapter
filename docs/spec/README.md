@@ -63,7 +63,7 @@
 | 共通契約 | [core-contract.md](core-contract.md) | 保存先に依存しない意味論。型、4 つの操作、seq_nr の規約、エラー分類、スナップショット保持、変更フィード |
 | ストレージプロファイル | [DynamoDB](storage/dynamodb.md)（D-1〜D-9 合意済み）、[Bigtable](storage/bigtable.md)（BT-D1〜D5・BT-D6a・BT-D6b・BT-D7 合意済み、具体的な実現方法は草案）、[Spanner](storage/spanner.md)（SPN-D1a・SPN-D1b・SPN-D2〜D7 合意済み、具体的な実現方法は草案）、[SQLite](storage/sqlite.md)（1 章の主要判断はすべて合意済み、具体的な実現方法は草案）、[メモリ](storage/memory.md)（MEM-D1〜D9・MEM-D11・MEM-D12 合意済み、MEM-D10 は保留） | 保存先ごとの配置、確定、読み取り、保持、変更フィード |
 | ストレージプロファイル共通 | [storage/hash.md](storage/hash.md) | キーにハッシュを使うプロファイル（Spanner・Bigtable など）が使う FNV-1a 64 とその入出力表 |
-| 適合テストデータ | （未作成） | 言語に依存しない JSON で書いた入出力と期待結果。各実装の CI が読み込む |
+| 適合テストデータ | [conformance/](../../conformance/README.md)（v1.0.0、2026-10-05） | 言語に依存しない JSON で書いた入出力と期待結果。各実装は同じ内容を写して CI で版とハッシュを照合し、段階 2 で実行器を作って読み込む |
 
 Spanner・Bigtable・SQLite の草案は 2026-10-04 に作成し、各プロファイルの 1 章にある主要判断をすべて合意した。
 

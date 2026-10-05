@@ -28,6 +28,23 @@ event-store-adapter グループの各リポジトリが従う、CI・ブラン�
 - 公開のジョブから main にコミットや push をしない。Snapshot の版は、ジョブの中だけで決める。
 - パッケージの登録先が OIDC の Trusted Publishing に対応しているときは、長く使うトークンではなく OIDC で公開する。対応していない登録先（Maven Central など）のときだけ、トークンを Secrets に置く（7 章）。
 
+### 版上げの workflow
+
+2026-10-05 に、[実装計画](../plan/implementation-plan.md)の IP-D1（新しい共通仕様への書き直しを main で進める）に沿って改めた。
+
+- 版上げの workflow は手動でだけ起動する。定期実行は置かない。main に入れた書き直しの途中の変更が、自動で公開されないようにするためである。
+- 手動の起動では、上げる段階を入力 `level`（auto・patch・minor・major）で選べる。auto のときは、前のタグ以降のコミットから判定する。
+- 判定は、件名の型の直後に `!` があるか、本文に `BREAKING CHANGE:`・`BREAKING-CHANGE:` で始まる行があれば major、`feat`・`revert` は minor、`perf` を含むそれ以外の型は patch とする。判定の対象のコミットがなければ失敗で終える。
+- 判定のスクリプトの単体試験と、workflow の静的検査（actionlint）を CI に置き、`CI Success` の依存に含める。
+
+### 適合テストデータの照合
+
+2026-10-05 に、実装計画の IP-D7 に沿って置いた。
+
+- 各リポジトリは、本リポジトリの `conformance/` と `tools/conformance/manifest.py` を同じ内容で写す。内容は変えない。
+- CI で `python3 tools/conformance/manifest.py verify` を実行し、`conformance/manifest.json` の SHA-256 を固定値と照合する。この手順は `CI Success` の依存に含まれるジョブに置く。
+- 本リポジトリのデータを変えたら、コーディネーターが全リポジトリに配り直し、固定値も更新する。
+
 ## 2. ブランチ保護（main）
 
 - 必須のステータスチェックは `CI Success` の 1 つだけにする。matrix のジョブ名を直接必須にすると、matrix を変えたときに名前がずれるからである。
@@ -91,6 +108,8 @@ takt を使うリポジトリは、次の配置にそろえる。テンプレー
 2026-10-03 の時点で、1〜4 章と 8 章は、6 リポジトリすべてで適合していた。必須チェックは `CI Success` だけで、strict が有効（会話の解決の必須は無効）、マージは squash のみ、CI の全ジョブに `timeout-minutes` があり、workflow で動く AI レビューと独自のスレッドのゲートはない。同日に足した 1 章の「公開の workflow」には、java・kotlin・js・scala・rs が適合している（scala は #853、js は手動実行の CI を除く #990、rs は #239 も含む）。go はパッケージの登録先に公開しないので対象外。8 章の takt の版は、同日に 6 リポジトリとも 0.68.0 にそろえ、Renovate では更新しない設定にした（rs #240、js #992、java #686、scala #854、kotlin #822、go #383）。
 
 2026-10-05 に 8 章の役割の分担を改め（設計と既定を Opus 5.5 から GPT-6.1-Sol に）、テンプレートを直して 6 リポジトリの `.takt/` に配った（rs #242、js #998、java #689、scala #857、kotlin #824、go #385）。8 章は、6 リポジトリとも再び適合している。
+
+同日に足した 1 章の「版上げの workflow」と「適合テストデータの照合」には、6 リポジトリとも適合している。版上げの workflow は rs #244、js #1000、java #691、kotlin #827、scala #860、go #387 で、適合テストデータ v1.0.0 の照合は rs #247、js #1003、java #692、kotlin #830、scala #861、go #388 で入れた。
 
 | 残っている項目 | 対象 | 担当 |
 |:--|:--|:--|
