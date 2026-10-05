@@ -1,0 +1,389 @@
+{
+  "environment": "B",
+  "image": "localstack/localstack:4.14.0@sha256:3ebc37595918b8accb852f8048fef2aff047d465167edd655528065b07bc364a",
+  "token_required": false,
+  "executed_at_utc": "2026-10-05T11:01:46.312794+00:00",
+  "checks": {
+    "1_update_all_old": {
+      "response": {
+        "Error": {
+          "Message": "Transaction cancelled, please refer cancellation reasons for specific reasons [None, ConditionalCheckFailed]",
+          "Code": "TransactionCanceledException"
+        },
+        "Message": "Transaction cancelled, please refer cancellation reasons for specific reasons [None, ConditionalCheckFailed]",
+        "CancellationReasons": [
+          {
+            "Code": "None"
+          },
+          {
+            "Item": {
+              "aid": {
+                "S": "transaction-Update"
+              },
+              "seq_nr": {
+                "N": "7"
+              },
+              "marker": {
+                "S": "old"
+              }
+            },
+            "Code": "ConditionalCheckFailed",
+            "Message": "The conditional request failed"
+          }
+        ]
+      },
+      "head_after": {
+        "Item": {
+          "aid": {
+            "S": "transaction-Update"
+          },
+          "seq_nr": {
+            "N": "7"
+          },
+          "marker": {
+            "S": "old"
+          }
+        }
+      },
+      "side_after": {},
+      "status": "success",
+      "seconds": 0.125
+    },
+    "1_put_all_old": {
+      "response": {
+        "Error": {
+          "Message": "Transaction cancelled, please refer cancellation reasons for specific reasons [None, ConditionalCheckFailed]",
+          "Code": "TransactionCanceledException"
+        },
+        "Message": "Transaction cancelled, please refer cancellation reasons for specific reasons [None, ConditionalCheckFailed]",
+        "CancellationReasons": [
+          {
+            "Code": "None"
+          },
+          {
+            "Item": {
+              "aid": {
+                "S": "transaction-Put"
+              },
+              "seq_nr": {
+                "N": "7"
+              },
+              "marker": {
+                "S": "old"
+              }
+            },
+            "Code": "ConditionalCheckFailed",
+            "Message": "The conditional request failed"
+          }
+        ]
+      },
+      "head_after": {
+        "Item": {
+          "aid": {
+            "S": "transaction-Put"
+          },
+          "seq_nr": {
+            "N": "7"
+          },
+          "marker": {
+            "S": "old"
+          }
+        }
+      },
+      "side_after": {},
+      "status": "success",
+      "seconds": 0.04
+    },
+    "2_streams_new_image": {
+      "stream_specification": {
+        "StreamEnabled": true,
+        "StreamViewType": "NEW_IMAGE"
+      },
+      "latest_stream_arn": "arn:aws:dynamodb:us-east-1:000000000000:table/spike-head/stream/2026-10-05T11:01:52.394",
+      "describe_stream": {
+        "StreamDescription": {
+          "StreamArn": "arn:aws:dynamodb:us-east-1:000000000000:table/spike-head/stream/2026-10-05T11:01:52.394",
+          "StreamLabel": "2026-10-05T11:01:52.394",
+          "StreamStatus": "ENABLING",
+          "StreamViewType": "NEW_IMAGE",
+          "TableName": "spike-head",
+          "KeySchema": [
+            {
+              "AttributeName": "aid",
+              "KeyType": "HASH"
+            }
+          ],
+          "Shards": [
+            {
+              "ShardId": "shardId-00000001791100000000-000000000000",
+              "SequenceNumberRange": {
+                "StartingSequenceNumber": "49678978151198073268168431436682971833162712315412348930"
+              }
+            }
+          ]
+        }
+      },
+      "readiness_errors": [],
+      "ready_stream_status": "ENABLED",
+      "stream_ready_seconds": 0.307,
+      "records": [
+        {
+          "eventID": "a82e79a3",
+          "eventName": "INSERT",
+          "eventVersion": "1.1",
+          "eventSource": "aws:dynamodb",
+          "awsRegion": "us-east-1",
+          "dynamodb": {
+            "ApproximateCreationDateTime": "2026-10-05T11:01:54+00:00",
+            "Keys": {
+              "aid": {
+                "S": "stream-target"
+              }
+            },
+            "NewImage": {
+              "aid": {
+                "S": "stream-target"
+              },
+              "seq_nr": {
+                "N": "1"
+              }
+            },
+            "SequenceNumber": "49678978151198073268168431436684180758982327013306531842",
+            "SizeBytes": 48,
+            "StreamViewType": "NEW_IMAGE"
+          }
+        },
+        {
+          "eventID": "b4cb7f8d",
+          "eventName": "MODIFY",
+          "eventVersion": "1.1",
+          "eventSource": "aws:dynamodb",
+          "awsRegion": "us-east-1",
+          "dynamodb": {
+            "ApproximateCreationDateTime": "2026-10-05T11:01:54+00:00",
+            "Keys": {
+              "aid": {
+                "S": "stream-target"
+              }
+            },
+            "NewImage": {
+              "seq_nr": {
+                "N": "2"
+              },
+              "aid": {
+                "S": "stream-target"
+              }
+            },
+            "SequenceNumber": "49678978151198073268168431436685389684801941642481238018",
+            "SizeBytes": 48,
+            "StreamViewType": "NEW_IMAGE"
+          }
+        }
+      ],
+      "events": [
+        {
+          "shard": "shardId-00000001791100000000-000000000000",
+          "event": "INSERT",
+          "seq_nr": {
+            "N": "1"
+          }
+        },
+        {
+          "shard": "shardId-00000001791100000000-000000000000",
+          "event": "MODIFY",
+          "seq_nr": {
+            "N": "2"
+          }
+        }
+      ],
+      "status": "success",
+      "seconds": 0.418
+    },
+    "3_query_pagination": {
+      "payload_bytes": 1440000,
+      "pages": [
+        {
+          "count": 9,
+          "payload_bytes": 1080000,
+          "last_evaluated_key": {
+            "seq_nr": {
+              "N": "9"
+            },
+            "aid": {
+              "S": "pagination"
+            }
+          }
+        },
+        {
+          "count": 3,
+          "payload_bytes": 360000,
+          "last_evaluated_key": null
+        }
+      ],
+      "seq_nrs": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "status": "success",
+      "seconds": 0.153
+    },
+    "4_batch_get_consistent": {
+      "requests": {
+        "spike-head": {
+          "Keys": [
+            {
+              "aid": {
+                "S": "__config__"
+              }
+            }
+          ],
+          "ConsistentRead": true
+        },
+        "spike-journal": {
+          "Keys": [
+            {
+              "aid": {
+                "S": "__config__"
+              },
+              "seq_nr": {
+                "N": "0"
+              }
+            }
+          ],
+          "ConsistentRead": true
+        },
+        "spike-snapshot": {
+          "Keys": [
+            {
+              "aid": {
+                "S": "__config__"
+              },
+              "skey": {
+                "N": "0"
+              }
+            }
+          ],
+          "ConsistentRead": true
+        }
+      },
+      "responses": [
+        {
+          "Responses": {
+            "spike-snapshot": [
+              {
+                "store_id": {
+                  "S": "spike"
+                },
+                "skey": {
+                  "N": "0"
+                },
+                "aid": {
+                  "S": "__config__"
+                },
+                "layout_version": {
+                  "N": "1"
+                }
+              }
+            ],
+            "spike-journal": [
+              {
+                "store_id": {
+                  "S": "spike"
+                },
+                "aid": {
+                  "S": "__config__"
+                },
+                "layout_version": {
+                  "N": "1"
+                },
+                "seq_nr": {
+                  "N": "0"
+                }
+              }
+            ],
+            "spike-head": [
+              {
+                "store_id": {
+                  "S": "spike"
+                },
+                "aid": {
+                  "S": "__config__"
+                },
+                "layout_version": {
+                  "N": "1"
+                }
+              }
+            ]
+          },
+          "UnprocessedKeys": {}
+        }
+      ],
+      "status": "success",
+      "seconds": 0.035
+    },
+    "5_sparse_gsi_keys_only": {
+      "response": {
+        "Items": [
+          {
+            "skey": {
+              "N": "0"
+            },
+            "active_history_seq_nr": {
+              "N": "2"
+            },
+            "aid": {
+              "S": "sparse"
+            }
+          }
+        ],
+        "Count": 1,
+        "ScannedCount": 1
+      },
+      "status": "success",
+      "seconds": 0.039
+    },
+    "6_ttl_enable": {
+      "update": {
+        "TimeToLiveSpecification": {
+          "Enabled": true,
+          "AttributeName": "ttl"
+        }
+      },
+      "describe": {
+        "TimeToLiveDescription": {
+          "TimeToLiveStatus": "ENABLED",
+          "AttributeName": "ttl"
+        }
+      },
+      "status": "success",
+      "seconds": 0.012
+    }
+  },
+  "pull_seconds": 2.487,
+  "image_metadata": {
+    "Id": "sha256:3ebc37595918b8accb852f8048fef2aff047d465167edd655528065b07bc364a",
+    "RepoDigests": [
+      "localstack/localstack@sha256:3ebc37595918b8accb852f8048fef2aff047d465167edd655528065b07bc364a"
+    ],
+    "Architecture": "arm64",
+    "Os": "linux",
+    "Created": "2026-02-26T10:28:09.664236889Z",
+    "labels": {
+      "authors": "LocalStack Contributors",
+      "description": "LocalStack Docker image",
+      "maintainer": "LocalStack Team (info@localstack.cloud)"
+    }
+  },
+  "startup_seconds": 3.402,
+  "container_removed": true
+}
