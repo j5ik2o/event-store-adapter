@@ -24,6 +24,7 @@ event-store-adapter グループの各リポジトリが従う、CI・ブラン�
 
 - Snapshot など、main の変更のたびに公開する workflow は、PR の CI では公開しない。
 - 公開するのは、main への push か定期実行の CI が成功したコミットで、起動した時点と公開の直前の両方で main の先頭であるものだけにする。checkout はそのコミットの SHA で行う。古い run を再実行したときも、公開の直前の確認で古いコードを公開しない。
+- リリースタグから公開する workflow（既存タグの手動再公開を含む）は、前項の main の先頭と main の CI 成功を求める条件の対象外とする。公開対象のタグを checkout する（[js の Release workflow](https://github.com/j5ik2o/event-store-adapter-js/blob/35de020edcf113191c27fef73aa84707edbcf46e/.github/workflows/release.yml)）。
 - 公開のジョブから main にコミットや push をしない。Snapshot の版は、ジョブの中だけで決める。
 - パッケージの登録先が OIDC の Trusted Publishing に対応しているときは、長く使うトークンではなく OIDC で公開する。対応していない登録先（Maven Central など）のときだけ、トークンを Secrets に置く（7 章）。
 
