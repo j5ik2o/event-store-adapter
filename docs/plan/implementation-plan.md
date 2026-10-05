@@ -179,6 +179,7 @@ IP-D3（2026-10-05 合意）で 3 つの保存先をいったん外す理由は�
 ## 9. 実行体制
 
 - 各リポジトリへの変更は、コーディネーター（本リポジトリのセッション）が Orca の orchestration で worker に指示して行う。worker は PR の作成までを行い、マージはコーディネーターが行う（[運用方針](../operations/repository-policy.md) 6 章）。
+- コーディネーターは Opus 5.5 で動かし、worker には Opus 以外のモデルとハーネス（Sonnet 5.5、GPT-6.1-Sol、Ollama Cloud・OpenCode Go）を使う（運用方針 6 章）。実作業は、Orca の orchestration で行っても、takt で行ってもよい。
 - takt を使う場合の役割の分担は、運用方針の 8 章に従う。aidlc は使わない。
 - PR は 4 章の段階の作業ごとに分け、1 つの PR が 1 つの規則群に対応するようにする。
 
