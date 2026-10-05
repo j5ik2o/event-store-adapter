@@ -37,12 +37,13 @@ class ConformanceToolsTests(unittest.TestCase):
         return self.assertRaisesRegex(ValueError, message)
 
     def test_distributed_data_is_valid(self):
-        schemas, documents, counts, covered, excluded = validate.validate(self.root, validate.DEFAULT_SPEC_ROOT)
+        schemas, documents, counts, covered, excluded, checked, skipped = validate.validate(self.root, validate.DEFAULT_SPEC_ROOT)
         self.assertEqual(schemas, 6)
         self.assertGreater(documents, 0)
         self.assertGreater(counts["scenarios"], 0)
         self.assertGreater(covered, 0)
         self.assertEqual(excluded, 2)
+        self.assertGreater(checked, 0)
 
     def test_manifest_cli_uses_only_standard_library_and_detects_change(self):
         command = [sys.executable, "-S", str(TOOLS / "manifest.py"), "verify", "--root", str(self.root)]
@@ -169,6 +170,86 @@ class ConformanceToolsTests(unittest.TestCase):
                 path.write_text(contents, encoding="utf-8")
                 with self.assertRaises(ValueError):
                     manifest.read_json(path)
+
+
+    def case_mutation(self, relative, identifier, change):
+        self.mutate(relative, lambda doc: change(next(c for c in doc["cases"] if c["id"] == identifier)))
+
+    def test_message_number_cannot_hide_in_aid_or_rule(self):
+        relative = "scenarios/core/write-read.json"
+        original = manifest.read_json(self.root / relative)
+        for token in ["9", "8", ""]:
+            with self.subTest(token=token):
+                (self.root / relative).write_text(json.dumps(original), encoding="utf-8")
+                self.case_mutation(relative, "core-gap-event", lambda c:
+                                   c["steps"][1]["expect"]["error"]["message"]["must_contain"].append(token))
+                with self.rejected("must_contain"):
+                    self.check()
+
+    def test_d7_cannot_be_required_error_rule(self):
+        self.case_mutation("dynamodb/write-errors.json", "dynamodb-item-size-event", lambda c:
+                           c["steps"][0]["expect"]["error"].update(rule="D-7"))
+        with self.rejected("判断番号"):
+            self.check()
+
+    def test_cancellation_vector_requires_none_for_other_actions(self):
+        self.case_mutation("dynamodb/write-errors.json", "dynamodb-condition-equal", lambda c:
+                           c["faults"][0]["details"]["cancellation_reasons"].pop(0))
+        with self.rejected("CancellationReasons"):
+            self.check()
+
+    def test_fault_fields_use_single_types_and_explicit_injection(self):
+        relative = "dynamodb/read.json"
+        original = manifest.read_json(self.root / relative)
+        for update in [{"times": "until-operation-finishes"}, {"repeat": 1}, {"operation": "initialize"}]:
+            with self.subTest(update=update):
+                (self.root / relative).write_text(json.dumps(original), encoding="utf-8")
+                self.case_mutation(relative, "dynamodb-latest-unprocessed", lambda c: c["faults"][0].update(update))
+                with self.rejected("Schema 不一致"):
+                    self.check()
+        (self.root / relative).write_text(json.dumps(original), encoding="utf-8")
+        self.case_mutation(relative, "dynamodb-latest-unprocessed", lambda c: c["faults"][0].pop("injection"))
+        with self.rejected("Schema 不一致"):
+            self.check()
+
+    def test_ambiguous_context_and_expression_strings_are_rejected(self):
+        self.case_mutation("scenarios/core/write-read.json", "core-existing-create-event", lambda c:
+                           c["steps"][2]["expect"]["error"]["message"].update(context_only={}))
+        with self.rejected("Schema 不一致"):
+            self.check()
+        shutil.copyfile(manifest.DEFAULT_ROOT / "scenarios/core/write-read.json", self.root / "scenarios/core/write-read.json")
+        self.case_mutation("dynamodb/retention.json", "dynamodb-retention-ttl-once", lambda c:
+                           c["steps"][0]["observe"]["requests"][0]["constraints"].update(update_expression="SET #ttl = :expires"))
+        with self.rejected("Schema 不一致"):
+            self.check()
+
+    def test_value_message_requires_related_sequence_number(self):
+        def incorrect(doc):
+            scenario = next(c for c in doc["cases"] if "error" in c["expect"])
+            scenario["expect"]["error"]["message"]["must_contain"] = ["T-13", "42"]
+        self.mutate("values/occurred-at.json", incorrect)
+        with self.rejected("関係する番号のメッセージ期待"):
+            self.check()
+
+    def test_hash_table_rejects_incorrect_output(self):
+        self.mutate("values/hash.json", lambda doc: doc["cases"][0]["expect"].update(value="0x0000000000000000"))
+        with self.rejected("値の期待が入力と不一致"):
+            self.check()
+
+    def test_validation_uses_reference_model_for_classification(self):
+        def incorrect(case):
+            e = case["steps"][1]["expect"]["error"]
+            e["category"] = "optimistic-lock"
+            e["message"]["must_contain"].append("Order-9")
+        self.case_mutation("scenarios/core/write-read.json", "core-gap-event", incorrect)
+        with self.rejected("参照モデルと期待が不一致"):
+            self.check()
+
+    def test_validation_uses_reference_model_for_ttl(self):
+        self.case_mutation("dynamodb/retention.json", "dynamodb-retention-ttl-once", lambda c:
+                           c["steps"][0]["observe"]["history"]["marked"][1].update(ttl=1))
+        with self.rejected("参照モデルの履歴・TTL期限"):
+            self.check()
 
 
 if __name__ == "__main__":

@@ -22,7 +22,7 @@
             "type": "array",
             "items": {
               "type": "string",
-              "pattern": "^(T|H|W|R|E|S|SP|DY|D)-[1-9][0-9]*$"
+              "pattern": "^(K|T|H|W|R|E|S|SP|DY|D)-[1-9][0-9]*$"
             },
             "minItems": 1,
             "uniqueItems": true
@@ -34,7 +34,8 @@
             "enum": [
               "buildAid",
               "validateOccurredAt",
-              "validateSeqNr"
+              "validateSeqNr",
+              "fnv1a64"
             ]
           },
           "input": {
@@ -91,6 +92,18 @@
                 "required": [
                   "seq_nr",
                   "context"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "utf8": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "utf8"
                 ],
                 "additionalProperties": false
               }

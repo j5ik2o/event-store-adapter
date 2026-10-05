@@ -54,7 +54,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -66,7 +66,7 @@
           "e2": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -78,7 +78,7 @@
           "e3": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 3,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -90,7 +90,7 @@
           "e4": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 4,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -222,7 +222,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -236,7 +236,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -256,20 +256,23 @@
           "operation": 1,
           "phase": "retention-query",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "history_pages": [
               [
                 1
               ]
             ]
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
         },
         {
           "operation": 2,
           "phase": "retention-query",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "history_pages": [
               [
@@ -277,13 +280,17 @@
                 1
               ]
             ]
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
         },
         {
           "operation": 3,
           "phase": "retention-query",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "history_pages": [
               [
@@ -291,13 +298,17 @@
                 2
               ]
             ]
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
         },
         {
           "operation": 4,
           "phase": "retention-query",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "history_pages": [
               [
@@ -305,7 +316,12 @@
                 3
               ]
             ]
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
         }
       ]
     },
@@ -329,7 +345,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -341,7 +357,7 @@
           "e2": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -353,7 +369,7 @@
           "e3": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 3,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -365,7 +381,7 @@
           "e4": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 4,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -496,7 +512,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -510,7 +526,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -530,20 +546,23 @@
           "operation": 1,
           "phase": "retention-query",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "history_pages": [
               [
                 1
               ]
             ]
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
         },
         {
           "operation": 2,
           "phase": "retention-query",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "history_pages": [
               [
@@ -551,13 +570,17 @@
                 1
               ]
             ]
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
         },
         {
           "operation": 3,
           "phase": "retention-query",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "history_pages": [
               [
@@ -566,13 +589,17 @@
                 1
               ]
             ]
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
         },
         {
           "operation": 4,
           "phase": "retention-query",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "history_pages": [
               [
@@ -581,7 +608,12 @@
                 2
               ]
             ]
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
         }
       ]
     },
@@ -604,7 +636,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -616,7 +648,7 @@
           "e2": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -688,7 +720,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -719,7 +751,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -760,7 +792,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -772,7 +804,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -787,10 +819,14 @@
           "operation": 1,
           "phase": "serialize-event",
           "kind": "serialization-error",
-          "times": 1,
           "details": {
             "message": "SERIALIZATION_SENTINEL"
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-request"
         }
       ]
     },
@@ -814,7 +850,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -856,7 +892,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -868,7 +904,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -883,10 +919,14 @@
           "operation": 1,
           "phase": "serialize-snapshot",
           "kind": "serialization-error",
-          "times": 1,
           "details": {
             "message": "SERIALIZATION_SENTINEL"
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-request"
         }
       ]
     },
@@ -909,7 +949,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -944,7 +984,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -964,10 +1004,14 @@
           "operation": 2,
           "phase": "deserialize-event",
           "kind": "serialization-error",
-          "times": 1,
           "details": {
             "message": "SERIALIZATION_SENTINEL"
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-request"
         }
       ]
     },
@@ -990,7 +1034,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1026,7 +1070,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -1045,10 +1089,14 @@
           "operation": 2,
           "phase": "deserialize-snapshot",
           "kind": "serialization-error",
-          "times": 1,
           "details": {
             "message": "SERIALIZATION_SENTINEL"
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-request"
         }
       ]
     },
@@ -1073,7 +1121,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1115,7 +1163,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -1127,7 +1175,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -1142,10 +1190,14 @@
           "operation": 1,
           "phase": "commit",
           "kind": "storage-error",
-          "times": 1,
           "details": {
             "message": "STORAGE_SENTINEL"
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-request"
         }
       ]
     },
@@ -1168,7 +1220,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1195,7 +1247,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -1215,10 +1267,14 @@
           "operation": 2,
           "phase": "read-events",
           "kind": "storage-error",
-          "times": 1,
           "details": {
             "message": "STORAGE_SENTINEL"
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-request"
         }
       ]
     },
@@ -1241,7 +1297,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1268,7 +1324,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -1287,10 +1343,14 @@
           "operation": 2,
           "phase": "read-snapshot",
           "kind": "storage-error",
-          "times": 1,
           "details": {
             "message": "STORAGE_SENTINEL"
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-request"
         }
       ]
     },
@@ -1317,7 +1377,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1329,7 +1389,7 @@
           "e2": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1341,7 +1401,7 @@
           "e3": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 3,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1414,7 +1474,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -1428,7 +1488,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -1468,17 +1528,20 @@
           "operation": 2,
           "phase": "retention-delete",
           "kind": "storage-error",
-          "times": 1,
           "details": {
             "message": "RETENTION_FAILURE",
             "scope": "final-retention-failure"
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-request"
         },
         {
           "operation": 2,
           "phase": "retention-query",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "history_pages": [
               [
@@ -1486,13 +1549,17 @@
                 1
               ]
             ]
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
         },
         {
           "operation": 5,
           "phase": "retention-query",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "history_pages": [
               [
@@ -1501,7 +1568,12 @@
                 1
               ]
             ]
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
         }
       ]
     },
@@ -1528,7 +1600,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1540,7 +1612,7 @@
           "e2": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1552,7 +1624,7 @@
           "e3": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 3,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1625,7 +1697,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -1639,7 +1711,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -1679,16 +1751,19 @@
           "operation": 2,
           "phase": "retention-query",
           "kind": "storage-error",
-          "times": 1,
           "details": {
             "message": "RETENTION_FAILURE"
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-request"
         },
         {
           "operation": 5,
           "phase": "retention-query",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "history_pages": [
               [
@@ -1697,7 +1772,12 @@
                 1
               ]
             ]
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
         }
       ]
     }

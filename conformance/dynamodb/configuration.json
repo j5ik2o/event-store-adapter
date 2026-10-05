@@ -9,7 +9,7 @@
         "D-1",
         "E-1"
       ],
-      "description": "設定項目がすべて揃い、ストア識別子と配置の版が一致する場合だけ生成を続ける。",
+      "description": "3テーブルの設定がすべて未作成なら、共通のstore_idと版1を条件付きトランザクションで作成する。",
       "backends": [
         "dynamodb"
       ],
@@ -52,7 +52,9 @@
                   "snapshot",
                   "head"
                 ],
-                "condition": "attribute_not_exists(aid)",
+                "condition": {
+                  "attribute_not_exists": "aid"
+                },
                 "same_store_id": true,
                 "layout_version": 1
               }
@@ -119,7 +121,7 @@
         "D-1",
         "E-1"
       ],
-      "description": "設定項目がすべて揃い、ストア識別子と配置の版が一致する場合だけ生成を続ける。",
+      "description": "3テーブルのstore_idと版1が一致していれば生成に成功する。",
       "backends": [
         "dynamodb"
       ],
@@ -208,7 +210,7 @@
         "D-1",
         "E-1"
       ],
-      "description": "設定項目がすべて揃い、ストア識別子と配置の版が一致する場合だけ生成を続ける。",
+      "description": "3テーブルのstore_idが一致しないため設定エラーとして拒む。",
       "backends": [
         "dynamodb"
       ],
@@ -307,7 +309,7 @@
         "D-1",
         "E-1"
       ],
-      "description": "設定項目がすべて揃い、ストア識別子と配置の版が一致する場合だけ生成を続ける。",
+      "description": "journalだけに設定が存在する部分配置を、設定エラーとして拒む。",
       "backends": [
         "dynamodb"
       ],
@@ -378,7 +380,7 @@
         "D-1",
         "E-1"
       ],
-      "description": "設定項目がすべて揃い、ストア識別子と配置の版が一致する場合だけ生成を続ける。",
+      "description": "全テーブルの配置版が一致していても、未対応の版は設定エラーとして拒む。",
       "backends": [
         "dynamodb"
       ],
@@ -477,7 +479,7 @@
         "D-1",
         "E-1"
       ],
-      "description": "設定項目がすべて揃い、ストア識別子と配置の版が一致する場合だけ生成を続ける。",
+      "description": "テーブル間の配置版が一致しないため設定エラーとして拒む。",
       "backends": [
         "dynamodb"
       ],
@@ -575,7 +577,7 @@
         "DY-8",
         "E-1"
       ],
-      "description": "未処理キーの回答が終わるまで欠損と判断せず、回答を蓄積する。",
+      "description": "設定の部分応答では未処理キーだけを強整合で再要求し、揃った設定で生成に成功する。",
       "backends": [
         "dynamodb"
       ],
@@ -673,10 +675,9 @@
       },
       "faults": [
         {
-          "operation": "initialize",
+          "operation": 0,
           "phase": "configuration-read",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "responses": {
               "journal": "seed-config"
@@ -685,7 +686,12 @@
               "snapshot:__config__:0",
               "head:__config__"
             ]
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
         }
       ]
     },
@@ -695,7 +701,7 @@
         "DY-8",
         "E-1"
       ],
-      "description": "未処理キーの上限到達は保存先エラーであり、設定エラーや新規作成ではない。",
+      "description": "設定の未処理キーが再要求の上限まで残る場合は、設定作成を行わず保存先エラーを返す。",
       "backends": [
         "dynamodb"
       ],
@@ -727,10 +733,9 @@
       },
       "faults": [
         {
-          "operation": "initialize",
+          "operation": 0,
           "phase": "configuration-read",
           "kind": "sdk-response",
-          "times": 2,
           "details": {
             "responses": {},
             "unprocessed_keys": [
@@ -738,7 +743,12 @@
               "snapshot:__config__:0",
               "head:__config__"
             ]
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 2
+          },
+          "injection": "replace-response"
         }
       ]
     },
@@ -748,7 +758,7 @@
         "DY-8",
         "D-1"
       ],
-      "description": "設定項目の条件付き作成に先行者が勝ったら、3件すべてを強整合で読み直す。",
+      "description": "設定の条件付き作成で競合したら、先行作成された3項目を読み直して生成に成功する。",
       "backends": [
         "dynamodb"
       ],
@@ -783,7 +793,9 @@
               "api": "TransactWriteItems",
               "phase": "configuration-create",
               "constraints": {
-                "condition": "attribute_not_exists(aid)"
+                "condition": {
+                  "attribute_not_exists": "aid"
+                }
               }
             },
             {
@@ -848,16 +860,23 @@
       },
       "faults": [
         {
-          "operation": "initialize",
+          "operation": 0,
           "phase": "configuration-create",
           "kind": "sdk-error",
-          "times": 1,
           "details": {
             "code": "TransactionCanceledException",
             "cancellation_reasons": [
               {
-                "target": "configuration",
+                "target": "configuration:journal",
                 "code": "ConditionalCheckFailed"
+              },
+              {
+                "target": "configuration:snapshot",
+                "code": "None"
+              },
+              {
+                "target": "configuration:head",
+                "code": "None"
               }
             ],
             "install_items": [
@@ -905,7 +924,12 @@
                 }
               }
             ]
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-request"
         }
       ]
     },
@@ -916,7 +940,7 @@
         "D-1",
         "E-1"
       ],
-      "description": "設定項目がすべて揃い、ストア識別子と配置の版が一致する場合だけ生成を続ける。",
+      "description": "snapshotだけに設定が存在する部分配置を、設定エラーとして拒む。",
       "backends": [
         "dynamodb"
       ],
@@ -987,7 +1011,7 @@
         "D-1",
         "E-1"
       ],
-      "description": "設定項目がすべて揃い、ストア識別子と配置の版が一致する場合だけ生成を続ける。",
+      "description": "headだけに設定が存在する部分配置を、設定エラーとして拒む。",
       "backends": [
         "dynamodb"
       ],
@@ -1056,7 +1080,7 @@
         "D-1",
         "E-1"
       ],
-      "description": "設定項目がすべて揃い、ストア識別子と配置の版が一致する場合だけ生成を続ける。",
+      "description": "journal・snapshotだけに設定が存在する部分配置を、設定エラーとして拒む。",
       "backends": [
         "dynamodb"
       ],
@@ -1142,7 +1166,7 @@
         "D-1",
         "E-1"
       ],
-      "description": "設定項目がすべて揃い、ストア識別子と配置の版が一致する場合だけ生成を続ける。",
+      "description": "journal・headだけに設定が存在する部分配置を、設定エラーとして拒む。",
       "backends": [
         "dynamodb"
       ],
@@ -1226,7 +1250,7 @@
         "D-1",
         "E-1"
       ],
-      "description": "設定項目がすべて揃い、ストア識別子と配置の版が一致する場合だけ生成を続ける。",
+      "description": "snapshot・headだけに設定が存在する部分配置を、設定エラーとして拒む。",
       "backends": [
         "dynamodb"
       ],

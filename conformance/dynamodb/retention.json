@@ -22,7 +22,7 @@
           "e31": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 31,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -130,7 +130,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "1",
               "occurred_at": "123000000",
               "manifest": ""
@@ -151,7 +151,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "2",
               "occurred_at": "123000000",
               "manifest": ""
@@ -172,7 +172,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "3",
               "occurred_at": "123000000",
               "manifest": ""
@@ -193,7 +193,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "4",
               "occurred_at": "123000000",
               "manifest": ""
@@ -214,7 +214,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "5",
               "occurred_at": "123000000",
               "manifest": ""
@@ -235,7 +235,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "6",
               "occurred_at": "123000000",
               "manifest": ""
@@ -256,7 +256,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "7",
               "occurred_at": "123000000",
               "manifest": ""
@@ -277,7 +277,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "8",
               "occurred_at": "123000000",
               "manifest": ""
@@ -298,7 +298,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "9",
               "occurred_at": "123000000",
               "manifest": ""
@@ -319,7 +319,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "10",
               "occurred_at": "123000000",
               "manifest": ""
@@ -340,7 +340,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "11",
               "occurred_at": "123000000",
               "manifest": ""
@@ -361,7 +361,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "12",
               "occurred_at": "123000000",
               "manifest": ""
@@ -382,7 +382,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "13",
               "occurred_at": "123000000",
               "manifest": ""
@@ -403,7 +403,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "14",
               "occurred_at": "123000000",
               "manifest": ""
@@ -424,7 +424,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "15",
               "occurred_at": "123000000",
               "manifest": ""
@@ -445,7 +445,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "16",
               "occurred_at": "123000000",
               "manifest": ""
@@ -466,7 +466,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "17",
               "occurred_at": "123000000",
               "manifest": ""
@@ -487,7 +487,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "18",
               "occurred_at": "123000000",
               "manifest": ""
@@ -508,7 +508,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "19",
               "occurred_at": "123000000",
               "manifest": ""
@@ -529,7 +529,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "20",
               "occurred_at": "123000000",
               "manifest": ""
@@ -550,7 +550,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "21",
               "occurred_at": "123000000",
               "manifest": ""
@@ -571,7 +571,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "22",
               "occurred_at": "123000000",
               "manifest": ""
@@ -592,7 +592,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "23",
               "occurred_at": "123000000",
               "manifest": ""
@@ -613,7 +613,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "24",
               "occurred_at": "123000000",
               "manifest": ""
@@ -634,7 +634,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "25",
               "occurred_at": "123000000",
               "manifest": ""
@@ -655,7 +655,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "26",
               "occurred_at": "123000000",
               "manifest": ""
@@ -676,7 +676,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "27",
               "occurred_at": "123000000",
               "manifest": ""
@@ -697,7 +697,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "28",
               "occurred_at": "123000000",
               "manifest": ""
@@ -718,7 +718,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "29",
               "occurred_at": "123000000",
               "manifest": ""
@@ -739,7 +739,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "30",
               "occurred_at": "123000000",
               "manifest": ""
@@ -759,7 +759,7 @@
               "events": "L"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "type_name": "Order",
               "seq_nr": "30",
               "events": [
@@ -795,7 +795,7 @@
               "last_updated_at": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "0",
               "seq_nr": "30",
               "manifest": "",
@@ -819,7 +819,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "1",
               "seq_nr": "1",
               "manifest": "",
@@ -844,7 +844,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "2",
               "seq_nr": "2",
               "manifest": "",
@@ -869,7 +869,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "3",
               "seq_nr": "3",
               "manifest": "",
@@ -894,7 +894,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "4",
               "seq_nr": "4",
               "manifest": "",
@@ -919,7 +919,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "5",
               "seq_nr": "5",
               "manifest": "",
@@ -944,7 +944,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "6",
               "seq_nr": "6",
               "manifest": "",
@@ -969,7 +969,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "7",
               "seq_nr": "7",
               "manifest": "",
@@ -994,7 +994,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "8",
               "seq_nr": "8",
               "manifest": "",
@@ -1019,7 +1019,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "9",
               "seq_nr": "9",
               "manifest": "",
@@ -1044,7 +1044,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "10",
               "seq_nr": "10",
               "manifest": "",
@@ -1069,7 +1069,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "11",
               "seq_nr": "11",
               "manifest": "",
@@ -1094,7 +1094,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "12",
               "seq_nr": "12",
               "manifest": "",
@@ -1119,7 +1119,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "13",
               "seq_nr": "13",
               "manifest": "",
@@ -1144,7 +1144,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "14",
               "seq_nr": "14",
               "manifest": "",
@@ -1169,7 +1169,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "15",
               "seq_nr": "15",
               "manifest": "",
@@ -1194,7 +1194,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "16",
               "seq_nr": "16",
               "manifest": "",
@@ -1219,7 +1219,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "17",
               "seq_nr": "17",
               "manifest": "",
@@ -1244,7 +1244,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "18",
               "seq_nr": "18",
               "manifest": "",
@@ -1269,7 +1269,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "19",
               "seq_nr": "19",
               "manifest": "",
@@ -1294,7 +1294,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "20",
               "seq_nr": "20",
               "manifest": "",
@@ -1319,7 +1319,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "21",
               "seq_nr": "21",
               "manifest": "",
@@ -1344,7 +1344,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "22",
               "seq_nr": "22",
               "manifest": "",
@@ -1369,7 +1369,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "23",
               "seq_nr": "23",
               "manifest": "",
@@ -1394,7 +1394,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "24",
               "seq_nr": "24",
               "manifest": "",
@@ -1419,7 +1419,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "25",
               "seq_nr": "25",
               "manifest": "",
@@ -1444,7 +1444,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "26",
               "seq_nr": "26",
               "manifest": "",
@@ -1469,7 +1469,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "27",
               "seq_nr": "27",
               "manifest": "",
@@ -1494,7 +1494,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "28",
               "seq_nr": "28",
               "manifest": "",
@@ -1519,7 +1519,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "29",
               "seq_nr": "29",
               "manifest": "",
@@ -1544,7 +1544,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "30",
               "seq_nr": "30",
               "manifest": "",
@@ -1564,7 +1564,6 @@
           "operation": 1,
           "phase": "retention-query",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "history_pages": [
               [
@@ -1603,16 +1602,25 @@
               ]
             ],
             "omit_just_written_history": true
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
         },
         {
           "operation": 1,
           "phase": "retention-delete",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "unprocessed_first_n": 2
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-request"
         }
       ]
     },
@@ -1635,7 +1643,7 @@
           "e2": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1690,7 +1698,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "1",
               "occurred_at": "123000000",
               "manifest": ""
@@ -1710,7 +1718,7 @@
               "events": "L"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "type_name": "Order",
               "seq_nr": "1",
               "events": [
@@ -1746,7 +1754,7 @@
               "last_updated_at": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "0",
               "seq_nr": "1",
               "manifest": "",
@@ -1770,7 +1778,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "1",
               "seq_nr": "1",
               "manifest": "",
@@ -1790,7 +1798,6 @@
           "operation": 1,
           "phase": "retention-query",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "history_pages": [
               [
@@ -1798,7 +1805,12 @@
               ]
             ],
             "omit_just_written_history": true
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
         }
       ]
     },
@@ -1821,7 +1833,7 @@
           "e2": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1875,7 +1887,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "1",
               "occurred_at": "123000000",
               "manifest": ""
@@ -1895,7 +1907,7 @@
               "events": "L"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "type_name": "Order",
               "seq_nr": "1",
               "events": [
@@ -1931,7 +1943,7 @@
               "last_updated_at": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "0",
               "seq_nr": "1",
               "manifest": "",
@@ -1955,7 +1967,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "1",
               "seq_nr": "1",
               "manifest": "",
@@ -1975,7 +1987,6 @@
           "operation": 1,
           "phase": "retention-query",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "history_pages": [
               [
@@ -1983,7 +1994,12 @@
                 1
               ]
             ]
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
         }
       ]
     },
@@ -2006,7 +2022,7 @@
           "e3": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 3,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -2056,7 +2072,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "1",
               "occurred_at": "123000000",
               "manifest": ""
@@ -2077,7 +2093,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "2",
               "occurred_at": "123000000",
               "manifest": ""
@@ -2097,7 +2113,7 @@
               "events": "L"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "type_name": "Order",
               "seq_nr": "2",
               "events": [
@@ -2133,7 +2149,7 @@
               "last_updated_at": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "0",
               "seq_nr": "2",
               "manifest": "",
@@ -2157,7 +2173,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "1",
               "seq_nr": "1",
               "manifest": "",
@@ -2182,7 +2198,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "2",
               "seq_nr": "2",
               "manifest": "",
@@ -2220,7 +2236,7 @@
           "e4": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 4,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -2232,7 +2248,7 @@
           "e5": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 5,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -2292,15 +2308,26 @@
                 "api": "UpdateItem",
                 "phase": "retention-mark",
                 "constraints": {
-                  "update_expression": "SET #ttl = :expires REMOVE active_history_seq_nr",
                   "expression_attribute_names": {
                     "#ttl": "ttl"
                   },
-                  "condition_expression": "attribute_exists(active_history_seq_nr)",
                   "expires": 4102444860,
                   "target_seq_nrs": [
                     2
-                  ]
+                  ],
+                  "update": {
+                    "set": {
+                      "ttl": {
+                        "value_binding": "expires"
+                      }
+                    },
+                    "remove": [
+                      "active_history_seq_nr"
+                    ]
+                  },
+                  "condition": {
+                    "attribute_exists": "active_history_seq_nr"
+                  }
                 }
               }
             ]
@@ -2368,7 +2395,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "1",
               "occurred_at": "123000000",
               "manifest": ""
@@ -2389,7 +2416,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "2",
               "occurred_at": "123000000",
               "manifest": ""
@@ -2410,7 +2437,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "3",
               "occurred_at": "123000000",
               "manifest": ""
@@ -2430,7 +2457,7 @@
               "events": "L"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "type_name": "Order",
               "seq_nr": "3",
               "events": [
@@ -2466,7 +2493,7 @@
               "last_updated_at": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "0",
               "seq_nr": "3",
               "manifest": "",
@@ -2490,7 +2517,7 @@
               "ttl": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "1",
               "seq_nr": "1",
               "manifest": "",
@@ -2515,7 +2542,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "2",
               "seq_nr": "2",
               "manifest": "",
@@ -2540,7 +2567,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "3",
               "seq_nr": "3",
               "manifest": "",
@@ -2563,7 +2590,6 @@
           "operation": 1,
           "phase": "retention-query",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "history_pages": [
               [
@@ -2571,13 +2597,17 @@
                 2
               ]
             ]
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
         },
         {
           "operation": 2,
           "phase": "retention-query",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "history_pages": [
               [
@@ -2585,7 +2615,12 @@
                 3
               ]
             ]
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
         }
       ]
     },
@@ -2610,7 +2645,7 @@
           "e4": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 4,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -2677,7 +2712,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "1",
               "occurred_at": "123000000",
               "manifest": ""
@@ -2698,7 +2733,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "2",
               "occurred_at": "123000000",
               "manifest": ""
@@ -2719,7 +2754,7 @@
               "payload": "B"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "seq_nr": "3",
               "occurred_at": "123000000",
               "manifest": ""
@@ -2739,7 +2774,7 @@
               "events": "L"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "type_name": "Order",
               "seq_nr": "3",
               "events": [
@@ -2775,7 +2810,7 @@
               "last_updated_at": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "0",
               "seq_nr": "3",
               "manifest": "",
@@ -2799,7 +2834,7 @@
               "ttl": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "1",
               "seq_nr": "1",
               "manifest": "",
@@ -2824,7 +2859,7 @@
               "ttl": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "2",
               "seq_nr": "2",
               "manifest": "",
@@ -2849,7 +2884,7 @@
               "active_history_seq_nr": "N"
             },
             "values": {
-              "aid": "Order-1",
+              "aid": "Order-9",
               "skey": "3",
               "seq_nr": "3",
               "manifest": "",
@@ -2872,7 +2907,6 @@
           "operation": 1,
           "phase": "retention-query",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "history_pages": [
               [
@@ -2881,7 +2915,12 @@
                 1
               ]
             ]
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
         }
       ]
     },
@@ -2904,7 +2943,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -2916,7 +2955,7 @@
           "e2": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -2928,7 +2967,7 @@
           "e3": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 3,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -3001,7 +3040,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -3015,7 +3054,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -3055,17 +3094,19 @@
           "operation": 2,
           "phase": "retention-delete",
           "kind": "sdk-error",
-          "times": "until-operation-finishes",
           "details": {
             "code": "ProvisionedThroughputExceededException",
             "message": "RETENTION_FAILURE"
-          }
+          },
+          "repeat": {
+            "mode": "until-operation-finishes"
+          },
+          "injection": "replace-request"
         },
         {
           "operation": 2,
           "phase": "retention-query",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "history_pages": [
               [
@@ -3073,13 +3114,17 @@
                 1
               ]
             ]
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
         },
         {
           "operation": 5,
           "phase": "retention-query",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "history_pages": [
               [
@@ -3088,7 +3133,12 @@
                 1
               ]
             ]
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
         }
       ]
     },
@@ -3112,7 +3162,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -3124,7 +3174,7 @@
           "e2": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -3136,7 +3186,7 @@
           "e3": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 3,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -3209,7 +3259,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -3223,7 +3273,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -3269,17 +3319,19 @@
           "operation": 2,
           "phase": "retention-mark",
           "kind": "sdk-error",
-          "times": "until-operation-finishes",
           "details": {
             "code": "ProvisionedThroughputExceededException",
             "message": "RETENTION_FAILURE"
-          }
+          },
+          "repeat": {
+            "mode": "until-operation-finishes"
+          },
+          "injection": "replace-request"
         },
         {
           "operation": 2,
           "phase": "retention-query",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "history_pages": [
               [
@@ -3287,13 +3339,17 @@
                 1
               ]
             ]
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
         },
         {
           "operation": 5,
           "phase": "retention-query",
           "kind": "sdk-response",
-          "times": 1,
           "details": {
             "history_pages": [
               [
@@ -3302,7 +3358,12 @@
                 1
               ]
             ]
-          }
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
         }
       ],
       "requires": [

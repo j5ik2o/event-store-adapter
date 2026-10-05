@@ -3,7 +3,6 @@
 
 import argparse
 from collections import defaultdict
-from datetime import datetime, timezone
 from pathlib import Path
 import re
 import sys
@@ -11,7 +10,9 @@ import sys
 from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 
+from data import epoch_nanoseconds, fnv1a64, materialize
 from manifest import DEFAULT_ROOT, read_json, verify
+from reference_model import equal_json, replay
 
 DEFAULT_SPEC_ROOT = Path(__file__).resolve().parents[2] / "docs" / "spec"
 FORMATS = {"values", "scenarios", "layout", "coverage", "manifest"}
@@ -23,15 +24,6 @@ PHASES = {
     "getEventsByIdSinceSeqNr": {"read-events", "deserialize-event"},
     "initialize": {"configuration-read", "configuration-create"},
 }
-
-
-def epoch_nanoseconds(iso):
-    match = re.fullmatch(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\.(\d{9})Z", iso)
-    if not match:
-        raise ValueError(f"UTC・9桁小数秒の ISO 8601 ではない: {iso}")
-    seconds = datetime.strptime(match[1], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
-    delta = seconds - datetime(1970, 1, 1, tzinfo=timezone.utc)
-    return (delta.days * 86400 + delta.seconds) * 1_000_000_000 + int(match[2])
 
 
 def check_value(case, where):
@@ -54,6 +46,8 @@ def check_value(case, where):
             violated = "T-13"
         if case.get("representation", {}).get("time_precision") == "milliseconds" and nanoseconds % 1_000_000:
             raise ValueError(f"{where}: ミリ秒境界がミリ秒で表せない")
+    elif case["operation"] == "fnv1a64":
+        value = fnv1a64(inputs["utf8"])
     else:
         value = inputs["seq_nr"]
         if not 0 <= value <= 2**53 - 1:
@@ -64,16 +58,17 @@ def check_value(case, where):
         error = expected.get("error", {})
         if error.get("category") != "contract-violation" or error.get("rule") != violated:
             raise ValueError(f"{where}: 境界の期待規則が不一致: {violated}")
-    elif "error" in expected or expected.get("value") != value:
+    elif "error" in expected or not equal_json(expected.get("value"), value):
         raise ValueError(f"{where}: 値の期待が入力と不一致")
 
 
 def specification_rules(spec_root):
     core = (spec_root / "core-contract.md").read_text(encoding="utf-8")
     dynamo = (spec_root / "storage" / "dynamodb.md").read_text(encoding="utf-8")
-    active = set(re.findall(r"^- \*\*(?:必須|推奨|任意) ([A-Z]+-\d+)\*\*", core + "\n" + dynamo, re.M))
+    hash_spec = (spec_root / "storage" / "hash.md").read_text(encoding="utf-8")
+    active = set(re.findall(r"^- \*\*(?:必須|推奨|任意) ([A-Z]+-\d+)\*\*", core + "\n" + dynamo + "\n" + hash_spec, re.M))
     active.update(re.findall(r"^\| (D-\d+) \|", dynamo, re.M))
-    mentioned = set(re.findall(r"\b(?:T|H|W|R|E|S|SP|DY|D)-\d+\b", core + "\n" + dynamo))
+    mentioned = set(re.findall(r"\b(?:K|T|H|W|R|E|S|SP|DY|D)-\d+\b", core + "\n" + dynamo + "\n" + hash_spec))
     return active, mentioned
 
 
@@ -86,6 +81,97 @@ def assert_rules(rules, active, where):
     for rule in rules:
         if rule not in active:
             raise ValueError(f"{where}: 規則が仕様に定義されていない（または削除済み）: {rule}")
+
+
+def case_aids(case):
+    aggregates = [event["aggregate_id"] for event in case.get("fixtures", {}).get("events", {}).values()]
+    aggregates += [step["arguments"]["aggregate_id"] for step in case.get("steps", [])
+                   if "aggregate_id" in step["arguments"]]
+    if "aggregate_id" in case.get("input", {}):
+        aggregates.append(case["input"]["aggregate_id"])
+    result = {identifier["type_name"] + "-" + identifier["value"] for identifier in aggregates}
+    result.update(item["values"]["aid"] for item in case.get("seed", {}).get("items", [])
+                  if item["values"]["aid"] != "__config__")
+    return result
+
+
+def check_message(case, error, where):
+    message = error.get("message", {})
+    required = message.get("must_contain", [])
+    rule = error.get("rule")
+    if rule and rule.startswith("D-"):
+        raise ValueError(f"{where}: 判断番号は契約違反の必須規則番号ではない")
+    aids = case_aids(case)
+    for token in required:
+        if not token:
+            raise ValueError(f"{where}: must_containに空文字列は指定できない")
+        if token in aids or token == rule:
+            continue
+        if any(token in identifier for identifier in aids) or (rule and token in rule):
+            raise ValueError(f"{where}: must_containがaidまたは規則番号の部分文字列: {token!r}")
+    if rule and error["category"] == "contract-violation":
+        field = {"validateOccurredAt": "event_seq_nr", "validateSeqNr": "seq_nr"}.get(case.get("operation"))
+        if field and str(case["input"][field]) not in required:
+            raise ValueError(f"{where}: 値表に関係する番号のメッセージ期待がない")
+    # 書き込みの番号は操作から決める。ヘッド番号は必須にしない。
+    expectations = [(s["expect"].get("error"), s["arguments"]) for s in case.get("steps", [])]
+    for expected, args in expectations:
+        if expected is not error or "event" not in args:
+            continue
+        event = case["fixtures"]["events"][args["event"]]
+        seq = str(event["seq_nr"])
+        if error["category"] == "optimistic-lock":
+            identifier = event["aggregate_id"]
+            identifier = identifier["type_name"] + "-" + identifier["value"]
+            if identifier not in required or seq not in required:
+                raise ValueError(f"{where}: 楽観ロックにaidと追記番号のメッセージ期待がない")
+        elif rule and error["category"] == "contract-violation" and seq not in required:
+            raise ValueError(f"{where}: 契約違反に追記番号のメッセージ期待がない")
+
+
+def check_fault(case, fault, where):
+    details, kind = fault["details"], fault["kind"]
+    allowed = {
+        "serialization-error": {"message"},
+        "storage-error": {"message", "scope"},
+        "sdk-error": {"code", "message", "cancellation_reasons", "install_items"},
+        "sdk-response": {"responses", "unprocessed_keys", "history_pages",
+                         "omit_just_written_history", "unprocessed_first_n"},
+        "read-interleave": {"after", "then", "interleaved_operation"},
+    }
+    if set(details) - allowed[kind]:
+        raise ValueError(f"{where}: 障害の種類とdetailsが不一致")
+    if kind == "read-interleave" and set(details) != allowed[kind]:
+        raise ValueError(f"{where}: BatchGetItem応答の組み立て指定が不足")
+    if kind == "sdk-error" and "code" not in details:
+        raise ValueError(f"{where}: SDK失敗のcodeがない")
+    if "history_pages" in details and fault["phase"] != "retention-query":
+        raise ValueError(f"{where}: 履歴ページは保持読み取りにだけ指定できる")
+    if "omit_just_written_history" in details and "history_pages" not in details:
+        raise ValueError(f"{where}: omit_just_written_historyにhistory_pagesがない")
+    reasons = details.get("cancellation_reasons")
+    if details.get("code") == "TransactionCanceledException":
+        if fault["phase"] not in {"commit", "configuration-create"} or not reasons:
+            raise ValueError(f"{where}: トランザクション取消の対象項目がない")
+        if fault["injection"] != "replace-request":
+            raise ValueError(f"{where}: 取り消された要求を確定してはならない")
+        if fault["operation"] == 0:
+            targets = ["configuration:journal", "configuration:snapshot", "configuration:head"]
+        else:
+            step = case["steps"][fault["operation"] - 1]
+            targets = ["journal", "head"]
+            if step["op"] == "persistEventAndSnapshot":
+                targets.append("current-snapshot")
+                if case["store"]["retention_count"] is not None:
+                    targets.append("history-snapshot")
+        if [r["target"] for r in reasons] != targets:
+            raise ValueError(f"{where}: CancellationReasonsは要求の各項目に1要素（非該当はNone）必要")
+        for reason in reasons:
+            needs_old_head = reason["target"] == "head" and reason["code"] == "ConditionalCheckFailed"
+            if needs_old_head != ("old_head_seq_nr" in reason):
+                raise ValueError(f"{where}: 旧ヘッドの指定と取消理由が不一致")
+    elif reasons:
+        raise ValueError(f"{where}: CancellationReasonsはTransactionCanceledExceptionだけに指定できる")
 
 
 def check_case(case, data_format, where, active):
@@ -121,14 +207,15 @@ def check_case(case, data_format, where, active):
                 raise ValueError(f"{where}/{index}: 操作と返り値の種類が一致しない")
         for fault in case.get("faults", []):
             operation = fault["operation"]
-            if operation == "initialize":
+            if operation == 0:
                 if "initialization" not in case:
                     raise ValueError(f"{where}: 初期化の障害に初期化期待値がない")
             elif type(operation) is not int or not 1 <= operation <= len(case["steps"]):
                 raise ValueError(f"{where}: 障害の操作番号が範囲外: {operation}")
-            op = "initialize" if operation == "initialize" else case["steps"][operation - 1]["op"]
+            op = "initialize" if operation == 0 else case["steps"][operation - 1]["op"]
             if fault["phase"] not in PHASES[op]:
                 raise ValueError(f"{where}: 障害の段階が対象操作にない: {fault['phase']}")
+            check_fault(case, fault, where)
             interleaved = fault["details"].get("interleaved_operation")
             if interleaved:
                 if interleaved.get("op") not in {"persistEvent", "persistEventAndSnapshot"}:
@@ -142,19 +229,22 @@ def check_case(case, data_format, where, active):
             raise ValueError(f"{where}: TTL 能力条件と保持方式が不一致")
     elif data_format == "values":
         required_input = {"buildAid": "aggregate_id", "validateOccurredAt": "iso8601",
-                          "validateSeqNr": "seq_nr"}[case["operation"]]
+                          "validateSeqNr": "seq_nr", "fnv1a64": "utf8"}[case["operation"]]
         if required_input not in case["input"]:
             raise ValueError(f"{where}: 値操作と入力の種類が一致しない")
         check_value(case, where)
     for expected in expectations:
         error = expected.get("error")
+        if error:
+            check_message(case, error, where)
         if error and "rule" in error:
             assert_rules([error["rule"]], active, where)
             if error["rule"] not in case["rules"]:
                 raise ValueError(f"{where}: エラー規則が対象規則にない: {error['rule']}")
             if error["rule"] not in error["message"]["must_contain"]:
                 raise ValueError(f"{where}: 契約違反のメッセージに規則番号の期待がない")
-        if error and error["category"] == "contract-violation" and "rule" not in error:
+        if (error and error["category"] == "contract-violation" and "rule" not in error
+                and "D-7" not in case["rules"]):
             raise ValueError(f"{where}: 契約違反に規則番号がない")
 
 
@@ -191,6 +281,7 @@ def validate(root, spec_root, update_coverage=False, check_manifest=True):
         raise ValueError("schema のファイル集合が不正")
     active, mentioned = specification_rules(spec_root)
     documents, identifiers = {}, {}
+    model_checked, model_skipped = 0, []
     for path in sorted(root.rglob("*.json")):
         if path.parent == root / "schema":
             continue
@@ -209,7 +300,12 @@ def validate(root, spec_root, update_coverage=False, check_manifest=True):
             if identifier in identifiers:
                 raise ValueError(f"ID 重複: {identifier}: {identifiers[identifier]} と {relative}")
             identifiers[identifier] = relative
-            check_case(case, data_format, f"{relative}:{identifier}", active)
+            expanded = materialize(case)
+            check_case(expanded, data_format, f"{relative}:{identifier}", active)
+            if data_format == "scenarios":
+                report = replay(expanded)
+                model_checked += report.checked
+                model_skipped += report.skipped
     coverage = documents.get("coverage.json")
     if coverage is None:
         raise ValueError("coverage.json がない")
@@ -237,7 +333,7 @@ def validate(root, spec_root, update_coverage=False, check_manifest=True):
         verify(root)
     counts = {kind: sum(len(doc.get("cases", [])) for doc in documents.values() if doc["format"] == kind)
               for kind in ["values", "scenarios", "layout"]}
-    return len(schemas), len(documents), counts, len(covered), len(exclusions)
+    return len(schemas), len(documents), counts, len(covered), len(exclusions), model_checked, model_skipped
 
 
 def main():
@@ -248,11 +344,18 @@ def main():
                         help="網羅表を再生成する（その後 manifest rebuild が必要）")
     args = parser.parse_args()
     try:
-        schemas, documents, counts, covered, excluded = validate(
+        schemas, documents, counts, covered, excluded, model_checked, model_skipped = validate(
             args.root, args.spec_root, args.update_coverage, not args.update_coverage)
         print(f"schema: OK ({schemas} schemas, {documents} data files)")
         print(f"ids/references: OK ({sum(counts.values())} unique cases; {counts})")
         print(f"rules/coverage: OK ({covered} covered rules, {excluded} exclusions)")
+        external = "SDK要求・物理属性・メッセージの実装検査は実行器が担当"
+        skipped_operations = sum(reason != external for _, reason in model_skipped)
+        print(f"reference model: OK ({model_checked} operations, {skipped_operations} skipped operations; "
+              f"external checks delegated in {len(model_skipped) - skipped_operations} scenarios)")
+        for where, reason in model_skipped:
+            if reason != "SDK要求・物理属性・メッセージの実装検査は実行器が担当":
+                print(f"model skip: {where}: {reason}")
         print("coverage: updated" if args.update_coverage else "manifest: OK")
     except Exception as error:
         print(f"validation: FAILED: {error}", file=sys.stderr)

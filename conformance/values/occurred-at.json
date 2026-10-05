@@ -35,7 +35,7 @@
       "input": {
         "iso8601": "1677-09-21T00:12:43.145224191Z",
         "epoch_nanoseconds": "-9223372036854775809",
-        "event_seq_nr": 1
+        "event_seq_nr": 7
       },
       "expect": {
         "error": {
@@ -43,7 +43,7 @@
           "message": {
             "must_contain": [
               "T-13",
-              "1"
+              "7"
             ],
             "must_not_contain": []
           },
@@ -87,7 +87,7 @@
       "input": {
         "iso8601": "2262-04-11T23:47:16.854775808Z",
         "epoch_nanoseconds": "9223372036854775808",
-        "event_seq_nr": 1
+        "event_seq_nr": 7
       },
       "expect": {
         "error": {
@@ -95,7 +95,7 @@
           "message": {
             "must_contain": [
               "T-13",
-              "1"
+              "7"
             ],
             "must_not_contain": []
           },
@@ -193,7 +193,7 @@
       "input": {
         "iso8601": "1677-09-21T00:12:43.145000000Z",
         "epoch_nanoseconds": "-9223372036855000000",
-        "event_seq_nr": 1
+        "event_seq_nr": 7
       },
       "expect": {
         "error": {
@@ -201,7 +201,7 @@
           "message": {
             "must_contain": [
               "T-13",
-              "1"
+              "7"
             ],
             "must_not_contain": []
           },
@@ -245,7 +245,7 @@
       "input": {
         "iso8601": "2262-04-11T23:47:16.855000000Z",
         "epoch_nanoseconds": "9223372036855000000",
-        "event_seq_nr": 1
+        "event_seq_nr": 7
       },
       "expect": {
         "error": {
@@ -253,7 +253,7 @@
           "message": {
             "must_contain": [
               "T-13",
-              "1"
+              "7"
             ],
             "must_not_contain": []
           },

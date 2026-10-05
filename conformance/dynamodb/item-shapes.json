@@ -29,7 +29,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "1970-01-01T00:00:00.123000000Z",
@@ -41,7 +41,7 @@
           "e2": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "1970-01-01T00:00:00.123000000Z",
@@ -90,7 +90,7 @@
                   "payload": "B"
                 },
                 "values": {
-                  "aid": "Order-1",
+                  "aid": "Order-9",
                   "seq_nr": "1",
                   "occurred_at": "123000000",
                   "manifest": ""
@@ -110,7 +110,7 @@
                   "events": "L"
                 },
                 "values": {
-                  "aid": "Order-1",
+                  "aid": "Order-9",
                   "type_name": "Order",
                   "seq_nr": "1",
                   "events": [
@@ -146,7 +146,7 @@
                   "last_updated_at": "N"
                 },
                 "values": {
-                  "aid": "Order-1",
+                  "aid": "Order-9",
                   "skey": "0",
                   "seq_nr": "1",
                   "manifest": "",
@@ -170,7 +170,7 @@
                   "active_history_seq_nr": "N"
                 },
                 "values": {
-                  "aid": "Order-1",
+                  "aid": "Order-9",
                   "skey": "1",
                   "seq_nr": "1",
                   "manifest": "",
@@ -207,7 +207,7 @@
                   "payload": "B"
                 },
                 "values": {
-                  "aid": "Order-1",
+                  "aid": "Order-9",
                   "seq_nr": "2",
                   "occurred_at": "123000000",
                   "manifest": ""
@@ -227,7 +227,7 @@
                   "events": "L"
                 },
                 "values": {
-                  "aid": "Order-1",
+                  "aid": "Order-9",
                   "type_name": "Order",
                   "seq_nr": "2",
                   "events": [
@@ -263,7 +263,7 @@
                   "last_updated_at": "N"
                 },
                 "values": {
-                  "aid": "Order-1",
+                  "aid": "Order-9",
                   "skey": "0",
                   "seq_nr": "2",
                   "manifest": "",
@@ -287,7 +287,7 @@
                   "active_history_seq_nr": "N"
                 },
                 "values": {
-                  "aid": "Order-1",
+                  "aid": "Order-9",
                   "skey": "2",
                   "seq_nr": "2",
                   "manifest": "",
@@ -312,7 +312,7 @@
                   "ttl": "N"
                 },
                 "values": {
-                  "aid": "Order-1",
+                  "aid": "Order-9",
                   "skey": "1",
                   "seq_nr": "1",
                   "manifest": "",
@@ -387,7 +387,11 @@
           "operation": 2,
           "phase": "retention-query",
           "kind": "sdk-response",
-          "times": 1,
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response",
           "details": {
             "history_pages": [
               [

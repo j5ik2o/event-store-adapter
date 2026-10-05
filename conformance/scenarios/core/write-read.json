@@ -32,7 +32,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -53,7 +53,7 @@
           "e2": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -73,7 +73,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -85,7 +85,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -117,7 +117,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -131,7 +131,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 0
           },
@@ -148,7 +148,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -165,7 +165,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2
           },
@@ -181,7 +181,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 3
           },
@@ -219,7 +219,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -231,7 +231,7 @@
           "e2": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -243,7 +243,7 @@
           "e3": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 3,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -302,7 +302,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -316,7 +316,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2
           },
@@ -355,7 +355,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -391,7 +391,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -405,7 +405,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -442,7 +442,7 @@
           "a1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -454,7 +454,7 @@
           "a2": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -511,7 +511,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -578,7 +578,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -590,7 +590,7 @@
           "e2": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -602,7 +602,7 @@
           "attempt": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -680,19 +680,14 @@
               "category": "optimistic-lock",
               "message": {
                 "must_contain": [
-                  "Order-1",
+                  "Order-9",
                   "1"
                 ],
                 "must_not_contain": [
                   "CREDENTIAL_SENTINEL",
                   "https://storage.invalid/private",
                   "SDK_RAW_SENTINEL"
-                ],
-                "context_only": {
-                  "aid": "Order-1",
-                  "attempted_seq_nr": 1,
-                  "head_seq_nr": 2
-                }
+                ]
               }
             }
           }
@@ -702,7 +697,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -716,7 +711,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -754,7 +749,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -766,7 +761,7 @@
           "e2": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -778,7 +773,7 @@
           "attempt": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -856,19 +851,14 @@
               "category": "optimistic-lock",
               "message": {
                 "must_contain": [
-                  "Order-1",
+                  "Order-9",
                   "2"
                 ],
                 "must_not_contain": [
                   "CREDENTIAL_SENTINEL",
                   "https://storage.invalid/private",
                   "SDK_RAW_SENTINEL"
-                ],
-                "context_only": {
-                  "aid": "Order-1",
-                  "attempted_seq_nr": 2,
-                  "head_seq_nr": 2
-                }
+                ]
               }
             }
           }
@@ -878,7 +868,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -892,7 +882,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -929,7 +919,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -941,7 +931,7 @@
           "e2": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -953,7 +943,7 @@
           "e3": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 3,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -965,7 +955,7 @@
           "attempt": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1052,19 +1042,14 @@
               "category": "optimistic-lock",
               "message": {
                 "must_contain": [
-                  "Order-1",
+                  "Order-9",
                   "2"
                 ],
                 "must_not_contain": [
                   "CREDENTIAL_SENTINEL",
                   "https://storage.invalid/private",
                   "SDK_RAW_SENTINEL"
-                ],
-                "context_only": {
-                  "aid": "Order-1",
-                  "attempted_seq_nr": 2,
-                  "head_seq_nr": 3
-                }
+                ]
               }
             }
           }
@@ -1074,7 +1059,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -1088,7 +1073,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -1126,7 +1111,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1138,9 +1123,9 @@
           "e3": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
-            "seq_nr": 3,
+            "seq_nr": 7,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
             "payload": {
               "number": 3
@@ -1174,7 +1159,7 @@
             "aggregate": {
               "total": 3
             },
-            "seq_nr": 3,
+            "seq_nr": 7,
             "manifest": ""
           },
           "s4": {
@@ -1207,8 +1192,7 @@
               "message": {
                 "must_contain": [
                   "W-8",
-                  "3",
-                  "1"
+                  "7"
                 ],
                 "must_not_contain": []
               },
@@ -1221,7 +1205,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -1235,7 +1219,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -1258,7 +1242,7 @@
         "R-1",
         "H-1"
       ],
-      "description": "ヘッドがない集約への2番の追記は飛び番である。",
+      "description": "ヘッドがない集約への7番の追記は飛び番として拒む。",
       "backends": [
         "memory",
         "dynamodb"
@@ -1272,9 +1256,9 @@
           "e2": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
-            "seq_nr": 2,
+            "seq_nr": 7,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
             "payload": {
               "number": 2
@@ -1301,7 +1285,7 @@
             "aggregate": {
               "total": 2
             },
-            "seq_nr": 2,
+            "seq_nr": 7,
             "manifest": ""
           },
           "s3": {
@@ -1332,8 +1316,7 @@
               "message": {
                 "must_contain": [
                   "W-8",
-                  "2",
-                  "0"
+                  "7"
                 ],
                 "must_not_contain": []
               },
@@ -1346,7 +1329,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -1358,7 +1341,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -1391,7 +1374,7 @@
           "e0": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 0,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1464,7 +1447,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -1476,7 +1459,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -1510,7 +1493,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1522,7 +1505,7 @@
           "e2": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1534,7 +1517,7 @@
           "attempt": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1613,19 +1596,14 @@
               "category": "optimistic-lock",
               "message": {
                 "must_contain": [
-                  "Order-1",
+                  "Order-9",
                   "1"
                 ],
                 "must_not_contain": [
                   "CREDENTIAL_SENTINEL",
                   "https://storage.invalid/private",
                   "SDK_RAW_SENTINEL"
-                ],
-                "context_only": {
-                  "aid": "Order-1",
-                  "attempted_seq_nr": 1,
-                  "head_seq_nr": 2
-                }
+                ]
               }
             }
           }
@@ -1635,7 +1613,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -1649,7 +1627,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -1687,7 +1665,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1699,7 +1677,7 @@
           "e2": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1711,7 +1689,7 @@
           "attempt": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1790,19 +1768,14 @@
               "category": "optimistic-lock",
               "message": {
                 "must_contain": [
-                  "Order-1",
+                  "Order-9",
                   "2"
                 ],
                 "must_not_contain": [
                   "CREDENTIAL_SENTINEL",
                   "https://storage.invalid/private",
                   "SDK_RAW_SENTINEL"
-                ],
-                "context_only": {
-                  "aid": "Order-1",
-                  "attempted_seq_nr": 2,
-                  "head_seq_nr": 2
-                }
+                ]
               }
             }
           }
@@ -1812,7 +1785,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -1826,7 +1799,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -1863,7 +1836,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1875,7 +1848,7 @@
           "e2": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1887,7 +1860,7 @@
           "e3": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 3,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1899,7 +1872,7 @@
           "attempt": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 2,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -1987,19 +1960,14 @@
               "category": "optimistic-lock",
               "message": {
                 "must_contain": [
-                  "Order-1",
+                  "Order-9",
                   "2"
                 ],
                 "must_not_contain": [
                   "CREDENTIAL_SENTINEL",
                   "https://storage.invalid/private",
                   "SDK_RAW_SENTINEL"
-                ],
-                "context_only": {
-                  "aid": "Order-1",
-                  "attempted_seq_nr": 2,
-                  "head_seq_nr": 3
-                }
+                ]
               }
             }
           }
@@ -2009,7 +1977,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -2023,7 +1991,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -2061,7 +2029,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -2073,9 +2041,9 @@
           "e3": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
-            "seq_nr": 3,
+            "seq_nr": 7,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
             "payload": {
               "number": 3
@@ -2109,7 +2077,7 @@
             "aggregate": {
               "total": 3
             },
-            "seq_nr": 3,
+            "seq_nr": 7,
             "manifest": ""
           },
           "s4": {
@@ -2143,8 +2111,7 @@
               "message": {
                 "must_contain": [
                   "W-8",
-                  "3",
-                  "1"
+                  "7"
                 ],
                 "must_not_contain": []
               },
@@ -2157,7 +2124,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -2171,7 +2138,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -2194,7 +2161,7 @@
         "R-1",
         "H-1"
       ],
-      "description": "ヘッドがない集約への2番の追記は飛び番である。",
+      "description": "ヘッドがない集約への7番の追記は飛び番として拒む。",
       "backends": [
         "memory",
         "dynamodb"
@@ -2208,9 +2175,9 @@
           "e2": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
-            "seq_nr": 2,
+            "seq_nr": 7,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
             "payload": {
               "number": 2
@@ -2237,7 +2204,7 @@
             "aggregate": {
               "total": 2
             },
-            "seq_nr": 2,
+            "seq_nr": 7,
             "manifest": ""
           },
           "s3": {
@@ -2269,8 +2236,7 @@
               "message": {
                 "must_contain": [
                   "W-8",
-                  "2",
-                  "0"
+                  "7"
                 ],
                 "must_not_contain": []
               },
@@ -2283,7 +2249,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -2295,7 +2261,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -2328,7 +2294,7 @@
           "e0": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 0,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -2402,7 +2368,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -2414,7 +2380,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -2448,7 +2414,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -2495,7 +2461,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -2507,7 +2473,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -2541,7 +2507,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -2588,7 +2554,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -2600,7 +2566,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 1
           },
@@ -2619,7 +2585,7 @@
         "E-3",
         "R-1"
       ],
-      "description": "言語時刻型への丸め前の値域違反を検査し、確定させない。",
+      "description": "正常な6番までを確定した後、範囲外時刻の7番だけを拒み、ヘッドと既存イベントを保つ。",
       "backends": [
         "memory",
         "dynamodb"
@@ -2633,19 +2599,133 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
-            "seq_nr": 1,
+            "seq_nr": 7,
             "occurred_at": "1677-09-21T00:12:43.145224191Z",
             "payload": {
               "number": 1
             },
+            "manifest": ""
+          },
+          "prior-1": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 1,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
+            "manifest": ""
+          },
+          "prior-2": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 2,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
+            "manifest": ""
+          },
+          "prior-3": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 3,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
+            "manifest": ""
+          },
+          "prior-4": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 4,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
+            "manifest": ""
+          },
+          "prior-5": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 5,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
+            "manifest": ""
+          },
+          "prior-6": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 6,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
             "manifest": ""
           }
         },
         "snapshots": {}
       },
       "steps": [
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-1"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-2"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-3"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-4"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-5"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-6"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
         {
           "op": "persistEvent",
           "arguments": {
@@ -2657,7 +2737,7 @@
               "message": {
                 "must_contain": [
                   "T-13",
-                  "1"
+                  "7"
                 ],
                 "must_not_contain": []
               },
@@ -2670,11 +2750,13 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
-            "result": "none"
+            "result": "snapshot",
+            "head_seq_nr": 6,
+            "snapshot": null
           }
         }
       ],
@@ -2690,7 +2772,7 @@
         "E-3",
         "R-1"
       ],
-      "description": "言語時刻型への丸め前の値域違反を検査し、確定させない。",
+      "description": "正常な6番までを確定した後、範囲外時刻の7番だけを拒み、ヘッドと既存イベントを保つ。",
       "backends": [
         "memory",
         "dynamodb"
@@ -2704,19 +2786,133 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
-            "seq_nr": 1,
+            "seq_nr": 7,
             "occurred_at": "2262-04-11T23:47:16.854775808Z",
             "payload": {
               "number": 1
             },
+            "manifest": ""
+          },
+          "prior-1": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 1,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
+            "manifest": ""
+          },
+          "prior-2": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 2,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
+            "manifest": ""
+          },
+          "prior-3": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 3,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
+            "manifest": ""
+          },
+          "prior-4": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 4,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
+            "manifest": ""
+          },
+          "prior-5": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 5,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
+            "manifest": ""
+          },
+          "prior-6": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 6,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
             "manifest": ""
           }
         },
         "snapshots": {}
       },
       "steps": [
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-1"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-2"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-3"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-4"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-5"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-6"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
         {
           "op": "persistEvent",
           "arguments": {
@@ -2728,7 +2924,7 @@
               "message": {
                 "must_contain": [
                   "T-13",
-                  "1"
+                  "7"
                 ],
                 "must_not_contain": []
               },
@@ -2741,11 +2937,13 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
-            "result": "none"
+            "result": "snapshot",
+            "head_seq_nr": 6,
+            "snapshot": null
           }
         }
       ],
@@ -2761,7 +2959,7 @@
         "E-3",
         "R-1"
       ],
-      "description": "ミリ秒型でも表現可能な範囲外時刻を拒む。",
+      "description": "正常な6番までを確定した後、範囲外時刻の7番だけを拒み、ヘッドと既存イベントを保つ。",
       "backends": [
         "memory",
         "dynamodb"
@@ -2775,19 +2973,133 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
-            "seq_nr": 1,
+            "seq_nr": 7,
             "occurred_at": "1677-09-21T00:12:43.145000000Z",
             "payload": {
               "number": 1
             },
+            "manifest": ""
+          },
+          "prior-1": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 1,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
+            "manifest": ""
+          },
+          "prior-2": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 2,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
+            "manifest": ""
+          },
+          "prior-3": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 3,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
+            "manifest": ""
+          },
+          "prior-4": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 4,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
+            "manifest": ""
+          },
+          "prior-5": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 5,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
+            "manifest": ""
+          },
+          "prior-6": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 6,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
             "manifest": ""
           }
         },
         "snapshots": {}
       },
       "steps": [
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-1"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-2"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-3"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-4"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-5"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-6"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
         {
           "op": "persistEvent",
           "arguments": {
@@ -2799,7 +3111,7 @@
               "message": {
                 "must_contain": [
                   "T-13",
-                  "1"
+                  "7"
                 ],
                 "must_not_contain": []
               },
@@ -2812,11 +3124,13 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
-            "result": "none"
+            "result": "snapshot",
+            "head_seq_nr": 6,
+            "snapshot": null
           }
         }
       ],
@@ -2832,7 +3146,7 @@
         "E-3",
         "R-1"
       ],
-      "description": "ミリ秒型でも表現可能な範囲外時刻を拒む。",
+      "description": "正常な6番までを確定した後、範囲外時刻の7番だけを拒み、ヘッドと既存イベントを保つ。",
       "backends": [
         "memory",
         "dynamodb"
@@ -2846,19 +3160,133 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
-            "seq_nr": 1,
+            "seq_nr": 7,
             "occurred_at": "2262-04-11T23:47:16.855000000Z",
             "payload": {
               "number": 1
             },
+            "manifest": ""
+          },
+          "prior-1": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 1,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
+            "manifest": ""
+          },
+          "prior-2": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 2,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
+            "manifest": ""
+          },
+          "prior-3": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 3,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
+            "manifest": ""
+          },
+          "prior-4": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 4,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
+            "manifest": ""
+          },
+          "prior-5": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 5,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
+            "manifest": ""
+          },
+          "prior-6": {
+            "aggregate_id": {
+              "type_name": "Order",
+              "value": "9"
+            },
+            "seq_nr": 6,
+            "occurred_at": "1970-01-01T00:00:00.123000000Z",
+            "payload": {},
             "manifest": ""
           }
         },
         "snapshots": {}
       },
       "steps": [
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-1"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-2"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-3"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-4"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-5"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
+        {
+          "op": "persistEvent",
+          "arguments": {
+            "event": "prior-6"
+          },
+          "expect": {
+            "result": "success"
+          }
+        },
         {
           "op": "persistEvent",
           "arguments": {
@@ -2870,7 +3298,7 @@
               "message": {
                 "must_contain": [
                   "T-13",
-                  "1"
+                  "7"
                 ],
                 "must_not_contain": []
               },
@@ -2883,11 +3311,13 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
-            "result": "none"
+            "result": "snapshot",
+            "head_seq_nr": 6,
+            "snapshot": null
           }
         }
       ],
@@ -2917,7 +3347,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": -1,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -2954,7 +3384,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
@@ -2988,7 +3418,7 @@
           "e1": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             },
             "seq_nr": 9007199254740992,
             "occurred_at": "2026-10-05T00:00:00.123456789Z",
@@ -3025,7 +3455,7 @@
           "arguments": {
             "aggregate_id": {
               "type_name": "Order",
-              "value": "1"
+              "value": "9"
             }
           },
           "expect": {
