@@ -6,14 +6,14 @@
 
 - 指揮役は Opus 5.5 のメインセッションが務める。指揮役は、要件の明確化、計画、作業の分割、ユーザーの承認の取り付け、差分全体のレビュー、検証の確認、統合した結果を受け入れるかの判断、ユーザーへの報告を担う。
 - 実作業は指揮役がせず、Opus 以外の作業者に任せる。委譲の手間が節約を上回る小さな作業だけは、指揮役が行ってよい。
-- 作業者（takt の中で動くモデル）に使えるもの: Sonnet 5.5（Claude Code）、GPT-6.1-Sol（Codex）、Ollama Cloud と OpenCode Go のモデル（OpenCode）。
+- 作業者（takt の中で動くモデル）に使えるもの: Sonnet 5.5（Claude Code）、GPT-6.1-Sol（Codex）、Ollama Cloud と OpenCode Go のモデル（OpenCode）。例外として、takt の設計（計画・再計画）の段だけは Opus 5.5 を使う（2026-10-06 にユーザーが指示）。
 - 実作業は、Orca のオーケストレーションで takt を起動して行う。Orca から作業者のエージェント（Codex・Claude Code・OpenCode）を直接起動しない（2026-10-05 にユーザーが指示）。takt の監督は指揮役が行う。
-- takt の中のモデルの使い分けは、運用方針の 8 章（テンプレートは `tools/takt/runtime.yaml`）に従う。設計（計画・再計画）と既定の段とレビューの裁定は GPT-6.1-Sol、試験と実装は Sonnet 5.5 である。
+- takt の中のモデルの使い分けは、運用方針の 8 章（テンプレートは `tools/takt/runtime.yaml`）に従う。設計（計画・再計画）は Opus 5.5、既定の段とレビューの裁定は GPT-6.1-Sol、試験と実装は Sonnet 5.5 である。
 
 ### ワークフローの選び方
 
 - 標準は flash-default とする。takt-workflows のバンドルが入れるワークフローで、takt に組み込みの `default` とは別物である。計画、試験の先行作成、実装、複数の観点のレビュー、修正、最終判定まで行う（上限 51 段）。コードと試験を伴う作業（段階 2 の書き直しなど）に使う。
-- 文書、CI の設定、依存の更新、データの配布のような小さな作業には、軽いカスタムワークフロー light-change を使う。組み込みの mini-core（計画 → 実装 → 並列レビュー → 修正、上限 21 段）を呼ぶ。計画とレビューは GPT-6.1-Sol、実装と修正は Sonnet 5.5 になるよう、`runtime.yaml` に mini-core/* の割り当てがある。テンプレートは `tools/takt/workflows/light-change.yaml`（2026-10-05 にユーザーと合意）。
+- 文書、CI の設定、依存の更新、データの配布のような小さな作業には、軽いカスタムワークフロー light-change を使う。組み込みの mini-core（計画 → 実装 → 並列レビュー → 修正、上限 21 段）を呼ぶ。計画は Opus 5.5、レビューは GPT-6.1-Sol、実装と修正は Sonnet 5.5 になるよう、`runtime.yaml` に mini-core/* の割り当てがある。テンプレートは `tools/takt/workflows/light-change.yaml`（2026-10-05 にユーザーと合意）。
 - 組み込みのワークフロー（全体の規則が挙げる `simple-mini` を含む）をそのまま使わない。段の名前が `runtime.yaml` の割り当てに合わず、実装まで既定の GPT-6.1-Sol で動いてしまうからである。計画から要る大きめの作業も、flash-default か light-change で賄う。
 
 ## takt の起動と監督
