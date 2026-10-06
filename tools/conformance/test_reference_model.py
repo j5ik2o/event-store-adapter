@@ -31,6 +31,19 @@ class ReferenceModelTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '参照モデルと期待が不一致'):
             replay(scenario)
 
+    def test_transaction_conflict_on_any_item_wins_over_head_gap(self):
+        scenario = case('dynamodb/write-errors.json', 'dynamodb-condition-gap')
+        fault = next(f for f in scenario['faults'] if f['phase'] == 'commit')
+        fault['details']['cancellation_reasons'].append({'target': 'current-snapshot', 'code': 'TransactionConflict'})
+        with self.assertRaisesRegex(ValueError, '参照モデルと期待が不一致'):
+            replay(scenario)
+
+    def test_head_condition_is_read_before_journal_condition(self):
+        scenario = case('dynamodb/write-errors.json', 'dynamodb-condition-gap')
+        fault = next(f for f in scenario['faults'] if f['phase'] == 'commit')
+        fault['details']['cancellation_reasons'][0] = {'target': 'journal', 'code': 'ConditionalCheckFailed'}
+        replay(scenario)
+
     def test_failed_write_does_not_advance_head(self):
         scenario = case('scenarios/core/write-read.json', 'core-gap-event')
         read = next(s for s in scenario['steps'] if s['op'] == 'getLatestSnapshotById')

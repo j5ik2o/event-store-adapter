@@ -120,15 +120,18 @@ class Model:
         if fault['kind'] != 'sdk-error':
             return None
         reasons = fault['details'].get('cancellation_reasons', [])
-        for reason in reasons:
-            if reason['code'] == 'TransactionConflict':
+        # 理由が複数の項目に付いたときは、TransactionConflict、ヘッドの条件不成立、ジャーナルの条件不成立の順に見る（dynamodb.md 6.2、P-43）
+        if any(reason['code'] == 'TransactionConflict' for reason in reasons):
+            return error('optimistic-lock')
+        failed = {reason['target'] for reason in reasons if reason['code'] == 'ConditionalCheckFailed'}
+        head = next((reason for reason in reasons if reason['code'] == 'ConditionalCheckFailed' and reason['target'] == 'head'), None)
+        if head is not None:
+            if event['seq_nr'] == 1:
                 return error('optimistic-lock')
-            if reason['code'] == 'ConditionalCheckFailed':
-                if reason['target'] == 'journal' or event['seq_nr'] == 1:
-                    return error('optimistic-lock')
-                if reason['target'] == 'head':
-                    old = reason['old_head_seq_nr'] or 0
-                    return error('optimistic-lock') if event['seq_nr'] <= old else error('contract-violation', 'W-8')
+            old = head['old_head_seq_nr'] or 0
+            return error('optimistic-lock') if event['seq_nr'] <= old else error('contract-violation', 'W-8')
+        if 'journal' in failed:
+            return error('optimistic-lock')
         return error('storage')
 
     def validate_write(self, event, snapshot):
