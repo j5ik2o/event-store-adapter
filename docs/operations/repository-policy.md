@@ -72,7 +72,7 @@ event-store-adapter グループの各リポジトリが従う、CI・ブラン�
 ## 6. エージェントによる運用
 
 - 各リポジトリへの変更は、本リポジトリのセッション（コーディネーター）が Orca の orchestration で worker に指示して行う。オーナーはコーディネーターとだけやりとりする。
-- コーディネーター（司令塔）は Opus 5.5 で動かし、計画・判断・レビューの統括に専念する。実作業は、Opus 以外のモデルとハーネス（Sonnet 5.5、GPT-6.1-Sol、Ollama Cloud・OpenCode Go）に任せる。例外として、takt の設計（計画・再計画）の段は Opus 5.5 で動かす（2026-10-06 にユーザーが指示。8 章）。実作業の手段は、Orca の orchestration でも takt でもよい（2026-10-05 にオーナーが指示）。
+- コーディネーター（司令塔）は Opus 5.5 で動かし、計画・判断・レビューの統括に専念する。実作業は、Opus 以外のモデルとハーネス（Sonnet 5.5、Ollama Cloud・OpenCode Go のモデル）に任せる。例外として、takt の設計（計画・再計画）、レビューの裁定・最終判定、割り当てのない段は Opus 5.5 で動かす（2026-10-06 にユーザーが指示。8 章）。GPT-6.1-Sol は、2026-10-06 から takt では使わない。実作業の手段は、Orca の orchestration でも takt でもよい（2026-10-05 にオーナーが指示）。
 - worker は PR の作成までを行い、マージはしない。マージはコーディネーターが差分とチェック結果を確認してから、この方針に沿って行う。
 - aidlc は使わない。takt は使ってよい。
 - 用済みのワークツリーは破棄する。リポジトリにない未コミットの成果物が残っている場合は、退避してから破棄する。
@@ -93,12 +93,13 @@ takt を使うリポジトリは、次の配置にそろえる。テンプレー
 | `.takt/.takt-workflows`、`.takt/.gitignore` | 導入したバンドルの言語と版、追跡するファイルの許可リスト | インストーラーが作る |
 | `.takt/runtime.yaml` | プロファイルとステップの割り当て | `tools/takt/runtime.yaml` |
 | `.takt/config.yaml` | 言語、並列数、利用上限での切り替え | `tools/takt/config.yaml` |
-| `.takt/workflows/light-change.yaml` | 小さな変更向けの軽いワークフロー（組み込みの mini-core を呼ぶ、上限 21 段）。2026-10-05 にユーザーと合意 | `tools/takt/workflows/light-change.yaml` |
+| `.takt/workflows/light-change.yaml` | 小さな変更向けの軽いワークフロー（計画 → 実装 → 3 人の並行レビュー → 修正、上限 17 段）。組み込みの mini-core を手本に、レビュー役を 3 人にした（2026-10-06 にユーザーが指定）。2026-10-05 にユーザーと合意 | `tools/takt/workflows/light-change.yaml` |
+| `.takt/facets/instructions/spec-conformance-review.md` | light-change の 3 人目のレビュー役（仕様との食い違い）の指示 | `tools/takt/facets/instructions/spec-conformance-review.md` |
 | `.claude/settings.json` | takt のステップに `.takt/` の部品を読ませない設定 | インストーラーが既存の設定にマージする |
 | `.takt/bin/run-takt.sh`、`.takt/bin/takt-claude.sh`、`.takt/bin/takt-codex.sh` | takt を起動する入口（`run-takt.sh --claude-account <設定> --codex-account <設定>`）と、takt が claude・codex を起動するときの入口。`TAKT_CONFIG_DIR` をプロジェクトの `.takt/home` に向ける | `tools/takt/bin/`。[ideo-plus/takt-workflows](https://github.com/ideo-plus/takt-workflows) の `scripts/` をコミット `34d5d5be664ba0f8475817fecfca9c52db77ea86`（ideo-plus/takt-workflows#67 のマージ）のまま写す（2026-10-05 にユーザーが指示）。置き場所は、takt-workflows のインストーラー（`use-lang.sh --launchers-only`）に合わせて `.takt/bin/` とし、`.takt/.gitignore` に `!bin/` と `!bin/**` を足す（2026-10-06 にユーザーと合意）。`scripts/` には置かない |
 | `mise.toml` | takt の版の固定(`"npm:takt" = "0.68.0"`) | 各リポジトリ |
 
-- 役割の分担は、設計(計画・再計画)を Opus 5.5、レビュー(裁定・最終ゲート)を GPT-6.1-Sol、実装(テスト・実装)を Sonnet 5.5 とする。割り当てのないステップも GPT-6.1-Sol で動かす。利用上限に当たったときは、Sonnet 5.5 と GPT-6.1-Sol のあいだで切り替える。2026-10-03 には設計と既定を Opus 5.5 にしていたが、2026-10-05 にオーナーと合意して GPT-6.1-Sol に改め、2026-10-06 にユーザーの指示で設計だけを Opus 5.5 に戻した（6 章の「実作業は Opus 以外」の例外）。GPT-6.1-Sol を使うので、takt は 0.67 以上にする。
+- 役割の分担は、2026-10-06 にユーザーが次のとおり指定した。GPT-6.1-Sol は使わない。設計（計画・再計画）、レビューの裁定・最終判定、割り当てのない段は Opus 5.5。実装（試験・実装・修正）は Sonnet 5.5。並行に動くレビュー役は、3 種類のモデルに 1 役ずつ固定で割り当てる（ladder ではない）。Sonnet 5.5 は仕様との食い違い（light-change）と設計の構造・CQRS とイベントソーシング（flash-default）。DeepSeek V4.1 Flash は AI 特有の問題（light-change）とバックエンド・セキュリティ（flash-default）。GLM 5.3 Flash は監督（light-change）と AI 特有の問題・試験・フロントエンド（flash-default）。DeepSeek と GLM は OpenCode Go 経由で呼ぶ。利用上限に当たったときは、Sonnet 5.5 → Opus 5.5 → DeepSeek V4.1 Flash の順に切り替える。これまでの経緯: 2026-10-03 には設計と既定を Opus 5.5 にしていたが、2026-10-05 にオーナーと合意して GPT-6.1-Sol に改め、2026-10-06 に GPT-6.1-Sol をやめた。
 - takt の版は、全リポジトリで同じにする。Renovate では takt を更新しない(各リポジトリの `renovate.json` で、理由を `description` に書いて止める)。新しい版に上げるときは、コーディネーターが上の表の版と全リポジトリの `mise.toml` を同時に上げる。Renovate の自動更新に任せると、リポジトリごとに更新の日がずれて版がばらつくからである(2026-10-03 に 0.67.1 と 0.68.0 が混在した。同日オーナーと合意)。
 - `~/.takt/`(全体の設定)には何も書かず、読ませもしない。全体の設定はすべてのプロジェクトに重ねて読まれるからである。`run-takt.sh` が `TAKT_CONFIG_DIR` をプロジェクトの `.takt/home` に向けるので、takt は `run-takt.sh` から起動する。`.takt/home` は `.takt/.gitignore` で追跡の外にある。
 - 起動の入口は takt-workflows のものをそのまま使い、独自に改変しない（2026-10-05 にユーザーが指示）。直す必要があるときは、takt-workflows に入れてから写す。呼び出し元のシェルに残る環境変数の除去は、2026-10-06 に takt-workflows に入った（ideo-plus/takt-workflows#65）。`takt-claude.sh` は認証・組織・提供元の選択・接続先・モデル・サブエージェントのモデルの変数を、`takt-codex.sh` は認証・トークン・接続先・外部認証の変数を、`run-takt.sh` は takt に渡る API キーを外してから起動する。
