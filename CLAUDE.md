@@ -40,7 +40,7 @@ takt はエージェントとして Orca に認識されないので、指示の
 
 ### takt にできないこと
 
-- takt の中の Claude は、`.takt/` の下に書き込めない。takt-workflows のインストーラーが `.claude/settings.json` に入れる拒否の規則（段に `.takt/` の部品を読ませないためのもの）が、書き込みも止めるからである。`.takt/` の下のファイル（ワークフロー、`runtime.yaml`、`config.yaml`）を作る・配る作業は、指揮役が小さな作業として行う。
+- takt の中の Claude は、takt の実行中、`.takt/tools`・`.takt/facets`・`.takt/workflows`・`.takt/steps` の下を読めない。takt-workflows のインストーラーが `.claude/settings.json` に入れる拒否の規則（`Read(./.takt/<ディレクトリ>/**)`。段にワークフローの部品を読ませないためのもの）によるもので、読めないのでそこへの書き込みもできない。`.takt/runs`（各段の報告。修正の段はここのレビューの報告を読んで直す）や `runtime.yaml`・`config.yaml` は対象外で、読み書きできる。`.takt/runs` まで止めるとワークフローが動かなくなるので、拒否の規則を広げない。この規則は takt の実行中の段にだけ効き、指揮役や takt の外の作業は制限しない。ワークフローや facet を作る・配る作業は、指揮役が小さな作業として行う。
 - takt は途中で質問できない。判断がつかないときは ABORT して、レポートに理由を残す。
 
 ## 指示書
