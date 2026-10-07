@@ -106,6 +106,8 @@ takt を使うリポジトリは、次の配置にそろえる。テンプレー
 - 実行ログやセッションの状態(`.takt/runs/` など)はコミットしない。インストーラーが作る `.takt/.gitignore` に従う。
 - インストーラーが入れる `.takt/tools/`(DDD 向けワークフロー用の ddd-lint。約 13MB で、プラットフォーム固有のバイナリを含む)はコミットしない。標準のワークフロー flash-default では使わないからである。`.takt/.gitignore` の `tools/` の許可を外す。インストーラーを入れ直したときは、この変更をやり直す。
 
+- Ollama Cloud の切り替え候補は、OpenCode の独自の提供元 `ollama` を通じ、`http://localhost:11434/v1` のローカル Ollama サーバーから呼ぶ。マシンでは [Ollama アプリまたはコマンドラインから Cloud にサインイン](https://docs.ollama.com/cloud) し、サーバーを起動しておく。OpenCode には [独自の提供元の設定](https://opencode.ai/docs/providers/) に従い、提供元名 `ollama`、パッケージ `@ai-sdk/openai-compatible`、上記の接続先と、3 つのモデル `deepseek-v4.1-flash:cloud`・`glm-5.3:cloud`・`glm-5.3-flash:cloud` を登録する。`opencode models ollama` で 3 モデルが見えることと、Cloud の利用枠があることを確かめる。OpenCode から Cloud に直接接続する組み込みの提供元 `ollama-cloud` は別の構成であり、そちらを使うマシンでは接続先・認証と `config.yaml` のモデル名を合わせる。認証情報はリポジトリに書かない。
+
 ## 適合状況（2026-10-05）
 
 2026-10-03 の時点で、1〜4 章と 8 章は、6 リポジトリすべてで適合していた。必須チェックは `CI Success` だけで、strict が有効（会話の解決の必須は無効）、マージは squash のみ、CI の全ジョブに `timeout-minutes` があり、workflow で動く AI レビューと独自のスレッドのゲートはない。同日に足した 1 章の「公開の workflow」には、java・kotlin・js・scala・rs が適合している（scala は #853、js は手動実行の CI を除く #990、rs は #239 も含む）。go はパッケージの登録先に公開しないので対象外。8 章の takt の版は、同日に 6 リポジトリとも 0.68.0 にそろえ、Renovate では更新しない設定にした（rs #240、js #992、java #686、scala #854、kotlin #822、go #383）。
