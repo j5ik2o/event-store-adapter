@@ -6,7 +6,7 @@
 
 - 指揮役は Opus 5.5 のメインセッションが務める。指揮役は、要件の明確化、計画、作業の分割、ユーザーの承認の取り付け、差分全体のレビュー、検証の確認、統合した結果を受け入れるかの判断、ユーザーへの報告を担う。
 - 実作業は指揮役がせず、Opus 以外の作業者に任せる。委譲の手間が節約を上回る小さな作業だけは、指揮役が行ってよい。
-- 作業者（takt の中で動くモデル）に使えるもの: Sonnet 5.5（Claude Code）、Ollama Cloud と OpenCode Go のモデル（OpenCode）。例外として、takt の設計・レビューの裁定・最終判定・割り当てのない段は Opus 5.5 を使う。GPT-6.1-Sol は takt では使わない（2026-10-06 にユーザーが指示）。
+- 作業者（takt の中で動くモデル）に使えるもの: Sonnet 5.5（Claude Code）、Ollama Cloud と OpenCode Go のモデル（OpenCode）。例外として、takt の設計・レビューの裁定・最終判定・割り当てのない段は Opus 5.5 を使う。GPT-6.1-Sol は通常の段には割り当てず、利用上限での切り替え候補として使う（2026-10-06 に通常の割り当てから外し、2026-10-07 にユーザーが切り替え候補へ追加するよう指示）。
 - 実作業は、Orca のオーケストレーションで takt を起動して行う。Orca から作業者のエージェント（Codex・Claude Code・OpenCode）を直接起動しない（2026-10-05 にユーザーが指示）。takt の監督は指揮役が行う。
 - takt の中のモデルの使い分けは、運用方針の 8 章（テンプレートは `tools/takt/runtime.yaml`）に従う。設計（計画・再計画）・裁定・最終判定・既定の段は Opus 5.5、試験・実装・修正は Sonnet 5.5、並行のレビュー役は Sonnet 5.5・DeepSeek V4.1 Flash・GLM 5.3 Flash に 1 役ずつ固定で割り当てる。
 
@@ -31,7 +31,7 @@ takt はエージェントとして Orca に認識されないので、指示の
 
    - 起動の入口は `.takt/bin/run-takt.sh` とする（2026-10-05 にユーザーが、takt-workflows の run-takt.sh を各リポジトリに配るよう指示。置き場所は 2026-10-06 に、takt-workflows のインストーラーに合わせて `.takt/bin/` とすることで合意）。全体の規則（`~/.claude/CLAUDE.md`）は takt を直接起動してラッパーを挟まないとするが、このグループでは、このスクリプトがアカウントの選択と `TAKT_CONFIG_DIR`（プロジェクトの `.takt/home`）の設定を担うので、例外として使う。これ以外のラッパーは挟まない。
    - アカウントの設定ディレクトリはマシンごとの事情なので、リポジトリには書かず、指揮役の memory に記録してある。
-   - takt を動かすマシンには、Claude Code（Sonnet 5.5・Opus 5.5）と、OpenCode Go の認証を済ませた OpenCode（レビュー役の DeepSeek V4.1 Flash・GLM 5.3 Flash）が要る。GPT-6.1-Sol は使わないが、上流の起動スクリプトが Codex のアカウントと CLI を必須にしているので、Codex も入れておく。
+   - takt を動かすマシンには、Claude Code（Sonnet 5.5・Opus 5.5）と、OpenCode Go の認証を済ませた OpenCode（レビュー役の DeepSeek V4.1 Flash・GLM 5.3 Flash）が要る。利用上限での切り替え候補の GPT-6.1-Sol を動かすため、Codex のアカウントと CLI も用意する。上流の起動スクリプトでもこの両方が必須である。
    - 指示書を `-t "$(cat <指示書>)"` で渡さない。takt は `-t` の文字列をそのまま PR のタイトルとコミットのメッセージ（`takt: <全文>`）にするので、長い指示書では PR のタイトルが長すぎて PR を作れない（2026-10-06 の試運転で、push の後に PR の作成だけが失敗した）。`-i` なら、PR のタイトルは `[#<番号>] <Issue のタイトル>`、コミットは `feat: <Issue のタイトル> (#<番号>)` になる（2026-10-06 に ideo-plus/takt-workflows#65 で、PR まで自動で作られることを確かめた）。squash でマージするときに、指揮役が Conventional Commits のタイトルに付け直す。
    - 出力はファイルにリダイレクトしない。takt は `.takt/runs/<run>/` に記録を残す。最後の `echo "takt-exit: $?"` で、端末に takt の終了コードを残す。端末は閉じないので、終わった後も `orca terminal read` で出力を読める。
    - 起動の直後に `orca terminal read` で、`run-takt: TAKT_CONFIG_DIR:` がワークツリーの `.takt/home` を指していることを確かめる。`~/.takt/` は読ませず、書き換えもしない。
