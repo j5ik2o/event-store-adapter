@@ -16,7 +16,7 @@ import uuid
 
 import boto3
 from botocore.config import Config
-from build import source_fingerprints, verify_artifacts, verify_sources
+from build import child_environment, source_fingerprints, verify_artifacts, verify_sources
 from query_observer import QueryObserver, item_bytes
 
 HERE = Path(__file__).resolve().parent
@@ -65,7 +65,7 @@ class Driver:
         self.replies = queue.Queue()
         self.count = 0
         self.stderr = (output / f"{language}-stderr.log").open("w")
-        environment = dict(os.environ, **definition["env"])
+        environment = child_environment(definition["env"])
         self.process = subprocess.Popen(definition["argv"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                         stderr=self.stderr, text=True, env=environment)
 
@@ -126,7 +126,7 @@ class Local:
         self.tables = {kind: f"{prefix}_{kind}" for kind in ("journal", "snapshot", "head")}
 
     def command(self, argv):
-        result = subprocess.run(argv, capture_output=True, text=True)
+        result = subprocess.run(argv, capture_output=True, text=True, env=child_environment())
         row = {"argv": argv, "exit": result.returncode, "stdout": result.stdout, "stderr": result.stderr}
         self.commands.append(row)
         save(self.output / "resource-commands.json", self.commands)
@@ -245,6 +245,11 @@ def attributes(item, expected):
     assert {name: next(iter(value)) for name, value in item.items()} == expected
 
 
+def validate_duplicate(reply, head_before, head_after):
+    assert reply["status"] == "error" and reply["category"] == "optimisticLock", reply
+    assert head_before == head_after, (head_before, head_after)
+
+
 def physical(local, first, second, state):
     aid = "Interop-" + first["value"]
     journal_shape = {"aid": "S", "seq_nr": "N", "occurred_at": "N", "manifest": "S", "payload": "B"}
@@ -300,7 +305,7 @@ def main():
     local = Local(output)
     drivers, observer = {}, None
     report = {"status": "running", "currentSnapshot": PINS, "matrix": [], "sequential": [],
-              "precision": [], "optimistic_lock": [], "physical": [], "pagination": [], "configurations": []}
+              "precision": [], "precision_writes": [], "optimistic_lock": [], "physical": [], "pagination": [], "configurations": []}
     save(output / "buildinputs.json", inputs)
 
     def checkpoint():
@@ -370,17 +375,39 @@ def main():
             suffix = call(language, {"op": "getEvents", "id": {"type_name": "Interop", "value": "shared"}, "seq_nr": 4}, "inclusive-start")
             assert suffix == [expected_event(input, language) for input in shared[3:]]
             duplicate = dict(shared[-1], payload={"attempt": "duplicate"})
+            head_before = local.item("head", "Interop-shared")
             reply = drivers[language].call({"op": "persistEvent", "event": duplicate}, "duplicate")
-            assert reply["status"] == "error" and reply["category"] == "optimisticLock", reply
-            report["optimistic_lock"].append({"language": language, "response": reply, "unchanged_read": read(language, shared, state, "after-duplicate"), "passed": True})
+            head_after = local.item("head", "Interop-shared")
+            row = {"language": language, "response": reply, "head_before": head_before, "head_after": head_after,
+                   "head_unchanged": head_before == head_after, "passed": False}
+            report["optimistic_lock"].append(row)
+            validate_duplicate(reply, head_before, head_after)
+            row.update(unchanged_read=read(language, shared, state, "after-duplicate"), passed=True)
+            checkpoint()
         head = local.item("head", "Interop-shared")
         current = local.item("snapshot", "Interop-shared", 0)
         assert head["seq_nr"] == {"N": "6"} and current["seq_nr"] == {"N": "4"}
         report["snapshot_head_distinction"] = {"head": head, "snapshot": current, "passed": True}
-        native = event("native-nanoseconds", "java", 1, BASE_NS + 456789)
-        call("java", {"op": "persistEvent", "event": native}, "precision")
-        for language in LANGUAGES:
-            report["precision"].append(read(language, [native], None, "precision"))
+        for writer in LANGUAGES:
+            native = event(f"native-nanoseconds-{writer}", writer, 1, BASE_NS + 456789)
+            call(writer, {"op": "persistEvent", "event": native}, "precision")
+            journal = local.item("journal", "Interop-" + native["value"], 1)
+            attributes(journal, {"aid": "S", "seq_nr": "N", "occurred_at": "N", "manifest": "S", "payload": "B"})
+            writer_precision = PINS["precision_ns"][writer]
+            expected_stored = str((int(native["occurred_at_ns"]) // writer_precision) * writer_precision)
+            observed_stored = journal["occurred_at"]["N"]
+            write_row = {"writer": writer, "precision_ns": writer_precision, "input_event": native,
+                         "expected_stored_ns": expected_stored, "observed_stored_ns": observed_stored,
+                         "actual_journal": journal, "passed": observed_stored == expected_stored}
+            report["precision_writes"].append(write_row)
+            assert write_row["passed"], write_row
+            assert json.loads(journal["payload"]["B"]) == native["payload"]
+            expected_native = dict(native, occurred_at_ns=expected_stored)
+            for reader in LANGUAGES:
+                row = read(reader, [expected_native], None, "precision")
+                row.update(writer=writer, writer_precision_ns=writer_precision)
+                report["precision"].append(row)
+            checkpoint()
         page_events = []
         for number in range(1, 13):
             language = LANGUAGES[(number - 1) % 6]
@@ -430,7 +457,9 @@ def main():
             report["configurations"].append({"language": language, "stage": "reopen", "actual": actual, "unchanged": True})
         report["status"] = "passed" if native_pages else "passed-with-local-boundary-limitation"
         report["summary"] = {"matrix_passed": len(report["matrix"]), "matrix_required": 36,
-                             "sequential_steps": len(report["sequential"]), "driver_languages": len(drivers)}
+                             "sequential_steps": len(report["sequential"]), "driver_languages": len(drivers),
+                             "precision_writers": len(report["precision_writes"]), "precision_reader_pairs": len(report["precision"]),
+                             "public_calls": sum(driver.count for driver in drivers.values()), "queries_observed": len(observer.records)}
     except BaseException as error:
         report["status"] = "failed"
         report["failure"] = {"type": type(error).__name__, "message": str(error), "traceback": traceback.format_exc()}

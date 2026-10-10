@@ -18,6 +18,16 @@ HERE = Path(__file__).resolve().parent
 PINS = json.loads((HERE / "snapshots.json").read_text())
 
 
+def child_environment(extra=None):
+    environment = dict(os.environ)
+    environment.update(extra or {})
+    # ドライバーやビルドの検査より先にコードを読む設定だけを、子から除く。
+    for name in ("NODE_OPTIONS", "JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS",
+                 "JAVA_OPTS", "GRADLE_OPTS", "LD_PRELOAD", "LD_AUDIT", "DYLD_INSERT_LIBRARIES"):
+        environment.pop(name, None)
+    return environment
+
+
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -112,7 +122,7 @@ def verify_artifacts(inputs):
     if not manifest:
         raise RuntimeError("JavaScript runtime inputs missing; rebuild all drivers")
     result = subprocess.run(["node", str(HERE / "drivers/js/runtime-inputs.cjs"), "--verify", manifest],
-                            capture_output=True, text=True)
+                            capture_output=True, text=True, env=child_environment())
     if result.returncode:
         raise RuntimeError(f"JavaScript runtime inputs mismatch: {result.stderr.strip()}")
 
@@ -271,12 +281,8 @@ def main():
     args = parser.parse_args()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    commands = json.loads((output / "build-commands.json").read_text()) if (output / "build-commands.json").exists() else []
-    previous_inputs = json.loads((output / "buildinputs.json").read_text()) if (output / "buildinputs.json").exists() else None
+    commands = []
     previous_success = (output / "drivers.json").exists() and not (output / "build-failure.json").exists()
-    # 取得失敗や途中の成果物更新でも、前回の成功を今回の結果として使わせない。
-    for name in ("drivers.json", "buildinputs.json"):
-        (output / name).unlink(missing_ok=True)
     selected = lambda language: args.only is None or args.only == language
 
     def execute(label, command, cwd=None, environment=None):
@@ -287,7 +293,7 @@ def main():
         save(output / "build-commands.json", commands)
         started = time.monotonic()
         with log.open("w") as stream:
-            result = subprocess.run(row["argv"], cwd=cwd or HERE, env=environment, stdout=stream, stderr=subprocess.STDOUT)
+            result = subprocess.run(row["argv"], cwd=cwd or HERE, env=child_environment(environment), stdout=stream, stderr=subprocess.STDOUT)
         row.update(exit=result.returncode, elapsed_seconds=round(time.monotonic() - started, 3))
         save(output / "build-commands.json", commands)
         print(label, "exit", result.returncode, flush=True)
@@ -295,6 +301,12 @@ def main():
             raise RuntimeError(f"{label} failed: {log}")
 
     try:
+        # 成功を先に無効にし、部分ビルド用の前回入力も例外保護の中で読む。
+        (output / "drivers.json").unlink(missing_ok=True)
+        previous_text = (output / "buildinputs.json").read_text() if (output / "buildinputs.json").exists() else None
+        (output / "buildinputs.json").unlink(missing_ok=True)
+        commands = json.loads((output / "build-commands.json").read_text()) if (output / "build-commands.json").exists() else []
+        previous_inputs = json.loads(previous_text) if previous_text is not None else None
         if not __debug__:
             raise RuntimeError("build requires assertions; run without -O or PYTHONOPTIMIZE")
         if args.only:
@@ -315,6 +327,12 @@ def main():
         artifacts = java_artifacts(output, args.java_artifact_directory)
         jvm = output / "jvm"
         if selected("jvm"):
+            # この入口が生成するクラスとリソースだけを再生成する。キャッシュは残す。
+            for path in (jvm / "classes", jvm / "resources"):
+                if path.is_symlink():
+                    raise RuntimeError(f"JVM output directory must not be a symlink: {path}")
+                if path.exists():
+                    shutil.rmtree(path)
             execute("jvm", [args.gradle, "--no-daemon", "--console", "plain", "--project-cache-dir", output / "gradle-cache",
                          "-p", HERE / "drivers/jvm", f"-PlibrarySources={sources}", f"-PoutputDir={jvm}",
                          f"-PjavaArtifact={artifacts[0]}", "writeClasspath"])

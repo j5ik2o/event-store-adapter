@@ -317,6 +317,119 @@ console.log(JSON.stringify({value: local(library).fixtureMarker,
         self.assertEqual(result["resource_calls"], 0)
         self.assertEqual(result["driver_calls"], 0)
 
+    def test_full_rebuild_removes_preexisting_jvm_shadow_and_resources(self):
+        source = self.root / "Shadow.java"
+        dependency = self.root / "dependency"
+        source.write_text('package fixture; public class Shadow { public static void main(String[] args) { System.out.print("original dependency"); } }')
+        subprocess.run(["javac", "-d", str(dependency), str(source)], capture_output=True, text=True, check=True)
+        snapshot = self.pins["java_currentSnapshot"]
+        jar = self.supplied / (snapshot["artifact"] + ".jar")
+        with zipfile.ZipFile(jar, "w") as package:
+            package.write(dependency / "fixture/Shadow.class", "fixture/Shadow.class")
+        snapshot["jar_sha256"] = build.digest(jar)
+        self.build()
+        classpath = (self.output / "jvm/classpath.txt").read_text()
+        classes, resources = map(Path, classpath.split(os.pathsep)[:2])
+        source.write_text('package fixture; public class Shadow { public static void main(String[] args) { System.out.print("unrecorded shadow class"); } }')
+        subprocess.run(["javac", "-d", str(classes), str(source)], capture_output=True, text=True, check=True)
+        resource = resources / "extra.properties"
+        resource.parent.mkdir(parents=True, exist_ok=True)
+        resource.write_text("unrecorded resource")
+        preserved = [self.output / "gradle-cache/keep", self.output / "jvm/user-resource"]
+        for path in preserved:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("user input")
+        before = subprocess.run(["java", "-cp", classpath, "fixture.Shadow"], capture_output=True, text=True, check=True).stdout
+        self.build()
+        after = subprocess.run(["java", "-cp", classpath, "fixture.Shadow"], capture_output=True, text=True, check=True).stdout
+        runner = self.probe_run()
+        self.record(before_java=before, after_java=after, resource_exists=resource.exists(), runner=runner,
+                    preserved={str(path): path.read_text() for path in preserved})
+        self.assertEqual(before, "unrecorded shadow class")
+        self.assertEqual(after, "original dependency")
+        self.assertFalse(resource.exists())
+        self.assertTrue(all(path.read_text() == "user input" for path in preserved))
+        self.assertEqual(runner["resource_calls"], 1)
+
+    def test_invalid_cached_json_invalidates_success_and_records_failure(self):
+        for name in ("build-commands.json", "buildinputs.json"):
+            for contents in ('[{"label":', 'not JSON'):
+                with self.subTest(name=name, contents=contents):
+                    (self.output / "build-commands.json").unlink(missing_ok=True)
+                    (self.output / "buildinputs.json").unlink(missing_ok=True)
+                    self.build()
+                    (self.output / name).write_text(contents)
+                    before_tools = (self.output / "tool-calls.jsonl").read_text()
+                    attempt = self.attempt()
+                    failure_path = self.output / "build-failure.json"
+                    failure = json.loads(failure_path.read_text()) if failure_path.exists() else None
+                    self.record(name=name, contents=contents, attempt=attempt, failure=failure)
+                    self.assertFalse(attempt["accepted"], attempt)
+                    self.assertEqual(attempt["metadata"], {"drivers.json": False, "buildinputs.json": False, "build-failure.json": True})
+                    self.assertIsNotNone(failure)
+                    self.assertEqual(attempt["runner"]["resource_calls"], 0)
+                    self.assertEqual(attempt["runner"]["driver_calls"], 0)
+                    self.assertEqual((self.output / "tool-calls.jsonl").read_text(), before_tools)
+                    (self.output / name).unlink(missing_ok=True)
+                    self.build()
+                    self.assertEqual(self.probe_run()["resource_calls"], 1)
+
+    def test_node_preload_is_excluded_from_build_verify_and_driver(self):
+        hook = self.root / "hook.cjs"
+        marker = self.root / "hook-marker.jsonl"
+        hook.write_text("require('node:fs').appendFileSync(" + json.dumps(str(marker))
+                        + ", JSON.stringify({argv: process.argv}) + '\\n');\n")
+        preload = {"NODE_OPTIONS": "--require=" + str(hook)}
+        with mock.patch.dict(os.environ, preload):
+            self.build()
+            build.verify_artifacts(json.loads((self.output / "buildinputs.json").read_text()))
+            probe = self.root / "probe.mjs"
+            probe.write_text('for await (const line of process.stdin) {}\n')
+            driver = run.Driver("js", {"argv": ["node", str(probe)], "env": {}}, self.root, None)
+            exit = driver.close()
+            parent_unchanged = os.environ["NODE_OPTIONS"] == preload["NODE_OPTIONS"]
+        rows = [json.loads(line) for line in marker.read_text().splitlines()] if marker.exists() else []
+        self.record(hook_executions=rows, driver_exit=exit, parent_unchanged=parent_unchanged)
+        self.assertEqual(exit["exit"], 0)
+        self.assertTrue(parent_unchanged)
+        self.assertEqual(rows, [])
+
+    def test_jvm_native_and_explicit_driver_preloads_are_excluded(self):
+        preload = {key: "unrecorded preload" for key in (
+            "NODE_OPTIONS", "JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS",
+            "JAVA_OPTS", "GRADLE_OPTS", "LD_PRELOAD", "LD_AUDIT", "DYLD_INSERT_LIBRARIES")}
+        for language, command in (("java", ["java", "-version"]), ("go", ["go-driver"]), ("rs", ["rust-driver"])):
+            with self.subTest(language=language), mock.patch.dict(os.environ, dict(preload, JAVA_HOME="kept-java-home")), \
+                    mock.patch.object(run.subprocess, "Popen") as popen:
+                popen.return_value.stdout = io.StringIO("")
+                popen.return_value.wait.return_value = 0
+                definition = {"argv": command, "env": dict(preload, INTEROP_EXPLICIT_INPUT="kept-input")}
+                driver = run.Driver(language, definition, self.root, None)
+                child = popen.call_args.kwargs["env"]
+                driver.close()
+                self.record(language=language, child_preload_keys=sorted(preload.keys() & child.keys()),
+                            path_preserved=child["PATH"] == os.environ["PATH"], java_home=child["JAVA_HOME"],
+                            explicit_input=child["INTEROP_EXPLICIT_INPUT"], parent_unchanged=all(os.environ[k] == v for k, v in preload.items()))
+                self.assertFalse(preload.keys() & child.keys())
+                self.assertEqual(child["PATH"], os.environ["PATH"])
+                self.assertEqual(child["JAVA_HOME"], "kept-java-home")
+                self.assertEqual(child["INTEROP_EXPLICIT_INPUT"], "kept-input")
+                self.assertTrue(all(os.environ[k] == v for k, v in preload.items()))
+
+    def test_duplicate_validator_rejects_changed_head_binary_at_same_sequence(self):
+        before = {"aid": {"S": "Interop-shared"}, "type_name": {"S": "Interop"}, "seq_nr": {"N": "6"},
+                  "events": {"L": [{"M": {"seq_nr": {"N": "6"}, "occurred_at": {"N": str(run.BASE_NS)},
+                    "manifest": {"S": "interop-event/v1"}, "payload": {"B": b'{"value":"original"}'}}}]}}
+        reply = {"status": "error", "category": "optimisticLock"}
+        run.validate_duplicate(reply, before, copy.deepcopy(before))
+        after = copy.deepcopy(before)
+        after["events"]["L"][0]["M"]["payload"]["B"] = b'{"value":"changed"}'
+        with self.assertRaises(AssertionError):
+            run.validate_duplicate(reply, before, after)
+        self.record(head_before=json.loads(json.dumps(before, default=run.evidence)),
+                    head_after=json.loads(json.dumps(after, default=run.evidence)),
+                    same_sequence=before["seq_nr"] == after["seq_nr"], changed_binary_rejected=True)
+
     def test_runner_rejects_redirected_or_missing_jvm_class_directory(self):
         for mode in ("redirected", "missing"):
             with self.subTest(mode=mode):
