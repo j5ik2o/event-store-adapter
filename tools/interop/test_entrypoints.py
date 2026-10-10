@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import tomllib
 import unittest
 from unittest import mock
 import zipfile
@@ -64,7 +65,7 @@ from pathlib import Path
 output = Path(os.environ["INTEROP_TEST_OUTPUT"])
 tool, args = Path(sys.argv[0]).name, sys.argv[1:]
 with (output / "tool-calls.jsonl").open("a") as stream:
-    stream.write(json.dumps({"tool": tool, "args": args}) + "\\n")
+    stream.write(json.dumps({"tool": tool, "args": args, "gowork": os.environ.get("GOWORK")}) + "\\n")
 def write(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
@@ -436,6 +437,135 @@ console.log(JSON.stringify({value: local(library).fixtureMarker,
                 self.assertTrue(link_preserved)
                 self.assertTrue(calls_unchanged)
                 self.assertEqual(attempt["runner"]["resource_calls"], 0)
+
+    def test_jvm_output_symlinks_preserve_both_children_before_acquisition(self):
+        for name in ("jvm", "jvm/classes", "jvm/resources"):
+            with self.subTest(input=name):
+                self.build()
+                path = self.output / name
+                path.mkdir(parents=True, exist_ok=True)
+                saved = self.root / ("saved-" + name.replace("/", "-"))
+                path.rename(saved)
+                foreign = self.root / ("owner-" + name.replace("/", "-"))
+                for child in ("classes", "resources"):
+                    (foreign / child).mkdir(parents=True)
+                    (foreign / child / "keep").write_text("別所有者の入力")
+                path.symlink_to(foreign, target_is_directory=True)
+                before = build.source_inventory(foreign, "go")
+                calls = (self.output / "tool-calls.jsonl").read_bytes()
+                try:
+                    with mock.patch.object(build, "acquire", wraps=build.acquire) as acquire:
+                        attempt = self.attempt()
+                    after = build.source_inventory(foreign, "go")
+                    self.record(input=name, attempt=attempt, foreign_before=before, foreign_after=after,
+                                acquisition_calls=acquire.call_count)
+                    self.assertFalse(attempt["accepted"], attempt)
+                    self.assertIn("JVM output directory", attempt["error"])
+                    self.assertEqual(before, after)
+                    self.assertTrue(path.is_symlink())
+                    self.assertEqual(acquire.call_count, 0)
+                    self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+                finally:
+                    path.unlink()
+                    saved.rename(path)
+
+    def test_jvm_full_and_partial_regenerate_only_owned_children(self):
+        gradle = self.bin / "gradle"
+        gradle.write_text(gradle.read_text() + '\nif tool == "gradle": write(jvm / "resources/main/generated", b"resource")\n')
+        self.build()
+        kept = [self.output / "jvm/user-resource", self.output / "gradle-cache/keep"]
+        for path in kept:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("保持する入力")
+        for only in (None, "jvm"):
+            with self.subTest(only=only):
+                inputs = json.loads((self.output / "buildinputs.json").read_text())
+                other = [row for row in inputs["artifacts"] if "jvm" not in Path(row["path"]).parts]
+                with mock.patch.object(build.shutil, "rmtree", wraps=shutil.rmtree) as cleanup:
+                    self.build(only=only)
+                removed = [call.args[0] for call in cleanup.call_args_list]
+                self.assertIn(self.output.resolve() / "jvm/classes", removed)
+                self.assertIn(self.output.resolve() / "jvm/resources", removed)
+                self.assertTrue((self.output / "jvm/classes/main/Fixture.class").exists())
+                self.assertEqual((self.output / "jvm/resources/main/generated").read_bytes(), b"resource")
+                self.assertTrue(all(path.read_text() == "保持する入力" for path in kept))
+                if only:
+                    self.assertTrue(all(build.digest(Path(row["path"])) == row["sha256"] for row in other))
+                self.record(only=only, cleaned=[str(path) for path in removed], runner=self.probe_run())
+
+    def test_go_build_and_list_disable_parent_and_explicit_workspaces(self):
+        workfile = self.root / "go.work"
+        workfile.write_text("go 1.26.0\nuse ./build/go-driver\n")
+        before = workfile.read_bytes()
+        for gowork in ("", str(workfile)):
+            with self.subTest(gowork=gowork), mock.patch.dict(os.environ, {"GOWORK": gowork}):
+                self.build()
+                self.build(only="go")
+                calls = [json.loads(line) for line in (self.output / "tool-calls.jsonl").read_text().splitlines()]
+                go_calls = [row for row in calls if row["tool"] == "go"]
+                self.record(go_calls=go_calls, parent_gowork=os.environ["GOWORK"])
+                self.assertTrue(go_calls)
+                self.assertTrue(all(row["gowork"] == "off" for row in go_calls))
+                self.assertEqual(os.environ["GOWORK"], gowork)
+                self.assertEqual(workfile.read_bytes(), before)
+
+    def test_generated_paths_preserve_spaces_quotes_backslashes_and_unicode(self):
+        for name in ('output with spaces', '日本語 "引用"', 'rust \\path'):
+            with self.subTest(path=name):
+                self.output = self.root / name
+                self.output.mkdir()
+                self.build()
+                cargo = tomllib.loads((self.output / "rust-driver/Cargo.toml").read_text())
+                self.assertEqual(cargo["dependencies"]["event-store-adapter-rs"]["path"], str(self.output.resolve() / "sources/rs/lib"))
+                # Go自身が非Windows上のバックスラッシュ付き置換先を拒否するため、ここはRustの字句だけを確認する。
+                if "\\" in name:
+                    self.record(path=str(self.output), rust_dependency_path=cargo["dependencies"]["event-store-adapter-rs"]["path"])
+                    continue
+                result = subprocess.run(["go", "mod", "edit", "-json"], cwd=self.output / "go-driver",
+                                        env=build.child_environment({"GOWORK": "off"}), capture_output=True, text=True)
+                self.record(path=str(self.output), exit=result.returncode, stdout=result.stdout, stderr=result.stderr)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                replacement = json.loads(result.stdout)["Replace"][0]["New"]["Path"]
+                self.assertEqual(replacement, str(self.output.resolve() / "sources/go"))
+
+    def test_cargo_rejects_applicable_config_without_reading_or_modifying_it(self):
+        with self.copied_entrypoints() as here:
+            home = self.root / "cargo-home"
+            home.mkdir()
+            configs = [here / ".cargo/config.toml", here.parent / ".cargo/config", home / "config.toml", home / "config"]
+            with mock.patch.dict(os.environ, {"CARGO_HOME": str(home)}):
+                for config in configs:
+                    with self.subTest(config=str(config)):
+                        self.build()
+                        config.parent.mkdir(exist_ok=True)
+                        contents = b'[build]\nrustc-wrapper = "unrecorded-wrapper"\n'
+                        config.write_bytes(contents)
+                        calls = (self.output / "tool-calls.jsonl").read_bytes()
+                        try:
+                            with mock.patch.object(build, "acquire", wraps=build.acquire) as acquire:
+                                attempt = self.attempt(only="rust")
+                            self.record(config=str(config), attempt=attempt, acquisition_calls=acquire.call_count)
+                            self.assertFalse(attempt["accepted"], attempt)
+                            self.assertIn("unrecorded Cargo configuration", attempt["error"])
+                            self.assertEqual(acquire.call_count, 0)
+                            self.assertEqual(config.read_bytes(), contents)
+                            self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+                        finally:
+                            config.unlink()
+
+    def test_cargo_rejects_compiler_and_wrapper_environment_without_disclosing_values(self):
+        self.build()
+        for name in ("RUSTC", "CARGO_BUILD_RUSTC", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER",
+                     "CARGO_BUILD_RUSTC_WRAPPER", "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER"):
+            with self.subTest(variable=name), mock.patch.dict(os.environ, {name: "private-marker-value"}):
+                with mock.patch.object(build, "acquire", wraps=build.acquire) as acquire:
+                    attempt = self.attempt()
+                self.record(variable=name, attempt=attempt, acquisition_calls=acquire.call_count)
+                self.assertFalse(attempt["accepted"], attempt)
+                self.assertIn(name, attempt["error"])
+                self.assertNotIn("private-marker-value", attempt["error"])
+                self.assertEqual(acquire.call_count, 0)
+                self.assertEqual(os.environ[name], "private-marker-value")
 
     def test_build_rejects_output_resolving_inside_source_before_side_effects(self):
         with self.copied_entrypoints() as here:

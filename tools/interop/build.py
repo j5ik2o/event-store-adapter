@@ -60,6 +60,34 @@ def verify_generated_package(root, files, directories=()):
             raise RuntimeError(f"unexpected generated package input: {path}")
 
 
+def verify_jvm_output(output):
+    root = output / "jvm"
+    # 両子を消す前に親も確認する。親のリンク経由では子のis_symlinkだけでは足りない。
+    for path in (root, root / "classes", root / "resources"):
+        if path.is_symlink() or (path.exists() and not path.is_dir()) or not path.resolve().is_relative_to(output):
+            raise RuntimeError(f"JVM output directory must be a real directory inside output: {path}")
+
+
+def cargo_config_inputs():
+    environment = child_environment()
+    cwd = HERE.resolve()
+    home = Path(environment.get("CARGO_HOME") or Path.home() / ".cargo").expanduser()
+    if not home.is_absolute():
+        home = cwd / home
+    home = home.resolve()
+    roots = [path / ".cargo" for path in (cwd, *cwd.parents)] + [home]
+    paths = list(dict.fromkeys(root / name for root in roots for name in ("config", "config.toml")))
+    # Cargoはmanifestの場所ではなく呼出し場所から探索する。秘密を含み得る内容は読まない。
+    for path in paths:
+        if path.exists() or path.is_symlink():
+            raise RuntimeError(f"unrecorded Cargo configuration: {path}")
+    for name in ("RUSTC", "CARGO_BUILD_RUSTC", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER",
+                 "CARGO_BUILD_RUSTC_WRAPPER", "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER"):
+        if environment.get(name):
+            raise RuntimeError(f"unrecorded Cargo compiler environment: {name}")
+    return {"cwd": str(cwd), "cargo_home": str(home), "absent_config_files": [str(path) for path in paths]}
+
+
 def source_inventory(root, language):
     # この入口の pnpm/tsc が作る場所だけを除く。他言語の出力はソース外に置く。
     generated = {"node_modules", "packages/library/node_modules", "packages/examples/node_modules",
@@ -325,6 +353,7 @@ def main():
         (output / "buildinputs.json").unlink(missing_ok=True)
         commands = json.loads((output / "build-commands.json").read_text()) if (output / "build-commands.json").exists() else []
         previous_inputs = json.loads(previous_text) if previous_text is not None else None
+        cargo_inputs = previous_inputs.get("cargo_config_inputs") if previous_inputs else None
         if not __debug__:
             raise RuntimeError("build requires assertions; run without -O or PYTHONOPTIMIZE")
         if args.only:
@@ -343,20 +372,22 @@ def main():
                 raise RuntimeError("unselected driver sources changed; rebuild all drivers")
         go = output / "go-driver"
         rust = output / "rust-driver"
+        jvm = output / "jvm"
         # 生成パッケージの既知入力だけを上書きする。残留入力は消さず、取得・コンパイル前に拒否する。
+        if selected("jvm"):
+            verify_jvm_output(output)
         if selected("go"):
             verify_generated_package(go, {"main.go", "go.mod", "go.sum", "driver"})
         if selected("rust"):
             verify_generated_package(rust, {"Cargo.toml", "Cargo.lock"}, {"src", "target"})
             verify_generated_package(rust / "src", {"main.rs"})
+            cargo_inputs = cargo_config_inputs()
         sources = acquire(output)
         artifacts = java_artifacts(output, args.java_artifact_directory)
-        jvm = output / "jvm"
         if selected("jvm"):
             # この入口が生成するクラスとリソースだけを再生成する。キャッシュは残す。
+            verify_jvm_output(output)
             for path in (jvm / "classes", jvm / "resources"):
-                if path.is_symlink():
-                    raise RuntimeError(f"JVM output directory must not be a symlink: {path}")
                 if path.exists():
                     shutil.rmtree(path)
             execute("jvm", [args.gradle, "--no-daemon", "--console", "plain", "--project-cache-dir", output / "gradle-cache",
@@ -369,9 +400,9 @@ def main():
             original = (sources / "go/go.mod").read_text()
             module = "github.com/j5ik2o/event-store-adapter-go/v2"
             (go / "go.mod").write_text(original.replace(f"module {module}", "module interop-driver", 1)
-                + f"\nrequire {module} v2.0.0-00010101000000-000000000000\nreplace {module} => {sources / 'go'}\n")
+                + f"\nrequire {module} v2.0.0-00010101000000-000000000000\nreplace {module} => {json.dumps(str(sources / 'go'), ensure_ascii=False)}\n")
             shutil.copyfile(sources / "go/go.sum", go / "go.sum")
-            execute("go", ["go", "build", "-mod=mod", "-o", go / "driver", "."], cwd=go)
+            execute("go", ["go", "build", "-mod=mod", "-o", go / "driver", "."], cwd=go, environment={"GOWORK": "off"})
         if selected("rust"):
             (rust / "src").mkdir(parents=True, exist_ok=True)
             shutil.copyfile(HERE / "drivers/rust/main.rs", rust / "src/main.rs")
@@ -380,7 +411,7 @@ name = "interop-driver"
 version = "0.0.0"
 edition = "2021"
 [dependencies]
-event-store-adapter-rs = {{ path = "{sources / 'rs/lib'}", features = ["dynamodb"] }}
+event-store-adapter-rs = {{ path = {json.dumps(str(sources / 'rs/lib'), ensure_ascii=False)}, features = ["dynamodb"] }}
 aws-sdk-dynamodb = "1.23.0"
 aws-smithy-async = {{ version = "1.3.0", features = ["rt-tokio"] }}
 chrono = "0.4.38"
@@ -388,7 +419,11 @@ serde_json = "1.0"
 tokio = {{ version = "1.37.0", features = ["full"] }}
 ''')
         if selected("rust"):
+            if cargo_config_inputs() != cargo_inputs:
+                raise RuntimeError("Cargo configuration search changed before build")
             execute("rust", ["cargo", "build", "--manifest-path", rust / "Cargo.toml"])
+            if cargo_config_inputs() != cargo_inputs:
+                raise RuntimeError("Cargo configuration search changed before metadata")
             execute("rust-inputs", ["cargo", "metadata", "--format-version", "1", "--manifest-path", rust / "Cargo.toml"])
         if selected("js"):
             execute("js-install", ["pnpm", "install", "--frozen-lockfile"], cwd=sources / "js")
@@ -396,7 +431,7 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
             execute("js-inputs", ["node", HERE / "drivers/js/runtime-inputs.cjs", "--record",
                                   sources / "js/packages/library", output / "js-runtime-inputs.json"])
         if selected("go"):
-            execute("go-inputs", ["go", "list", "-m", "-json", "all"], cwd=go)
+            execute("go-inputs", ["go", "list", "-m", "-json", "all"], cwd=go, environment={"GOWORK": "off"})
         classpath = (jvm / "classpath.txt").read_text()
         drivers = {language: {"argv": ["java", "-cp", classpath, main], "env": {}}
                    for language, main in [("java", "interop.JavaDriver"), ("kotlin", "interop.KotlinDriverKt"), ("scala", "interop.ScalaDriver")]}
@@ -408,7 +443,7 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
         inputs = {"currentSnapshot": PINS, "sources": json.loads((output / "source-inputs.json").read_text()),
                   "java_sources_match_pinned_source": True, "artifacts": [], "driver_sources": {},
                   "js_runtime_inputs": str(output / "js-runtime-inputs.json"),
-                  "jvm_classpath_inputs": jvm_classpath_inputs(classpath), "drivers": drivers}
+                  "jvm_classpath_inputs": jvm_classpath_inputs(classpath), "cargo_config_inputs": cargo_inputs, "drivers": drivers}
         files = artifacts + [go / "driver", go / "go.mod", go / "go.sum", rust / "Cargo.lock", rust / "target/debug/interop-driver"]
         files += [Path(inputs["js_runtime_inputs"])]
         files += [Path(row["path"]) for row in json.loads(Path(inputs["js_runtime_inputs"]).read_text())["files"]]
