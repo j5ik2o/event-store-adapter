@@ -16,7 +16,7 @@ import uuid
 
 import boto3
 from botocore.config import Config
-from build import child_environment, source_fingerprints, verify_artifacts, verify_sources
+from build import child_environment, external_output, source_fingerprints, verify_artifacts, verify_sources
 from query_observer import QueryObserver, item_bytes
 
 HERE = Path(__file__).resolve().parent
@@ -290,6 +290,7 @@ def main():
     parser.add_argument("--build", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    output = external_output(args.output)
     if (args.build / "build-failure.json").exists():
         raise RuntimeError("build failed; rebuild successfully before running")
     inputs = json.loads((args.build / "buildinputs.json").read_text())
@@ -300,7 +301,6 @@ def main():
     definition = json.loads((args.build / "drivers.json").read_text())
     if definition != inputs["drivers"]:
         raise RuntimeError("driver definitions changed; rebuild before running")
-    output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     local = Local(output)
     drivers, observer = {}, None

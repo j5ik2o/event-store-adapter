@@ -42,6 +42,24 @@ def source_fingerprints():
             and not any(part.startswith(".") for part in path.relative_to(HERE).parts)}
 
 
+def external_output(path):
+    output = path.resolve()
+    if output.is_relative_to(HERE.resolve()):
+        raise RuntimeError(f"output must be outside tools/interop: {output}")
+    return output
+
+
+def verify_generated_package(root, files, directories=()):
+    if root.is_symlink() or (root.exists() and not root.is_dir()):
+        raise RuntimeError(f"generated package directory must be a real directory: {root}")
+    if root.exists():
+        for path in sorted(root.iterdir()):
+            if not path.is_symlink() and ((path.name in files and path.is_file())
+                                         or (path.name in directories and path.is_dir())):
+                continue
+            raise RuntimeError(f"unexpected generated package input: {path}")
+
+
 def source_inventory(root, language):
     # この入口の pnpm/tsc が作る場所だけを除く。他言語の出力はソース外に置く。
     generated = {"node_modules", "packages/library/node_modules", "packages/examples/node_modules",
@@ -279,7 +297,7 @@ def main():
     parser.add_argument("--java-artifact-directory", type=Path)
     parser.add_argument("--only", choices=("jvm", "go", "rust", "js"), help="変更したドライバーだけを再ビルドする")
     args = parser.parse_args()
-    output = args.output.resolve()
+    output = external_output(args.output)
     output.mkdir(parents=True, exist_ok=True)
     commands = []
     previous_success = (output / "drivers.json").exists() and not (output / "build-failure.json").exists()
@@ -323,6 +341,14 @@ def main():
             actual = {path: sha for path, sha in source_fingerprints().items() if unchanged(path)}
             if actual != expected:
                 raise RuntimeError("unselected driver sources changed; rebuild all drivers")
+        go = output / "go-driver"
+        rust = output / "rust-driver"
+        # 生成パッケージの既知入力だけを上書きする。残留入力は消さず、取得・コンパイル前に拒否する。
+        if selected("go"):
+            verify_generated_package(go, {"main.go", "go.mod", "go.sum", "driver"})
+        if selected("rust"):
+            verify_generated_package(rust, {"Cargo.toml", "Cargo.lock"}, {"src", "target"})
+            verify_generated_package(rust / "src", {"main.rs"})
         sources = acquire(output)
         artifacts = java_artifacts(output, args.java_artifact_directory)
         jvm = output / "jvm"
@@ -336,9 +362,8 @@ def main():
             execute("jvm", [args.gradle, "--no-daemon", "--console", "plain", "--project-cache-dir", output / "gradle-cache",
                          "-p", HERE / "drivers/jvm", f"-PlibrarySources={sources}", f"-PoutputDir={jvm}",
                          f"-PjavaArtifact={artifacts[0]}", "writeClasspath"])
-        go = output / "go-driver"
-        go.mkdir(exist_ok=True)
         if selected("go"):
+            go.mkdir(exist_ok=True)
             shutil.copyfile(HERE / "drivers/go/main.go", go / "main.go")
             # 本体と同じ依存集合。置換先の実ソースを使うので公開版番号は仮定しない。
             original = (sources / "go/go.mod").read_text()
@@ -347,9 +372,8 @@ def main():
                 + f"\nrequire {module} v2.0.0-00010101000000-000000000000\nreplace {module} => {sources / 'go'}\n")
             shutil.copyfile(sources / "go/go.sum", go / "go.sum")
             execute("go", ["go", "build", "-mod=mod", "-o", go / "driver", "."], cwd=go)
-        rust = output / "rust-driver"
-        (rust / "src").mkdir(parents=True, exist_ok=True)
         if selected("rust"):
+            (rust / "src").mkdir(parents=True, exist_ok=True)
             shutil.copyfile(HERE / "drivers/rust/main.rs", rust / "src/main.rs")
             (rust / "Cargo.toml").write_text(f'''[package]
 name = "interop-driver"

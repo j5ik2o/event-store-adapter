@@ -351,6 +351,168 @@ console.log(JSON.stringify({value: local(library).fixtureMarker,
         self.assertTrue(all(path.read_text() == "user input" for path in preserved))
         self.assertEqual(runner["resource_calls"], 1)
 
+    def test_generated_go_package_rejects_extra_compilation_inputs(self):
+        for only, name in ((None, "extra.go"), ("go", "extra.s"), ("go", "nested/extra.go")):
+            with self.subTest(only=only, name=name):
+                self.build()
+                path = self.output / "go-driver" / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("unrecorded compilation input")
+                previous_calls = (self.output / "tool-calls.jsonl").read_bytes()
+                previous = build.source_inventory(self.output, "go")
+                attempt = self.attempt(only=only)
+                current = build.source_inventory(self.output, "go")
+                preserved = {key: value for key, value in previous.items()
+                             if key not in {"drivers.json", "buildinputs.json", "build-failure.json"}}
+                self.record(input=name, only=only, attempt=attempt,
+                            compiler_calls_unchanged=(self.output / "tool-calls.jsonl").read_bytes() == previous_calls,
+                            previous_inputs_preserved=all(current.get(key) == value for key, value in preserved.items()))
+                self.assertFalse(attempt["accepted"], attempt)
+                self.assertIn("unexpected generated package input", attempt["error"])
+                self.assertEqual(attempt["downloads"], [])
+                self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), previous_calls)
+                self.assertTrue(all(current.get(key) == value for key, value in preserved.items()))
+                self.assertEqual(attempt["runner"]["resource_calls"], 0)
+                path.unlink()
+                if path.parent != self.output / "go-driver":
+                    path.parent.rmdir()
+
+    def test_generated_rust_package_rejects_automatic_inputs(self):
+        for name in ("build.rs", "src/lib.rs", "src/bin/extra.rs", "examples/extra.rs",
+                     "tests/extra.rs", "benches/extra.rs", ".cargo/config.toml"):
+            with self.subTest(input=name):
+                self.build()
+                path = self.output / "rust-driver" / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("unrecorded package input")
+                previous_calls = (self.output / "tool-calls.jsonl").read_bytes()
+                previous = build.source_inventory(self.output, "go")
+                attempt = self.attempt(only="rust")
+                current = build.source_inventory(self.output, "go")
+                preserved = {key: value for key, value in previous.items()
+                             if key not in {"drivers.json", "buildinputs.json", "build-failure.json"}}
+                self.record(input=name, attempt=attempt,
+                            compiler_calls_unchanged=(self.output / "tool-calls.jsonl").read_bytes() == previous_calls,
+                            previous_inputs_preserved=all(current.get(key) == value for key, value in preserved.items()))
+                self.assertFalse(attempt["accepted"], attempt)
+                self.assertIn("unexpected generated package input", attempt["error"])
+                self.assertEqual(attempt["downloads"], [])
+                self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), previous_calls)
+                self.assertTrue(all(current.get(key) == value for key, value in preserved.items()))
+                self.assertEqual(attempt["runner"]["resource_calls"], 0)
+                path.unlink()
+                if path.parent != self.output / "rust-driver/src" and path.parent != self.output / "rust-driver":
+                    path.parent.rmdir()
+
+    def test_generated_package_symlinks_preserve_other_owner(self):
+        for name in ("go-driver", "rust-driver", "rust-driver/src", "go-driver/main.go"):
+            with self.subTest(input=name):
+                self.build()
+                path = self.output / name
+                saved = self.root / ("saved-" + name.replace("/", "-"))
+                path.rename(saved)
+                foreign = self.root / "other-owner"
+                foreign.mkdir(exist_ok=True)
+                (foreign / "keep").write_text("other owner's resource")
+                target = foreign / "main.go" if name.endswith("main.go") else foreign
+                if name.endswith("main.go"):
+                    target.write_text("other owner's source")
+                path.symlink_to(target, target_is_directory=not name.endswith("main.go"))
+                previous = build.source_inventory(foreign, "go")
+                calls = (self.output / "tool-calls.jsonl").read_bytes()
+                try:
+                    attempt = self.attempt()
+                    current = build.source_inventory(foreign, "go")
+                    link_preserved = path.is_symlink()
+                    calls_unchanged = (self.output / "tool-calls.jsonl").read_bytes() == calls
+                    self.record(input=name, attempt=attempt, foreign_before=previous, foreign_after=current,
+                                link_preserved=link_preserved, compiler_calls_unchanged=calls_unchanged)
+                finally:
+                    path.unlink()
+                    saved.rename(path)
+                self.assertFalse(attempt["accepted"], attempt)
+                self.assertIn("generated package", attempt["error"])
+                self.assertEqual(current, previous)
+                self.assertTrue(link_preserved)
+                self.assertTrue(calls_unchanged)
+                self.assertEqual(attempt["runner"]["resource_calls"], 0)
+
+    def test_build_rejects_output_resolving_inside_source_before_side_effects(self):
+        with self.copied_entrypoints() as here:
+            alias = self.root / "source-alias"
+            alias.symlink_to(here, target_is_directory=True)
+            for output in (here, here / "generated-build", alias / "generated-build"):
+                with self.subTest(output=str(output)):
+                    self.output = output
+                    previous = build.source_inventory(here, "go")
+                    with mock.patch.object(build, "acquire", wraps=build.acquire) as acquire, \
+                            mock.patch.object(build.subprocess, "run", wraps=build.subprocess.run) as compiler:
+                        try:
+                            self.build()
+                            attempt = {"accepted": True}
+                        except Exception as error:
+                            attempt = {"accepted": False, "error": str(error)}
+                    current = build.source_inventory(here, "go")
+                    self.record(output=str(output), attempt=attempt, acquisition_calls=acquire.call_count,
+                                subprocess_calls=compiler.call_count, downloads=self.downloads,
+                                source_unchanged=current == previous)
+                    self.assertFalse(attempt["accepted"], attempt)
+                    self.assertIn("output must be outside tools/interop", attempt["error"])
+                    self.assertEqual(acquire.call_count, 0)
+                    self.assertEqual(compiler.call_count, 0)
+                    self.assertEqual(self.downloads, [])
+                    self.assertEqual(current, previous)
+
+    def test_run_rejects_output_resolving_inside_source_before_side_effects(self):
+        with self.copied_entrypoints() as here:
+            self.build()
+            alias = self.root / "source-alias"
+            alias.symlink_to(here, target_is_directory=True)
+            for output in (here, here / "generated-result", alias / "generated-result"):
+                with self.subTest(output=str(output)):
+                    previous = build.source_inventory(here, "go")
+                    argv = ["run.py", "--build", str(self.output), "--output", str(output)]
+                    with mock.patch.object(sys, "argv", argv), mock.patch.object(run, "PINS", self.pins), \
+                            mock.patch.object(run, "verify_artifacts", wraps=run.verify_artifacts) as verify, \
+                            mock.patch.object(run.Local, "start", side_effect=RuntimeError("resource acquisition reached")) as start, \
+                            mock.patch.object(run.Local, "close", return_value={"errors": []}), \
+                            mock.patch.object(run, "Driver") as driver, contextlib.redirect_stdout(io.StringIO()):
+                        try:
+                            attempt = {"accepted": True, "exit": run.main()}
+                        except Exception as error:
+                            attempt = {"accepted": False, "error": str(error)}
+                    current = build.source_inventory(here, "go")
+                    self.record(output=str(output), attempt=attempt, artifact_verification_calls=verify.call_count,
+                                resource_calls=start.call_count, driver_calls=driver.call_count,
+                                source_unchanged=current == previous)
+                    self.assertFalse(attempt["accepted"], attempt)
+                    self.assertIn("output must be outside tools/interop", attempt["error"])
+                    self.assertEqual(verify.call_count, 0)
+                    self.assertEqual(start.call_count, 0)
+                    self.assertEqual(driver.call_count, 0)
+                    self.assertEqual(current, previous)
+
+    def test_outputs_resolving_outside_source_remain_usable(self):
+        with self.copied_entrypoints() as here:
+            self.output = here / "external-build"
+            self.output.symlink_to(self.root / "external-build", target_is_directory=True)
+            output = here / "external-result"
+            output.symlink_to(self.root / "external-result", target_is_directory=True)
+            previous = build.source_inventory(here, "go")
+            self.build()
+            argv = ["run.py", "--build", str(self.output), "--output", str(output)]
+            with mock.patch.object(sys, "argv", argv), mock.patch.object(run, "PINS", self.pins), \
+                    mock.patch.object(run.Local, "start", side_effect=RuntimeError("resource acquisition reached")) as start, \
+                    mock.patch.object(run.Local, "close", return_value={"errors": []}), contextlib.redirect_stdout(io.StringIO()):
+                exit = run.main()
+            current = build.source_inventory(here, "go")
+            self.record(build_path=str(self.output), build_resolved=str(self.output.resolve()),
+                        result_path=str(output), result_resolved=str(output.resolve()), exit=exit,
+                        resource_calls=start.call_count, source_unchanged=current == previous)
+            self.assertEqual(start.call_count, 1)
+            self.assertTrue(output.exists())
+            self.assertEqual(current, previous)
+
     def test_invalid_cached_json_invalidates_success_and_records_failure(self):
         for name in ("build-commands.json", "buildinputs.json"):
             for contents in ('[{"label":', 'not JSON'):
