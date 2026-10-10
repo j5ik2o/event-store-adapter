@@ -123,6 +123,14 @@ def source_recovery(output, **record):
 
 
 def acquire(output):
+    archive_pins = PINS.get("source_archives", {})
+    if set(archive_pins) != set(PINS["sources"]):
+        raise RuntimeError("source archive pin mismatch: update source commits and archive digests together")
+    for language, sha in PINS["sources"].items():
+        pin = archive_pins[language]
+        expected_digest = pin.get("sha256", "")
+        if pin.get("source_sha") != sha or len(expected_digest) != 64 or any(c not in "0123456789abcdef" for c in expected_digest):
+            raise RuntimeError(f"source archive pin mismatch: {language}: {sha}")
     sources = output / "sources"
     sources.mkdir(exist_ok=True)
     records = []
@@ -148,15 +156,19 @@ def acquire(output):
             except (tarfile.TarError, EOFError):
                 return None
 
-        expected = archive_inventory(archive) if archive.exists() else None
+        expected_digest = archive_pins[language]["sha256"]
+        expected = archive_inventory(archive) if archive.exists() and digest(archive) == expected_digest else None
         if expected is None:
             if archive.exists():
                 source_recovery(output, language=language, path=str(archive), kind="archive", phase="incomplete",
-                                error="cached source archive is unreadable or does not match the pin")
+                                error="cached source archive is unreadable or does not match the pin",
+                                archive_sha256=digest(archive), expected_sha256=expected_digest)
             with tempfile.TemporaryDirectory(prefix=f".{language}-download-", dir=sources) as temporary:
                 candidate = Path(temporary) / archive.name
                 with urllib.request.urlopen(url, timeout=60) as response:
                     candidate.write_bytes(response.read())
+                if digest(candidate) != expected_digest:
+                    raise RuntimeError(f"source archive digest mismatch: {language}: {sha}")
                 expected = archive_inventory(candidate)
                 if expected is None:
                     raise RuntimeError(f"source archive does not match pin: {language}: {sha}")
@@ -210,25 +222,43 @@ def acquire(output):
 
 def java_artifacts(output, supplied):
     snapshot = PINS["java_currentSnapshot"]
-    artifacts = []
-    for suffix, key in [(".jar", "jar_sha256"), ("-sources.jar", "sources_sha256")]:
-        path = output / (snapshot["artifact"] + suffix)
-        if not path.exists():
-            source = Path(supplied) / path.name if supplied else None
-            if source and source.exists():
-                shutil.copyfile(source, path)
-            else:
-                with urllib.request.urlopen(snapshot["repository"] + path.name, timeout=60) as response:
-                    path.write_bytes(response.read())
+    source_root = output / "sources/java/src/main/java"
+    source_files = {str(p.relative_to(source_root)) for p in source_root.rglob("*.java")}
+
+    def validate(path, key):
         if digest(path) != snapshot[key]:
             raise RuntimeError(f"Java currentSnapshot digest mismatch: {path}")
-        artifacts.append(path)
-    with zipfile.ZipFile(artifacts[1]) as package:
-        names = [n for n in package.namelist() if n.endswith(".java")]
-        source_root = output / "sources/java/src/main/java"
-        source_files = {str(p.relative_to(source_root)) for p in source_root.rglob("*.java")}
-        if set(names) != source_files or any(package.read(n) != (source_root / n).read_bytes() for n in names):
-            raise RuntimeError("Java published sources do not match the pinned source")
+        if key == "sources_sha256":
+            with zipfile.ZipFile(path) as package:
+                names = [n for n in package.namelist() if n.endswith(".java")]
+                if set(names) != source_files or any(package.read(n) != (source_root / n).read_bytes() for n in names):
+                    raise RuntimeError("Java published sources do not match the pinned source")
+
+    artifacts = []
+    with tempfile.TemporaryDirectory(prefix=".java-artifacts-", dir=output) as temporary:
+        replacements = []
+        for suffix, key in [(".jar", "jar_sha256"), ("-sources.jar", "sources_sha256")]:
+            path = output / (snapshot["artifact"] + suffix)
+            source = Path(supplied) / path.name if supplied else None
+            # 明示された入力はキャッシュの有無にかかわらず検証し、不正なら代替取得しない。
+            if source is not None:
+                validate(source, key)
+            if path.exists() and digest(path) == snapshot[key]:
+                validate(path, key)
+            else:
+                path.unlink(missing_ok=True)
+                candidate = Path(temporary) / path.name
+                if source is not None:
+                    shutil.copyfile(source, candidate)
+                else:
+                    with urllib.request.urlopen(snapshot["repository"] + path.name, timeout=60) as response:
+                        candidate.write_bytes(response.read())
+                validate(candidate, key)
+                replacements.append((candidate, path))
+            artifacts.append(path)
+        # 2成果物の指紋と公開ソースの一致を確認してから、出力キャッシュへ確定する。
+        for candidate, path in replacements:
+            candidate.replace(path)
     return artifacts
 
 

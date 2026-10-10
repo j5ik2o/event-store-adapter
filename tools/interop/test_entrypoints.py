@@ -1,6 +1,8 @@
 """取得・ビルド・測定の正規入口で、入力と成功記録の対応を確認する。"""
 import contextlib
 import copy
+import gzip
+import hashlib
 import io
 import json
 import os
@@ -27,6 +29,7 @@ class EntrypointTests(unittest.TestCase):
         self.probes = 0
         self.pins = copy.deepcopy(build.PINS)
         self.pins["sources"] = {lang: f"{i:040x}" for i, lang in enumerate(self.pins["sources"], 1)}
+        self.pins["source_archives"] = {}
         self.archives = {}
         for language, sha in self.pins["sources"].items():
             files = {"marker.txt": sha.encode()}
@@ -37,6 +40,8 @@ class EntrypointTests(unittest.TestCase):
             if language == "js":
                 files["packages/library/package.json"] = b'{"main":"dist/index.js"}\n'
             self.add_archive(language, sha, files)
+            data = self.archives[self.source_url(language)]
+            self.pins["source_archives"][language] = {"source_sha": sha, "sha256": hashlib.sha256(data).hexdigest()}
         self.supplied = self.root / "supplied"
         self.supplied.mkdir()
         snapshot = self.pins["java_currentSnapshot"]
@@ -44,10 +49,11 @@ class EntrypointTests(unittest.TestCase):
             path = self.supplied / (snapshot["artifact"] + suffix)
             with zipfile.ZipFile(path, "w") as package:
                 if suffix == "-sources.jar":
-                    package.writestr("Fixture.java", b"class Fixture {}\n")
+                    package.writestr(zipfile.ZipInfo("Fixture.java"), b"class Fixture {}\n")
                 else:
-                    package.writestr("Fixture.class", b"fixture bytecode")
+                    package.writestr(zipfile.ZipInfo("Fixture.class"), b"fixture bytecode")
             snapshot[key] = build.digest(path)
+            self.archives[snapshot["repository"] + path.name] = path.read_bytes()
         self.bin = self.root / "bin"
         self.bin.mkdir()
         # 外部ビルドだけを代替し、生成物の列挙・取得・成功記録は実入口に任せる。
@@ -99,13 +105,33 @@ elif tool == "pnpm" and "build" in args:
 
     def add_archive(self, language, sha, files):
         data = io.BytesIO()
-        with tarfile.open(fileobj=data, mode="w:gz") as package:
+        with tarfile.open(fileobj=data, mode="w") as package:
             for name, contents in files.items():
                 member = tarfile.TarInfo(f"event-store-adapter-{language}-{sha}/{name}")
                 member.size = len(contents)
                 package.addfile(member, io.BytesIO(contents))
         url = f"https://codeload.github.com/j5ik2o/event-store-adapter-{language}/tar.gz/{sha}"
-        self.archives[url] = data.getvalue()
+        self.archives[url] = gzip.compress(data.getvalue(), mtime=0)
+
+    def source_url(self, language):
+        return f"https://codeload.github.com/j5ik2o/event-store-adapter-{language}/tar.gz/{self.pins['sources'][language]}"
+
+    def metadata(self):
+        return {name: (self.output / name).exists() for name in ("drivers.json", "buildinputs.json", "build-failure.json")}
+
+    def file_state(self, path):
+        if not path.exists():
+            return {"exists": False}
+        data = path.read_bytes()
+        return {"exists": True, "sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data), "prefix_hex": data[:24].hex()}
+
+    def attempt(self, **kwargs):
+        try:
+            self.build(**kwargs)
+            result = {"accepted": True}
+        except Exception as error:
+            result = {"accepted": False, "error": str(error)}
+        return dict(result, downloads=list(self.downloads), metadata=self.metadata(), runner=self.probe_run())
 
     def record(self, **values):
         path = os.environ.get("INTEROP_TEST_EVIDENCE")
@@ -113,15 +139,23 @@ elif tool == "pnpm" and "build" in args:
             with Path(path).open("a") as stream:
                 stream.write(json.dumps(dict(test=self.id(), **values), ensure_ascii=False) + "\n")
 
-    def build(self, only=None):
-        argv = ["build.py", "--output", str(self.output), "--gradle", str(self.bin / "gradle"),
-                "--java-artifact-directory", str(self.supplied)]
+    def build(self, only=None, *, supplied=True):
+        argv = ["build.py", "--output", str(self.output), "--gradle", str(self.bin / "gradle")]
+        if supplied:
+            argv += ["--java-artifact-directory", str(self.supplied)]
         if only:
             argv += ["--only", only]
         environment = {"PATH": str(self.bin) + os.pathsep + os.environ["PATH"], "INTEROP_TEST_OUTPUT": str(self.output)}
+        self.downloads = []
+
+        def fetch(url, **kwargs):
+            data = self.archives[url]
+            self.downloads.append({"url": url, "sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)})
+            return io.BytesIO(data)
+
         with mock.patch.object(build, "PINS", self.pins), mock.patch.object(sys, "argv", argv), \
                 mock.patch.dict(os.environ, environment), \
-                mock.patch.object(build.urllib.request, "urlopen", side_effect=lambda url, **kw: io.BytesIO(self.archives[url])) as download:
+                mock.patch.object(build.urllib.request, "urlopen", side_effect=fetch) as download:
             build.main()
             return download.call_count
 
@@ -341,7 +375,8 @@ console.log(JSON.stringify({value: local(library).fixtureMarker,
         for language, name in (("go", "extra.go"), ("rs", "lib/src/extra.rs"),
                                ("js", "packages/library/src/extra.ts")):
             with self.subTest(language=language):
-                pins = {"sources": {language: self.pins["sources"][language]}}
+                pins = {"sources": {language: self.pins["sources"][language]},
+                        "source_archives": {language: self.pins["source_archives"][language]}}
                 with mock.patch.object(build, "PINS", pins), \
                         mock.patch.object(build.urllib.request, "urlopen", side_effect=lambda url, **kw: io.BytesIO(self.archives[url])):
                     sources = build.acquire(self.output)
@@ -488,7 +523,9 @@ console.log(JSON.stringify({value: local(library).fixtureMarker,
         rows = []
         with mock.patch.object(build.urllib.request, "urlopen", side_effect=lambda url, **kw: io.BytesIO(self.archives[url])) as download:
             for sha in (first, second):
-                with mock.patch.object(build, "PINS", {"sources": {"go": sha}}):
+                archive_pin = {"source_sha": sha, "sha256": hashlib.sha256(self.archives[
+                    f"https://codeload.github.com/j5ik2o/event-store-adapter-go/tar.gz/{sha}"]).hexdigest()}
+                with mock.patch.object(build, "PINS", {"sources": {"go": sha}, "source_archives": {"go": archive_pin}}):
                     sources = build.acquire(self.output)
                 recorded = json.loads((self.output / "source-inputs.json").read_text())[0]
                 rows.append({"requested_sha": sha, "recorded": recorded,
@@ -571,6 +608,213 @@ console.log(JSON.stringify({value: local(library).fixtureMarker,
         self.record(previous_artifacts=previous["artifacts"], current_artifacts=current["artifacts"], runner=result)
         self.assertEqual(previous["artifacts"], current["artifacts"])
         self.assertEqual(result["resource_calls"], 1)
+
+    def test_acquire_recovers_forged_readable_cached_archive(self):
+        url = self.source_url("java")
+        original = self.archives[url]
+        for mode in ("modified", "incomplete"):
+            with self.subTest(mode=mode):
+                self.output = self.root / mode
+                (self.output / "sources").mkdir(parents=True)
+                files = {"src/main/java/Fixture.java": b"class Fixture {}\n"}
+                if mode == "modified":
+                    files["marker.txt"] = b"forged source under the requested commit name"
+                self.add_archive("java", self.pins["sources"]["java"], files)
+                archive = self.output / "sources/java.tar.gz"
+                archive.write_bytes(self.archives[url])
+                forged = self.file_state(archive)
+                self.archives[url] = original
+                result = self.attempt()
+                final = self.file_state(archive)
+                marker = self.output / "sources/java/marker.txt"
+                self.record(mode=mode, forged=forged, forged_files={k: v.decode() for k, v in files.items()},
+                            expected=self.pins["source_archives"]["java"], result=result, final=final,
+                            marker=marker.read_text() if marker.exists() else None)
+                self.assertNotEqual(forged["sha256"], self.pins["source_archives"]["java"]["sha256"])
+                self.assertTrue(result["accepted"], result)
+                self.assertEqual(final["sha256"], self.pins["source_archives"]["java"]["sha256"])
+                self.assertEqual(marker.read_text(), self.pins["sources"]["java"])
+                self.assertEqual(len(result["downloads"]), 6)
+                self.assertEqual(result["runner"]["resource_calls"], 1)
+
+    def test_acquire_rejects_forged_readable_download_then_retries(self):
+        url = self.source_url("java")
+        original = self.archives[url]
+        for mode in ("modified", "incomplete"):
+            with self.subTest(mode=mode):
+                self.output = self.root / mode
+                self.output.mkdir()
+                self.build()
+                previous = (self.output / "source-inputs.json").read_bytes()
+                calls = (self.output / "tool-calls.jsonl").read_bytes()
+                archive = self.output / "sources/java.tar.gz"
+                archive.unlink()
+                files = {"src/main/java/Fixture.java": b"class Fixture {}\n"}
+                if mode == "modified":
+                    files["marker.txt"] = b"forged downloaded source"
+                self.add_archive("java", self.pins["sources"]["java"], files)
+                failure = self.attempt()
+                failed_cache = self.file_state(archive)
+                retained_record = (self.output / "source-inputs.json").read_bytes() == previous
+                tools_unchanged = (self.output / "tool-calls.jsonl").read_bytes() == calls
+                self.archives[url] = original
+                retry = self.attempt()
+                self.record(mode=mode, failure=failure, failed_cache=failed_cache,
+                            previous_source_record_retained=retained_record, tools_unchanged=tools_unchanged,
+                            retry=retry, final=self.file_state(archive))
+                self.assertFalse(failure["accepted"], failure)
+                self.assertIn("source archive digest mismatch", failure["error"])
+                self.assertFalse(failed_cache["exists"])
+                self.assertTrue(retained_record)
+                self.assertTrue(tools_unchanged)
+                self.assertEqual(failure["metadata"], {"drivers.json": False, "buildinputs.json": False, "build-failure.json": True})
+                self.assertEqual(failure["runner"]["resource_calls"], 0)
+                self.assertTrue(retry["accepted"], retry)
+                self.assertEqual(len(retry["downloads"]), 1)
+                self.assertEqual(retry["runner"]["resource_calls"], 1)
+
+    def test_acquire_rejects_source_pin_without_matching_archive_pin(self):
+        self.pins["sources"]["go"] = "f" * 40
+        self.add_archive("go", self.pins["sources"]["go"], {
+            "marker.txt": self.pins["sources"]["go"].encode(),
+            "go.mod": b"module github.com/j5ik2o/event-store-adapter-go/v2\n", "go.sum": b""})
+        result = self.attempt()
+        self.record(source_sha=self.pins["sources"]["go"], archive_pin=self.pins["source_archives"]["go"], result=result)
+        self.assertFalse(result["accepted"], result)
+        self.assertIn("source archive pin mismatch", result["error"])
+        self.assertEqual(result["downloads"], [])
+        self.assertEqual(result["runner"]["resource_calls"], 0)
+
+    def test_java_recovers_invalid_cache_from_supplied_or_official_artifact(self):
+        snapshot = self.pins["java_currentSnapshot"]
+        for supplied in (True, False):
+            for suffix, key in ((".jar", "jar_sha256"), ("-sources.jar", "sources_sha256")):
+                with self.subTest(supplied=supplied, suffix=suffix):
+                    self.output = self.root / f"{supplied}{suffix}"
+                    self.output.mkdir()
+                    self.build()
+                    path = self.output / (snapshot["artifact"] + suffix)
+                    path.write_bytes(b"partial cached Java artifact")
+                    before = self.file_state(path)
+                    result = self.attempt(supplied=supplied)
+                    after = self.file_state(path)
+                    self.record(supplied=supplied, suffix=suffix, before=before, result=result, after=after, expected=snapshot[key])
+                    self.assertTrue(result["accepted"], result)
+                    self.assertEqual(after["sha256"], snapshot[key])
+                    self.assertEqual(len(result["downloads"]), 0 if supplied else 1)
+                    if not supplied:
+                        self.assertEqual(result["downloads"][0]["url"], snapshot["repository"] + path.name)
+                    self.assertEqual(result["runner"]["resource_calls"], 1)
+                    self.assertFalse(result["metadata"]["build-failure.json"])
+
+    def test_java_rejects_invalid_explicit_artifact_without_network_fallback(self):
+        snapshot = self.pins["java_currentSnapshot"]
+        for suffix in (".jar", "-sources.jar"):
+            for cached in ("valid", "invalid", "missing"):
+                with self.subTest(suffix=suffix, cached=cached):
+                    self.output = self.root / (suffix + cached)
+                    self.output.mkdir()
+                    self.build()
+                    path = self.output / (snapshot["artifact"] + suffix)
+                    if cached == "invalid":
+                        path.write_bytes(b"partial output cache")
+                    elif cached == "missing":
+                        path.unlink()
+                    supplied = self.supplied / path.name
+                    original = supplied.read_bytes()
+                    supplied.write_bytes(b"invalid explicitly supplied artifact")
+                    bad_supplied = self.file_state(supplied)
+                    result = self.attempt()
+                    supplied.write_bytes(original)
+                    self.record(suffix=suffix, cached=cached, supplied=bad_supplied, result=result)
+                    self.assertFalse(result["accepted"], result)
+                    self.assertIn("Java currentSnapshot digest mismatch", result["error"])
+                    self.assertEqual(result["downloads"], [])
+                    self.assertEqual(result["runner"]["resource_calls"], 0)
+                    self.assertFalse(result["metadata"]["drivers.json"])
+
+    def test_java_interrupted_copy_or_download_retries_same_output(self):
+        snapshot = self.pins["java_currentSnapshot"]
+        for mode in ("copy", "download"):
+            for suffix, key in ((".jar", "jar_sha256"), ("-sources.jar", "sources_sha256")):
+                with self.subTest(mode=mode, suffix=suffix):
+                    self.output = self.root / (mode + suffix)
+                    self.output.mkdir()
+                    name = snapshot["artifact"] + suffix
+                    original_copy, original_write = build.shutil.copyfile, Path.write_bytes
+                    partial = []
+
+                    def interrupt_write(path, data):
+                        original_write(path, data[:12])
+                        partial.append(dict(path=str(path), **self.file_state(path)))
+                        raise RuntimeError("fixture Java transfer interrupted")
+
+                    def copy(source, destination, **kwargs):
+                        if Path(destination).name == name:
+                            return interrupt_write(Path(destination), Path(source).read_bytes())
+                        return original_copy(source, destination, **kwargs)
+
+                    def write(path, data):
+                        if path.name == name:
+                            return interrupt_write(path, data)
+                        return original_write(path, data)
+
+                    with (mock.patch.object(build.shutil, "copyfile", side_effect=copy) if mode == "copy"
+                          else mock.patch.object(Path, "write_bytes", new=write)):
+                        failure = self.attempt(supplied=mode == "copy")
+                    failed_cache = self.file_state(self.output / name)
+                    retry = self.attempt(supplied=mode == "copy")
+                    self.record(mode=mode, suffix=suffix, partial=partial, failed_cache=failed_cache, failure=failure,
+                                retry=retry, final=self.file_state(self.output / name))
+                    self.assertIn("fixture Java transfer interrupted", failure["error"])
+                    self.assertEqual(len(partial), 1)
+                    self.assertFalse(failed_cache["exists"])
+                    self.assertEqual(failure["runner"]["resource_calls"], 0)
+                    self.assertTrue(retry["accepted"], retry)
+                    self.assertEqual(build.digest(self.output / name), snapshot[key])
+                    self.assertEqual(retry["runner"]["resource_calls"], 1)
+
+    def test_java_rejects_invalid_download_then_retries(self):
+        snapshot = self.pins["java_currentSnapshot"]
+        for suffix, key in ((".jar", "jar_sha256"), ("-sources.jar", "sources_sha256")):
+            with self.subTest(suffix=suffix):
+                self.output = self.root / suffix
+                self.output.mkdir()
+                self.build()
+                path = self.output / (snapshot["artifact"] + suffix)
+                path.write_bytes(b"broken output artifact")
+                url = snapshot["repository"] + path.name
+                original = self.archives[url]
+                self.archives[url] = b"invalid downloaded Java artifact"
+                failure = self.attempt(supplied=False)
+                failed_cache = self.file_state(path)
+                self.archives[url] = original
+                retry = self.attempt(supplied=False)
+                self.record(suffix=suffix, failure=failure, failed_cache=failed_cache,
+                            retry=retry, final=self.file_state(path), expected=snapshot[key])
+                self.assertFalse(failure["accepted"], failure)
+                self.assertIn("Java currentSnapshot digest mismatch", failure["error"])
+                self.assertFalse(failed_cache["exists"])
+                self.assertEqual(len(failure["downloads"]), 1)
+                self.assertEqual(failure["runner"]["resource_calls"], 0)
+                self.assertTrue(retry["accepted"], retry)
+                self.assertEqual(len(retry["downloads"]), 1)
+                self.assertEqual(build.digest(path), snapshot[key])
+                self.assertEqual(retry["runner"]["resource_calls"], 1)
+
+    def test_java_sources_must_match_pin_before_cache_commit(self):
+        snapshot = self.pins["java_currentSnapshot"]
+        path = self.supplied / (snapshot["artifact"] + "-sources.jar")
+        with zipfile.ZipFile(path, "w") as package:
+            package.writestr(zipfile.ZipInfo("Fixture.java"), b"class Other {}\n")
+        snapshot["sources_sha256"] = build.digest(path)
+        result = self.attempt()
+        cached = self.file_state(self.output / path.name)
+        self.record(supplied=self.file_state(path), cached=cached, result=result)
+        self.assertFalse(result["accepted"], result)
+        self.assertIn("Java published sources do not match the pinned source", result["error"])
+        self.assertFalse(cached["exists"])
+        self.assertEqual(result["runner"]["resource_calls"], 0)
 
     def test_optimized_entries_reject_before_acquisition(self):
         self.build()
