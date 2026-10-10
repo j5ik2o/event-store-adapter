@@ -9,6 +9,7 @@ import shutil
 import stat
 import subprocess
 import tarfile
+import tempfile
 import time
 import urllib.request
 import zipfile
@@ -69,11 +70,44 @@ def verify_sources(records):
             raise RuntimeError(f"source inventory mismatch: {path}")
 
 
+def jvm_classpath_inputs(classpath):
+    directories = []
+    for entry in classpath.split(os.pathsep):
+        if not entry:
+            raise RuntimeError("empty JVM classpath entry")
+        path = Path(entry)
+        if path.is_file():
+            continue
+        record = {"path": str(path), "resolved_path": str(path.resolve()), "exists": path.exists(),
+                  "symlink": os.readlink(path) if path.is_symlink() else None, "files": {}}
+        if record["exists"]:
+            if not path.is_dir():
+                raise RuntimeError(f"unsupported JVM classpath entry: {path}")
+            for directory, children, files in os.walk(path, followlinks=False):
+                for name in children + files:
+                    file = Path(directory) / name
+                    mode = file.lstat().st_mode
+                    if stat.S_ISREG(mode):
+                        record["files"][str(file.relative_to(path))] = {"sha256": digest(file), "bytes": file.stat().st_size}
+                    elif not stat.S_ISDIR(mode):
+                        raise RuntimeError(f"unsupported JVM classpath file: {file}")
+        directories.append(record)
+    return {"classpath": classpath, "directories": directories}
+
+
 def verify_artifacts(inputs):
     for artifact in inputs["artifacts"]:
         path = Path(artifact["path"])
         if path.stat().st_size != artifact["bytes"] or digest(path) != artifact["sha256"]:
             raise RuntimeError(f"build artifact mismatch: {path}")
+    jvm = inputs.get("jvm_classpath_inputs")
+    if not jvm:
+        raise RuntimeError("JVM classpath inputs missing; rebuild all drivers")
+    for language in ("java", "kotlin", "scala"):
+        if inputs["drivers"][language]["argv"][1:3] != ["-cp", jvm["classpath"]]:
+            raise RuntimeError(f"JVM classpath definition mismatch: {language}")
+    if jvm_classpath_inputs(jvm["classpath"]) != jvm:
+        raise RuntimeError("JVM classpath directory inputs mismatch; rebuild all drivers")
     manifest = inputs.get("js_runtime_inputs")
     if not manifest:
         raise RuntimeError("JavaScript runtime inputs missing; rebuild all drivers")
@@ -81,6 +115,11 @@ def verify_artifacts(inputs):
                             capture_output=True, text=True)
     if result.returncode:
         raise RuntimeError(f"JavaScript runtime inputs mismatch: {result.stderr.strip()}")
+
+
+def source_recovery(output, **record):
+    with (output / "source-recovery.jsonl").open("a") as stream:
+        stream.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 def acquire(output):
@@ -92,34 +131,69 @@ def acquire(output):
         destination = sources / f"event-store-adapter-{language}-{sha}"
         url = f"https://codeload.github.com/j5ik2o/event-store-adapter-{language}/tar.gz/{sha}"
 
-        def matches_pin():
-            with tarfile.open(archive) as package:
-                members = package.getmembers()
-                return bool(members) and all(member.name.split("/")[0] == destination.name for member in members)
+        def archive_inventory(path):
+            try:
+                with tarfile.open(path) as package:
+                    members = package.getmembers()
+                    if not members or any(member.name.split("/")[0] != destination.name for member in members):
+                        return None
+                    expected = {}
+                    for member in members:
+                        name = str(Path(member.name).relative_to(destination.name))
+                        if member.isfile():
+                            expected[name] = {"sha256": hashlib.sha256(package.extractfile(member).read()).hexdigest()}
+                        elif member.issym():
+                            expected[name] = {"symlink": member.linkname}
+                    return expected
+            except (tarfile.TarError, EOFError):
+                return None
 
-        if not archive.exists() or not matches_pin():
-            with urllib.request.urlopen(url, timeout=60) as response:
-                archive.write_bytes(response.read())
-        if not matches_pin():
-            raise RuntimeError(f"source archive does not match pin: {language}: {sha}")
-        if not destination.exists():
-            with tarfile.open(archive) as package:
-                package.extractall(sources, filter="data")
-        if destination.is_symlink() or not destination.is_dir():
+        expected = archive_inventory(archive) if archive.exists() else None
+        if expected is None:
+            if archive.exists():
+                source_recovery(output, language=language, path=str(archive), kind="archive", phase="incomplete",
+                                error="cached source archive is unreadable or does not match the pin")
+            with tempfile.TemporaryDirectory(prefix=f".{language}-download-", dir=sources) as temporary:
+                candidate = Path(temporary) / archive.name
+                with urllib.request.urlopen(url, timeout=60) as response:
+                    candidate.write_bytes(response.read())
+                expected = archive_inventory(candidate)
+                if expected is None:
+                    raise RuntimeError(f"source archive does not match pin: {language}: {sha}")
+                candidate.replace(archive)
+            source_recovery(output, language=language, path=str(archive), kind="archive", phase="acquired")
+        if destination.is_symlink() or (destination.exists() and not destination.is_dir()):
             raise RuntimeError(f"source destination is not a directory: {destination}")
         # ビルドが読むソースを取得したアーカイブと照合する。成果物の版文字列に頼らない。
-        with tarfile.open(archive) as package:
-            expected = {}
-            for member in package.getmembers():
-                name = str(Path(member.name).relative_to(destination.name))
-                if member.isfile():
-                    expected[name] = {"sha256": hashlib.sha256(package.extractfile(member).read()).hexdigest()}
-                elif member.issym():
-                    expected[name] = {"symlink": member.linkname}
         actual = source_inventory(destination, language)
-        mismatches = sorted(name for name in expected.keys() | actual.keys() if expected.get(name) != actual.get(name))
+        mismatches = sorted(name for name in actual if expected.get(name) != actual[name])
         if mismatches:
             raise RuntimeError(f"source archive mismatch: {language}: {mismatches}")
+        missing = sorted(expected.keys() - actual.keys())
+        if not destination.exists() or missing:
+            if destination.exists():
+                source_recovery(output, language=language, path=str(destination), kind="directory", phase="incomplete",
+                                error="cached source files missing", missing=missing, file_inventory_sha256=inventory_digest(actual))
+            with tempfile.TemporaryDirectory(prefix=f".{language}-extract-", dir=sources) as temporary:
+                temporary = Path(temporary)
+                with tarfile.open(archive) as package:
+                    package.extractall(temporary, filter="data")
+                candidate = temporary / destination.name
+                if candidate.is_symlink() or not candidate.is_dir():
+                    raise RuntimeError(f"source destination is not a directory: {candidate}")
+                actual = source_inventory(candidate, language)
+                if actual != expected:
+                    raise RuntimeError(f"source archive mismatch after extraction: {language}")
+                backup = temporary / "incomplete-cache"
+                if destination.exists():
+                    destination.rename(backup)
+                try:
+                    candidate.rename(destination)
+                except Exception:
+                    if backup.exists():
+                        backup.rename(destination)
+                    raise
+            source_recovery(output, language=language, path=str(destination), kind="directory", phase="acquired", missing=missing)
         alias = sources / language
         if alias.is_symlink():
             alias.unlink()
@@ -259,12 +333,14 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
                                  "INTEROP_JS_INPUTS": str(output / "js-runtime-inputs.json")}}
         inputs = {"currentSnapshot": PINS, "sources": json.loads((output / "source-inputs.json").read_text()),
                   "java_sources_match_pinned_source": True, "artifacts": [], "driver_sources": {},
-                  "js_runtime_inputs": str(output / "js-runtime-inputs.json"), "drivers": drivers}
+                  "js_runtime_inputs": str(output / "js-runtime-inputs.json"),
+                  "jvm_classpath_inputs": jvm_classpath_inputs(classpath), "drivers": drivers}
         files = artifacts + [go / "driver", go / "go.mod", go / "go.sum", rust / "Cargo.lock", rust / "target/debug/interop-driver"]
         files += [Path(inputs["js_runtime_inputs"])]
         files += [Path(row["path"]) for row in json.loads(Path(inputs["js_runtime_inputs"]).read_text())["files"]]
         files += [Path(p) for p in classpath.split(os.pathsep) if Path(p).is_file()]
-        files += list(jvm.rglob("*.class"))
+        files += [Path(directory["path"]) / name for directory in inputs["jvm_classpath_inputs"]["directories"]
+                  for name in directory["files"]]
         for path in sorted(set(files)):
             inputs["artifacts"].append({"path": str(path), "sha256": digest(path), "bytes": path.stat().st_size})
         inputs["driver_sources"] = source_fingerprints()

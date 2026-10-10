@@ -63,8 +63,11 @@ def write(path, data):
     path.write_bytes(data)
 if tool == "gradle":
     jvm = Path(next(arg.split("=", 1)[1] for arg in args if arg.startswith("-PoutputDir=")))
-    write(jvm / "Fixture.class", b"jvm fixture")
-    write(jvm / "classpath.txt", str(jvm).encode())
+    artifact = next(arg.split("=", 1)[1] for arg in args if arg.startswith("-PjavaArtifact="))
+    write(jvm / "classes/main/Fixture.class", b"jvm fixture")
+    write(jvm / "classes/main/META-INF/fixture.module", b"runtime metadata")
+    write(jvm / "classpath.txt", os.pathsep.join([str(jvm / "classes/main"),
+        str(jvm / "resources/main"), artifact]).encode())
 elif tool == "go" and args[0] == "build":
     data = (output / "sources/go/marker.txt").read_bytes()
     failed = (output / "fail-go").exists()
@@ -118,8 +121,9 @@ elif tool == "pnpm" and "build" in args:
         environment = {"PATH": str(self.bin) + os.pathsep + os.environ["PATH"], "INTEROP_TEST_OUTPUT": str(self.output)}
         with mock.patch.object(build, "PINS", self.pins), mock.patch.object(sys, "argv", argv), \
                 mock.patch.dict(os.environ, environment), \
-                mock.patch.object(build.urllib.request, "urlopen", side_effect=lambda url, **kw: io.BytesIO(self.archives[url])):
+                mock.patch.object(build.urllib.request, "urlopen", side_effect=lambda url, **kw: io.BytesIO(self.archives[url])) as download:
             build.main()
+            return download.call_count
 
     def probe_run(self):
         self.probes += 1
@@ -144,6 +148,194 @@ console.log(JSON.stringify({value: local(library).fixtureMarker,
     dependency: local.resolve('fixture-dependency')}));
 """, str(library)], capture_output=True, text=True, check=True)
         return json.loads(result.stdout)
+
+    def test_acquire_retries_interrupted_extraction(self):
+        original = tarfile.TarFile.extractall
+
+        def interrupted(package, path=".", **kwargs):
+            original(package, path, members=package.getmembers()[:1], **kwargs)
+            raise RuntimeError("fixture extraction interrupted")
+
+        with mock.patch.object(tarfile.TarFile, "extractall", new=interrupted):
+            with self.assertRaisesRegex(RuntimeError, "fixture extraction interrupted"):
+                self.build()
+        failure = json.loads((self.output / "build-failure.json").read_text())
+        language = next(iter(self.pins["sources"]))
+        destination = self.output / "sources" / f"event-store-adapter-{language}-{self.pins['sources'][language]}"
+        incomplete_destination = destination.exists()
+        try:
+            downloads = self.build()
+            retry = {"accepted": True, "downloads": downloads, "runner": self.probe_run()}
+        except Exception as error:
+            retry = {"accepted": False, "error": str(error)}
+        self.record(first_failure=failure, incomplete_destination=incomplete_destination, retry=retry)
+        self.assertFalse(incomplete_destination)
+        self.assertTrue(retry["accepted"], retry)
+        self.assertEqual(retry["runner"]["resource_calls"], 1)
+        self.assertFalse((self.output / "build-failure.json").exists())
+
+    def test_acquire_retries_incomplete_download(self):
+        language = next(iter(self.pins["sources"]))
+        url = f"https://codeload.github.com/j5ik2o/event-store-adapter-{language}/tar.gz/{self.pins['sources'][language]}"
+        complete = self.archives[url]
+        self.archives[url] = complete[:12]
+        with self.assertRaises(Exception):
+            self.build()
+        first_failure = json.loads((self.output / "build-failure.json").read_text())
+        incomplete_archive = (self.output / f"sources/{language}.tar.gz").exists()
+        self.archives[url] = complete
+        try:
+            self.build()
+            retry = {"accepted": True, "runner": self.probe_run()}
+        except Exception as error:
+            retry = {"accepted": False, "error": str(error)}
+        self.record(first_failure=first_failure, incomplete_archive=incomplete_archive, retry=retry)
+        self.assertFalse(incomplete_archive)
+        self.assertTrue(retry["accepted"], retry)
+        self.assertEqual(retry["runner"]["resource_calls"], 1)
+
+    def test_acquire_recovers_cached_missing_files_without_download(self):
+        self.build()
+        for language in ("js", "go"):
+            (self.output / f"sources/{language}/marker.txt").unlink()
+        try:
+            downloads = self.build()
+            recovery = {"accepted": True, "downloads": downloads, "runner": self.probe_run()}
+        except Exception as error:
+            recovery = {"accepted": False, "error": str(error)}
+        report = self.output / "source-recovery.jsonl"
+        self.record(recovery=recovery, reports=[json.loads(line) for line in report.read_text().splitlines()] if report.exists() else [])
+        self.assertTrue(recovery["accepted"], recovery)
+        self.assertEqual(recovery["downloads"], 0)
+        self.assertEqual(recovery["runner"]["resource_calls"], 1)
+        for language in ("js", "go"):
+            self.assertEqual((self.output / f"sources/{language}/marker.txt").read_text(), self.pins["sources"][language])
+        self.assertTrue(report.exists())
+
+    def test_acquire_recovers_cached_incomplete_archive(self):
+        sources = self.output / "sources"
+        sources.mkdir()
+        (sources / "go.tar.gz").write_bytes(b"incomplete cached archive")
+        try:
+            self.build()
+            recovery = {"accepted": True, "runner": self.probe_run()}
+        except Exception as error:
+            recovery = {"accepted": False, "error": str(error)}
+        self.record(recovery=recovery)
+        self.assertTrue(recovery["accepted"], recovery)
+        self.assertEqual(recovery["runner"]["resource_calls"], 1)
+
+    def test_acquire_rejects_partial_cache_with_added_or_changed_files(self):
+        for mode in ("added", "changed"):
+            with self.subTest(mode=mode):
+                self.build()
+                missing = self.output / "sources/go/go.sum"
+                original_missing = missing.read_bytes()
+                missing.unlink()
+                changed = self.output / ("sources/go/extra.go" if mode == "added" else "sources/go/marker.txt")
+                original_changed = changed.read_bytes() if changed.exists() else None
+                changed.write_bytes(b"untrusted source")
+                with self.assertRaisesRegex(RuntimeError, "source archive mismatch"):
+                    self.build()
+                result = self.probe_run()
+                self.record(mode=mode, runner=result, cache_retained=changed.read_bytes() == b"untrusted source")
+                self.assertEqual(result["resource_calls"], 0)
+                self.assertEqual(changed.read_bytes(), b"untrusted source")
+                missing.write_bytes(original_missing)
+                if original_changed is None:
+                    changed.unlink()
+                else:
+                    changed.write_bytes(original_changed)
+
+    def test_runner_rejects_added_jvm_shadow_class(self):
+        source = self.root / "Shadow.java"
+        dependency = self.root / "dependency"
+        source.write_text('package fixture; public class Shadow { public static void main(String[] args) { System.out.print("original dependency"); } }')
+        subprocess.run(["javac", "-d", str(dependency), str(source)], capture_output=True, text=True, check=True)
+        snapshot = self.pins["java_currentSnapshot"]
+        jar = self.supplied / (snapshot["artifact"] + ".jar")
+        with zipfile.ZipFile(jar, "w") as package:
+            package.write(dependency / "fixture/Shadow.class", "fixture/Shadow.class")
+        snapshot["jar_sha256"] = build.digest(jar)
+        self.build()
+        baseline = self.probe_run()
+        classpath = (self.output / "jvm/classpath.txt").read_text()
+        command = ["java", "-cp", classpath, "fixture.Shadow"]
+        before = subprocess.run(command, capture_output=True, text=True, check=True).stdout
+        source.write_text('package fixture; public class Shadow { public static void main(String[] args) { System.out.print("unrecorded shadow class"); } }')
+        classes = Path(classpath.split(os.pathsep)[0])
+        subprocess.run(["javac", "-d", str(classes), str(source)], capture_output=True, text=True, check=True)
+        after = subprocess.run(command, capture_output=True, text=True, check=True).stdout
+        result = self.probe_run()
+        self.record(before=baseline, before_java=before, after_java=after, after=result,
+                    added_class=str(classes / "fixture/Shadow.class"))
+        self.assertEqual(before, "original dependency")
+        self.assertEqual(after, "unrecorded shadow class")
+        self.assertEqual(baseline["resource_calls"], 1)
+        self.assertEqual(result["resource_calls"], 0)
+        self.assertEqual(result["driver_calls"], 0)
+
+    def test_runner_rejects_redirected_or_missing_jvm_class_directory(self):
+        for mode in ("redirected", "missing"):
+            with self.subTest(mode=mode):
+                self.build()
+                baseline = self.probe_run()
+                classes = Path((self.output / "jvm/classpath.txt").read_text().split(os.pathsep)[0])
+                backup = self.root / f"{mode}-classes"
+                classes.rename(backup)
+                if mode == "redirected":
+                    classes.symlink_to(backup, target_is_directory=True)
+                result = self.probe_run()
+                self.record(mode=mode, before=baseline, after=result, same_bytes=mode == "redirected")
+                if classes.is_symlink():
+                    classes.unlink()
+                backup.rename(classes)
+                self.assertEqual(baseline["resource_calls"], 1)
+                self.assertEqual(result["resource_calls"], 0)
+                self.assertEqual(result["driver_calls"], 0)
+
+    def test_runner_rejects_changed_or_added_jvm_resources(self):
+        for mode in ("changed", "missing", "added", "created-directory"):
+            with self.subTest(mode=mode):
+                self.build()
+                baseline = self.probe_run()
+                entries = (self.output / "jvm/classpath.txt").read_text().split(os.pathsep)
+                path = Path(entries[1]) / "fixture.properties" if mode == "created-directory" else Path(entries[0]) / "META-INF/fixture.module"
+                if mode == "added":
+                    path = path.with_name("extra.properties")
+                original = path.read_bytes() if path.exists() else None
+                if mode == "missing":
+                    path.unlink()
+                else:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(b"unrecorded runtime resource")
+                result = self.probe_run()
+                self.record(mode=mode, before=baseline, after=result, path=str(path))
+                if original is None:
+                    path.unlink()
+                    if mode == "created-directory":
+                        path.parent.rmdir()
+                else:
+                    path.write_bytes(original)
+                self.assertEqual(baseline["resource_calls"], 1)
+                self.assertEqual(result["resource_calls"], 0)
+                self.assertEqual(result["driver_calls"], 0)
+
+    def test_only_rejects_unrecorded_unselected_jvm_inputs(self):
+        self.build()
+        classes = Path((self.output / "jvm/classpath.txt").read_text().split(os.pathsep)[0])
+        (classes / "Added.class").write_bytes(b"unrecorded bytecode")
+        before = (self.output / "tool-calls.jsonl").read_text()
+        try:
+            self.build(only="go")
+            outcome = {"accepted": True}
+        except RuntimeError as error:
+            outcome = {"accepted": False, "error": str(error)}
+        result = self.probe_run()
+        self.record(build=outcome, runner=result)
+        self.assertFalse(outcome["accepted"], outcome)
+        self.assertEqual((self.output / "tool-calls.jsonl").read_text(), before)
+        self.assertEqual(result["resource_calls"], 0)
 
     def test_acquire_rejects_added_build_sources(self):
         for language, name in (("go", "extra.go"), ("rs", "lib/src/extra.rs"),
