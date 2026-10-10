@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -171,6 +172,13 @@ elif tool == "pnpm" and "build" in args:
             except Exception as error:
                 result = {"exit": 1, "error": str(error)}
             return dict(result, resource_calls=start.call_count, driver_calls=driver.call_count)
+
+    @contextlib.contextmanager
+    def copied_entrypoints(self):
+        here = self.root / "entrypoints"
+        shutil.copytree(build.HERE, here, ignore=shutil.ignore_patterns("__pycache__"))
+        with mock.patch.object(build, "HERE", here), mock.patch.object(run, "HERE", here):
+            yield here
 
     def js_value(self):
         library = self.output / "sources/js/packages/library"
@@ -608,6 +616,94 @@ console.log(JSON.stringify({value: local(library).fixtureMarker,
         self.record(previous_artifacts=previous["artifacts"], current_artifacts=current["artifacts"], runner=result)
         self.assertEqual(previous["artifacts"], current["artifacts"])
         self.assertEqual(result["resource_calls"], 1)
+
+    def test_only_rejects_changed_shared_build_then_full_retry_succeeds(self):
+        with self.copied_entrypoints() as here:
+            self.build()
+            previous = json.loads((self.output / "buildinputs.json").read_text())
+            shared = here / "build.py"
+            original = shared.read_text()
+            changed = original.replace('serde_json = "1.0"',
+                'serde_json = {{ version = "1.0", features = ["preserve_order"] }}')
+            self.assertNotEqual(changed, original)
+            shared.write_text(changed)
+            calls = (self.output / "tool-calls.jsonl").read_bytes()
+            result = self.attempt(only="js")
+            self.record(previous_shared_sha256=previous["driver_sources"]["build.py"],
+                        current_shared_sha256=build.digest(shared), partial=result,
+                        compiler_calls_unchanged=(self.output / "tool-calls.jsonl").read_bytes() == calls)
+            self.assertFalse(result["accepted"], result)
+            self.assertIn("shared build input changed", result["error"])
+            self.assertEqual(result["downloads"], [])
+            self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+            self.assertEqual(result["metadata"], {"drivers.json": False, "buildinputs.json": False, "build-failure.json": True})
+            self.assertEqual(result["runner"]["resource_calls"], 0)
+            self.assertEqual(result["runner"]["driver_calls"], 0)
+            self.build()
+            current = json.loads((self.output / "buildinputs.json").read_text())
+            retry = self.probe_run()
+            self.record(full_retry=retry, recorded_shared_sha256=current["driver_sources"]["build.py"])
+            self.assertEqual(current["driver_sources"]["build.py"], build.digest(shared))
+            self.assertFalse(self.metadata()["build-failure.json"])
+            self.assertEqual(retry["resource_calls"], 1)
+
+    def test_only_accepts_changed_selected_driver_with_unchanged_shared_build(self):
+        with self.copied_entrypoints() as here:
+            self.build()
+            previous = json.loads((self.output / "buildinputs.json").read_text())
+            selected = here / "drivers/go/main.go"
+            selected.write_text(selected.read_text() + "\n// 選択したドライバーの変更\n")
+            result = self.attempt(only="go")
+            current = json.loads((self.output / "buildinputs.json").read_text())
+            self.record(partial=result, previous_sources=previous["driver_sources"], current_sources=current["driver_sources"])
+            self.assertTrue(result["accepted"], result)
+            self.assertEqual(current["driver_sources"]["build.py"], previous["driver_sources"]["build.py"])
+            self.assertNotEqual(current["driver_sources"]["drivers/go/main.go"], previous["driver_sources"]["drivers/go/main.go"])
+            self.assertEqual((self.output / "go-driver/main.go").read_bytes(), selected.read_bytes())
+            self.assertEqual(previous["artifacts"], current["artifacts"])
+            self.assertEqual(result["runner"]["resource_calls"], 1)
+
+    def test_only_rejects_changed_unselected_driver_sources(self):
+        with self.copied_entrypoints() as here:
+            self.build()
+            unselected = here / "drivers/rust/main.rs"
+            unselected.write_text(unselected.read_text() + "\n// 未選択ドライバーの変更\n")
+            calls = (self.output / "tool-calls.jsonl").read_bytes()
+            result = self.attempt(only="js")
+            self.record(partial=result, compiler_calls_unchanged=(self.output / "tool-calls.jsonl").read_bytes() == calls)
+            self.assertFalse(result["accepted"], result)
+            self.assertIn("unselected driver sources changed", result["error"])
+            self.assertEqual(result["downloads"], [])
+            self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+            self.assertEqual(result["runner"]["resource_calls"], 0)
+
+    def test_only_accepts_changed_run_and_observer_sources(self):
+        with self.copied_entrypoints() as here:
+            for name in ("run.py", "query_observer.py"):
+                with self.subTest(source=name):
+                    self.build()
+                    source = here / name
+                    source.write_text(source.read_text() + "\n# 観測処理の変更\n")
+                    result = self.attempt(only="go")
+                    current = json.loads((self.output / "buildinputs.json").read_text())
+                    self.record(source=name, partial=result, recorded_sha256=current["driver_sources"][name])
+                    self.assertTrue(result["accepted"], result)
+                    self.assertEqual(current["driver_sources"][name], build.digest(source))
+                    self.assertEqual(result["runner"]["resource_calls"], 1)
+
+    def test_only_rejects_changed_snapshot_pins_before_acquisition(self):
+        with self.copied_entrypoints() as here:
+            self.build()
+            calls = (self.output / "tool-calls.jsonl").read_bytes()
+            self.pins["java_currentSnapshot"]["jar_sha256"] = "f" * 64
+            build.save(here / "snapshots.json", self.pins)
+            result = self.attempt(only="go")
+            self.record(partial=result, compiler_calls_unchanged=(self.output / "tool-calls.jsonl").read_bytes() == calls)
+            self.assertFalse(result["accepted"], result)
+            self.assertIn("current pins", result["error"])
+            self.assertEqual(result["downloads"], [])
+            self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+            self.assertEqual(result["runner"]["resource_calls"], 0)
 
     def test_acquire_recovers_forged_readable_cached_archive(self):
         url = self.source_url("java")

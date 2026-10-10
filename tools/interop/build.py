@@ -300,6 +300,8 @@ def main():
         if args.only:
             if not previous_success or previous_inputs is None or previous_inputs["currentSnapshot"] != PINS:
                 raise RuntimeError("--only requires a successful build with the current pins; rebuild all drivers")
+            if previous_inputs["driver_sources"].get("build.py") != digest(HERE / "build.py"):
+                raise RuntimeError("shared build input changed; rebuild all drivers")
             if not previous_inputs.get("js_runtime_inputs"):
                 raise RuntimeError("--only requires current runtime input coverage; rebuild all drivers")
             verify_sources(previous_inputs["sources"])
