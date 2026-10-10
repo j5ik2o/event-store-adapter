@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import tarfile
 import time
@@ -30,11 +31,56 @@ def source_fingerprints():
             and not any(part.startswith(".") for part in path.relative_to(HERE).parts)}
 
 
+def source_inventory(root, language):
+    # この入口の pnpm/tsc が作る場所だけを除く。他言語の出力はソース外に置く。
+    generated = {"node_modules", "packages/library/node_modules", "packages/examples/node_modules",
+                 "packages/tests/node_modules", "packages/library/dist"} if language == "js" else set()
+    inventory = {}
+    for directory, directories, files in os.walk(root, followlinks=False):
+        for name in list(directories):
+            path = Path(directory) / name
+            if str(path.relative_to(root)) in generated:
+                directories.remove(name)
+        for name in directories + files:
+            path = Path(directory) / name
+            relative = str(path.relative_to(root))
+            mode = path.lstat().st_mode
+            if stat.S_ISLNK(mode):
+                inventory[relative] = {"symlink": os.readlink(path)}
+            elif stat.S_ISREG(mode):
+                inventory[relative] = {"sha256": digest(path)}
+            elif not stat.S_ISDIR(mode):
+                raise RuntimeError(f"unsupported source file: {path}")
+    return inventory
+
+
+def inventory_digest(inventory):
+    return hashlib.sha256(json.dumps(inventory, sort_keys=True).encode()).hexdigest()
+
+
+def verify_sources(records):
+    for record in records:
+        path = Path(record["path"])
+        if str(path.resolve()) != record["resolved_path"] or not path.is_symlink():
+            raise RuntimeError(f"source alias mismatch: {path}")
+        if digest(Path(record["archive_path"])) != record["archive_sha256"]:
+            raise RuntimeError(f"source archive changed: {path}")
+        if inventory_digest(source_inventory(path, record["language"])) != record["file_inventory_sha256"]:
+            raise RuntimeError(f"source inventory mismatch: {path}")
+
+
 def verify_artifacts(inputs):
     for artifact in inputs["artifacts"]:
         path = Path(artifact["path"])
         if path.stat().st_size != artifact["bytes"] or digest(path) != artifact["sha256"]:
             raise RuntimeError(f"build artifact mismatch: {path}")
+    manifest = inputs.get("js_runtime_inputs")
+    if not manifest:
+        raise RuntimeError("JavaScript runtime inputs missing; rebuild all drivers")
+    result = subprocess.run(["node", str(HERE / "drivers/js/runtime-inputs.cjs"), "--verify", manifest],
+                            capture_output=True, text=True)
+    if result.returncode:
+        raise RuntimeError(f"JavaScript runtime inputs mismatch: {result.stderr.strip()}")
 
 
 def acquire(output):
@@ -59,14 +105,19 @@ def acquire(output):
         if not destination.exists():
             with tarfile.open(archive) as package:
                 package.extractall(sources, filter="data")
+        if destination.is_symlink() or not destination.is_dir():
+            raise RuntimeError(f"source destination is not a directory: {destination}")
         # ビルドが読むソースを取得したアーカイブと照合する。成果物の版文字列に頼らない。
         with tarfile.open(archive) as package:
-            mismatches = []
+            expected = {}
             for member in package.getmembers():
+                name = str(Path(member.name).relative_to(destination.name))
                 if member.isfile():
-                    path = sources / member.name
-                    if hashlib.sha256(package.extractfile(member).read()).hexdigest() != digest(path):
-                        mismatches.append(member.name)
+                    expected[name] = {"sha256": hashlib.sha256(package.extractfile(member).read()).hexdigest()}
+                elif member.issym():
+                    expected[name] = {"symlink": member.linkname}
+        actual = source_inventory(destination, language)
+        mismatches = sorted(name for name in expected.keys() | actual.keys() if expected.get(name) != actual.get(name))
         if mismatches:
             raise RuntimeError(f"source archive mismatch: {language}: {mismatches}")
         alias = sources / language
@@ -76,7 +127,9 @@ def acquire(output):
             raise RuntimeError(f"source alias is not a symlink: {alias}")
         alias.symlink_to(destination)
         records.append({"language": language, "source_sha": sha, "archive_sha256": digest(archive),
-                        "url": url, "path": str(alias), "archive_matches_source": True})
+                        "archive_path": str(archive), "url": url, "path": str(alias),
+                        "resolved_path": str(destination.resolve()), "archive_matches_source": True,
+                        "file_count": len(actual), "file_inventory_sha256": inventory_digest(actual)})
     save(output / "source-inputs.json", records)
     return sources
 
@@ -143,6 +196,9 @@ def main():
         if args.only:
             if not previous_success or previous_inputs is None or previous_inputs["currentSnapshot"] != PINS:
                 raise RuntimeError("--only requires a successful build with the current pins; rebuild all drivers")
+            if not previous_inputs.get("js_runtime_inputs"):
+                raise RuntimeError("--only requires current runtime input coverage; rebuild all drivers")
+            verify_sources(previous_inputs["sources"])
             verify_artifacts(previous_inputs)
             unchanged = lambda path: path.startswith("drivers/") and not path.startswith(f"drivers/{args.only}/")
             expected = {path: sha for path, sha in previous_inputs["driver_sources"].items() if unchanged(path)}
@@ -189,6 +245,8 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
         if selected("js"):
             execute("js-install", ["pnpm", "install", "--frozen-lockfile"], cwd=sources / "js")
             execute("js", ["pnpm", "--filter", "event-store-adapter-js", "build"], cwd=sources / "js")
+            execute("js-inputs", ["node", HERE / "drivers/js/runtime-inputs.cjs", "--record",
+                                  sources / "js/packages/library", output / "js-runtime-inputs.json"])
         if selected("go"):
             execute("go-inputs", ["go", "list", "-m", "-json", "all"], cwd=go)
         classpath = (jvm / "classpath.txt").read_text()
@@ -196,16 +254,22 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
                    for language, main in [("java", "interop.JavaDriver"), ("kotlin", "interop.KotlinDriverKt"), ("scala", "interop.ScalaDriver")]}
         drivers["go"] = {"argv": [str(go / "driver")], "env": {}}
         drivers["rs"] = {"argv": [str(rust / "target/debug/interop-driver")], "env": {}}
-        drivers["js"] = {"argv": ["node", str(HERE / "drivers/js/driver.mjs")], "env": {"INTEROP_JS_LIBRARY": str(sources / "js/packages/library")}}
+        drivers["js"] = {"argv": ["node", str(HERE / "drivers/js/driver.mjs")],
+                         "env": {"INTEROP_JS_LIBRARY": str(sources / "js/packages/library"),
+                                 "INTEROP_JS_INPUTS": str(output / "js-runtime-inputs.json")}}
         inputs = {"currentSnapshot": PINS, "sources": json.loads((output / "source-inputs.json").read_text()),
-                  "java_sources_match_pinned_source": True, "artifacts": [], "driver_sources": {}}
+                  "java_sources_match_pinned_source": True, "artifacts": [], "driver_sources": {},
+                  "js_runtime_inputs": str(output / "js-runtime-inputs.json"), "drivers": drivers}
         files = artifacts + [go / "driver", go / "go.mod", go / "go.sum", rust / "Cargo.lock", rust / "target/debug/interop-driver"]
-        files += list((sources / "js/packages/library/dist").rglob("*.js"))
+        files += [Path(inputs["js_runtime_inputs"])]
+        files += [Path(row["path"]) for row in json.loads(Path(inputs["js_runtime_inputs"]).read_text())["files"]]
         files += [Path(p) for p in classpath.split(os.pathsep) if Path(p).is_file()]
         files += list(jvm.rglob("*.class"))
         for path in sorted(set(files)):
             inputs["artifacts"].append({"path": str(path), "sha256": digest(path), "bytes": path.stat().st_size})
         inputs["driver_sources"] = source_fingerprints()
+        verify_sources(inputs["sources"])
+        verify_artifacts(inputs)
         save(output / "buildinputs.json", inputs)
         save(output / "drivers.json", drivers)
         (output / "build-failure.json").unlink(missing_ok=True)

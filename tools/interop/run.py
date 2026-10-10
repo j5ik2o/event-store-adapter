@@ -16,7 +16,7 @@ import uuid
 
 import boto3
 from botocore.config import Config
-from build import source_fingerprints, verify_artifacts
+from build import source_fingerprints, verify_artifacts, verify_sources
 from query_observer import QueryObserver, item_bytes
 
 HERE = Path(__file__).resolve().parent
@@ -290,8 +290,11 @@ def main():
     inputs = json.loads((args.build / "buildinputs.json").read_text())
     if inputs["currentSnapshot"] != PINS or inputs["driver_sources"] != source_fingerprints():
         raise RuntimeError("build inputs are stale; rebuild before running")
+    verify_sources(inputs["sources"])
     verify_artifacts(inputs)
     definition = json.loads((args.build / "drivers.json").read_text())
+    if definition != inputs["drivers"]:
+        raise RuntimeError("driver definitions changed; rebuild before running")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     local = Local(output)

@@ -24,6 +24,7 @@ class EntrypointTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.output = self.root / "build"
         self.output.mkdir()
+        self.probes = 0
         self.pins = copy.deepcopy(build.PINS)
         self.pins["sources"] = {lang: f"{i:040x}" for i, lang in enumerate(self.pins["sources"], 1)}
         self.archives = {}
@@ -33,6 +34,8 @@ class EntrypointTests(unittest.TestCase):
                 files.update({"go.mod": b"module github.com/j5ik2o/event-store-adapter-go/v2\n", "go.sum": b""})
             if language == "java":
                 files["src/main/java/Fixture.java"] = b"class Fixture {}\n"
+            if language == "js":
+                files["packages/library/package.json"] = b'{"main":"dist/index.js"}\n'
             self.add_archive(language, sha, files)
         self.supplied = self.root / "supplied"
         self.supplied.mkdir()
@@ -72,7 +75,19 @@ elif tool == "cargo" and args[0] == "build":
     write(output / "rust-driver/Cargo.lock", b"rust lock fixture")
     write(output / "rust-driver/target/debug/interop-driver", b"rust fixture")
 elif tool == "pnpm" and "build" in args:
-    write(output / "sources/js/packages/library/dist/index.js", b"js fixture")
+    library = output / "sources/js/packages/library"
+    write(library / "dist/index.js", b"module.exports = {fixtureMarker: require('fixture-dependency')};\\n")
+    write(library / "dist/alternate.js", b"module.exports = {fixtureMarker: 'alternate entry'};\\n")
+    dependency = output / "sources/js/node_modules/fixture-dependency"
+    write(dependency / "package.json", b'{"main":"index.js"}\\n')
+    write(dependency / "index.js", b"module.exports = 'original dependency';\\n")
+    write(dependency / "unused.js", b"module.exports = 'unused dependency';\\n")
+    link = library / "node_modules/fixture-dependency"
+    link.parent.mkdir(parents=True, exist_ok=True)
+    if not link.exists():
+        link.symlink_to(dependency, target_is_directory=True)
+    write(library / "node_modules/@aws-sdk/client-dynamodb/package.json", b'{"main":"index.js"}\\n')
+    write(library / "node_modules/@aws-sdk/client-dynamodb/index.js", b"exports.DynamoDBClient = class { destroy() {} };\\n")
 '''
         for tool in ("gradle", "go", "cargo", "pnpm"):
             path = self.bin / tool
@@ -107,7 +122,8 @@ elif tool == "pnpm" and "build" in args:
             build.main()
 
     def probe_run(self):
-        argv = ["run.py", "--build", str(self.output), "--output", str(self.root / "result")]
+        self.probes += 1
+        argv = ["run.py", "--build", str(self.output), "--output", str(self.root / f"result-{self.probes}")]
         with mock.patch.object(run, "PINS", self.pins), mock.patch.object(sys, "argv", argv), \
                 mock.patch.object(run.Local, "start", side_effect=RuntimeError("resource acquisition reached")) as start, \
                 mock.patch.object(run.Local, "close", return_value={"errors": []}), mock.patch.object(run, "Driver") as driver, \
@@ -117,6 +133,161 @@ elif tool == "pnpm" and "build" in args:
             except Exception as error:
                 result = {"exit": 1, "error": str(error)}
             return dict(result, resource_calls=start.call_count, driver_calls=driver.call_count)
+
+    def js_value(self):
+        library = self.output / "sources/js/packages/library"
+        result = subprocess.run(["node", "-e", """
+const { createRequire } = require('node:module');
+const library = process.argv[1];
+const local = createRequire(library + '/package.json');
+console.log(JSON.stringify({value: local(library).fixtureMarker,
+    dependency: local.resolve('fixture-dependency')}));
+""", str(library)], capture_output=True, text=True, check=True)
+        return json.loads(result.stdout)
+
+    def test_acquire_rejects_added_build_sources(self):
+        for language, name in (("go", "extra.go"), ("rs", "lib/src/extra.rs"),
+                               ("js", "packages/library/src/extra.ts")):
+            with self.subTest(language=language):
+                pins = {"sources": {language: self.pins["sources"][language]}}
+                with mock.patch.object(build, "PINS", pins), \
+                        mock.patch.object(build.urllib.request, "urlopen", side_effect=lambda url, **kw: io.BytesIO(self.archives[url])):
+                    sources = build.acquire(self.output)
+                    added = sources / language / name
+                    added.parent.mkdir(parents=True, exist_ok=True)
+                    added.write_text("additional build source\n")
+                    try:
+                        build.acquire(self.output)
+                        outcome = {"accepted": True}
+                    except RuntimeError as error:
+                        outcome = {"accepted": False, "error": str(error)}
+                self.record(language=language, added_file=name, acquisition=outcome)
+                self.assertFalse(outcome["accepted"], outcome)
+                self.assertIn(name, outcome["error"])
+
+    def test_acquire_preserves_known_js_generated_directories(self):
+        self.build()
+        sources = self.output / "sources"
+        for name in ("node_modules/cache.js", "packages/library/dist/extra.js",
+                     "packages/examples/node_modules/cache.js", "packages/tests/node_modules/cache.js"):
+            path = sources / "js" / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("generated fixture\n")
+        before = json.loads((self.output / "source-inputs.json").read_text())
+        self.build()
+        after = json.loads((self.output / "source-inputs.json").read_text())
+        self.record(before=before, after=after, runner=self.probe_run())
+        self.assertEqual(before, after)
+        self.assertEqual(self.probe_run()["resource_calls"], 1)
+
+    def test_acquire_rejects_replaced_source_file_symlink(self):
+        self.build()
+        path = self.output / "sources/go/marker.txt"
+        original = path.read_bytes()
+        redirected = self.root / "outside-marker.txt"
+        redirected.write_bytes(original)
+        path.unlink()
+        path.symlink_to(redirected)
+        try:
+            self.build()
+            outcome = {"accepted": True}
+        except RuntimeError as error:
+            outcome = {"accepted": False, "error": str(error)}
+        self.record(acquisition=outcome, same_bytes=path.read_bytes() == original, target=str(path.resolve()))
+        self.assertFalse(outcome["accepted"], outcome)
+
+    def test_runner_rejects_changed_source_alias(self):
+        self.build()
+        baseline = self.probe_run()
+        alias = self.output / "sources/js"
+        old = alias.resolve()
+        alias.unlink()
+        alias.symlink_to(self.output / "sources/go", target_is_directory=True)
+        result = self.probe_run()
+        self.record(before=baseline, after=result, old_target=str(old), actual_target=str(alias.resolve()))
+        self.assertEqual(baseline["resource_calls"], 1)
+        self.assertEqual(result["resource_calls"], 0)
+        self.assertEqual(result["driver_calls"], 0)
+
+    def test_runner_rejects_changed_js_package_main(self):
+        self.build()
+        baseline = self.probe_run()
+        before = self.js_value()
+        path = self.output / "sources/js/packages/library/package.json"
+        path.write_text('{"main":"dist/alternate.js"}\n')
+        after = self.js_value()
+        result = self.probe_run()
+        self.record(before=baseline, before_require=before, after_require=after, after=result)
+        self.assertEqual(baseline["resource_calls"], 1)
+        self.assertNotEqual(before["value"], after["value"])
+        self.assertEqual(result["resource_calls"], 0)
+        self.assertEqual(result["driver_calls"], 0)
+
+    def test_runner_rejects_changed_js_dependency_bytes(self):
+        self.build()
+        baseline = self.probe_run()
+        before = self.js_value()
+        path = Path(before["dependency"])
+        path.write_text("module.exports = 'changed dependency';\n")
+        after = self.js_value()
+        result = self.probe_run()
+        self.record(before=baseline, before_require=before, after_require=after, after=result)
+        self.assertEqual(baseline["resource_calls"], 1)
+        self.assertNotEqual(before["value"], after["value"])
+        self.assertEqual(result["resource_calls"], 0)
+        self.assertEqual(result["driver_calls"], 0)
+
+    def test_runner_rejects_redirected_js_dependency(self):
+        self.build()
+        baseline = self.probe_run()
+        before = self.js_value()
+        library = self.output / "sources/js/packages/library"
+        alternative = library / "node_modules/alternative-dependency"
+        alternative.mkdir()
+        for name in ("package.json", "index.js"):
+            (alternative / name).write_bytes((Path(before["dependency"]).parent / name).read_bytes())
+        link = library / "node_modules/fixture-dependency"
+        link.unlink()
+        link.symlink_to(alternative, target_is_directory=True)
+        after = self.js_value()
+        result = self.probe_run()
+        self.record(before=baseline, before_require=before, after_require=after, after=result)
+        self.assertEqual(baseline["resource_calls"], 1)
+        self.assertEqual(before["value"], after["value"])
+        self.assertNotEqual(before["dependency"], after["dependency"])
+        self.assertEqual(result["resource_calls"], 0)
+
+    def test_runner_ignores_unused_js_dependency_files(self):
+        self.build()
+        unused = self.output / "sources/js/node_modules/fixture-dependency/unused.js"
+        unused.write_text("module.exports = 'changed unused dependency';\n")
+        inputs = json.loads((self.output / "buildinputs.json").read_text())
+        result = self.probe_run()
+        self.record(unused_path=str(unused), runner=result)
+        self.assertNotIn(str(unused.resolve()), {row["path"] for row in inputs["artifacts"]})
+        self.assertEqual(result["resource_calls"], 1)
+
+    def test_only_rejects_changed_unselected_js_runtime(self):
+        for name in ("node_modules/fixture-dependency/index.js", "packages/library/package.json"):
+            with self.subTest(input=name):
+                self.build()
+                path = self.output / "sources/js" / name
+                path.write_bytes(path.read_bytes() + b" \n")
+                calls = (self.output / "tool-calls.jsonl").read_text().splitlines()
+                try:
+                    self.build(only="go")
+                    outcome = {"accepted": True}
+                except RuntimeError as error:
+                    outcome = {"accepted": False, "error": str(error)}
+                result = self.probe_run()
+                current_calls = (self.output / "tool-calls.jsonl").read_text().splitlines()
+                metadata = {key: (self.output / key).exists() for key in ("drivers.json", "buildinputs.json", "build-failure.json")}
+                self.record(changed_input=name, build=outcome, tools_before=len(calls), tools_after=len(current_calls),
+                            metadata=metadata, runner=result)
+                self.assertFalse(outcome["accepted"], outcome)
+                self.assertEqual(calls, current_calls)
+                self.assertEqual(metadata, {"drivers.json": False, "buildinputs.json": False, "build-failure.json": True})
+                self.assertEqual(result["resource_calls"], 0)
 
     def test_acquire_refreshes_pin_alias_and_archive(self):
         first, second = "a" * 40, "b" * 40
