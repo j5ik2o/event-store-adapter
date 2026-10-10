@@ -16,6 +16,7 @@ import uuid
 
 import boto3
 from botocore.config import Config
+from build import source_fingerprints, verify_artifacts
 from query_observer import QueryObserver, item_bytes
 
 HERE = Path(__file__).resolve().parent
@@ -278,18 +279,26 @@ def physical(local, first, second, state):
 
 
 def main():
+    if not __debug__:
+        raise RuntimeError("run requires assertions; run without -O or PYTHONOPTIMIZE")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    if (args.build / "build-failure.json").exists():
+        raise RuntimeError("build failed; rebuild successfully before running")
+    inputs = json.loads((args.build / "buildinputs.json").read_text())
+    if inputs["currentSnapshot"] != PINS or inputs["driver_sources"] != source_fingerprints():
+        raise RuntimeError("build inputs are stale; rebuild before running")
+    verify_artifacts(inputs)
+    definition = json.loads((args.build / "drivers.json").read_text())
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     local = Local(output)
     drivers, observer = {}, None
     report = {"status": "running", "currentSnapshot": PINS, "matrix": [], "sequential": [],
               "precision": [], "optimistic_lock": [], "physical": [], "pagination": [], "configurations": []}
-    definition = json.loads((args.build / "drivers.json").read_text())
-    save(output / "buildinputs.json", json.loads((args.build / "buildinputs.json").read_text()))
+    save(output / "buildinputs.json", inputs)
 
     def checkpoint():
         save(output / "acceptance.json", report)
@@ -434,8 +443,7 @@ def main():
         report["cleanup"] = local.close()
         if report["cleanup"]["errors"] or any(row.get("exit") != 0 or row.get("terminated") for row in report["driver_exits"]):
             report["status"] = "failed"
-        report["source_sha256"] = {str(p.relative_to(HERE)): hashlib.sha256(p.read_bytes()).hexdigest()
-            for p in HERE.rglob("*") if p.is_file() and "__pycache__" not in p.parts and not any(part.startswith(".") for part in p.relative_to(HERE).parts)}
+        report["source_sha256"] = source_fingerprints()
         checkpoint()
     print(json.dumps({"status": report["status"], "matrix": len(report["matrix"]), "output": str(output)}, ensure_ascii=False))
     return 1 if report["status"] == "failed" else 0

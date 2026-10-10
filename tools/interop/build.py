@@ -24,23 +24,41 @@ def save(path, value):
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
 
 
+def source_fingerprints():
+    return {str(path.relative_to(HERE)): digest(path) for path in sorted(HERE.rglob("*"))
+            if path.is_file() and "__pycache__" not in path.parts
+            and not any(part.startswith(".") for part in path.relative_to(HERE).parts)}
+
+
+def verify_artifacts(inputs):
+    for artifact in inputs["artifacts"]:
+        path = Path(artifact["path"])
+        if path.stat().st_size != artifact["bytes"] or digest(path) != artifact["sha256"]:
+            raise RuntimeError(f"build artifact mismatch: {path}")
+
+
 def acquire(output):
     sources = output / "sources"
     sources.mkdir(exist_ok=True)
     records = []
     for language, sha in PINS["sources"].items():
         archive = sources / f"{language}.tar.gz"
+        destination = sources / f"event-store-adapter-{language}-{sha}"
         url = f"https://codeload.github.com/j5ik2o/event-store-adapter-{language}/tar.gz/{sha}"
-        if not archive.exists():
+
+        def matches_pin():
+            with tarfile.open(archive) as package:
+                members = package.getmembers()
+                return bool(members) and all(member.name.split("/")[0] == destination.name for member in members)
+
+        if not archive.exists() or not matches_pin():
             with urllib.request.urlopen(url, timeout=60) as response:
                 archive.write_bytes(response.read())
-        destination = sources / f"event-store-adapter-{language}-{sha}"
+        if not matches_pin():
+            raise RuntimeError(f"source archive does not match pin: {language}: {sha}")
         if not destination.exists():
             with tarfile.open(archive) as package:
                 package.extractall(sources, filter="data")
-        alias = sources / language
-        if not alias.exists():
-            alias.symlink_to(destination)
         # ビルドが読むソースを取得したアーカイブと照合する。成果物の版文字列に頼らない。
         with tarfile.open(archive) as package:
             mismatches = []
@@ -51,6 +69,12 @@ def acquire(output):
                         mismatches.append(member.name)
         if mismatches:
             raise RuntimeError(f"source archive mismatch: {language}: {mismatches}")
+        alias = sources / language
+        if alias.is_symlink():
+            alias.unlink()
+        elif alias.exists():
+            raise RuntimeError(f"source alias is not a symlink: {alias}")
+        alias.symlink_to(destination)
         records.append({"language": language, "source_sha": sha, "archive_sha256": digest(archive),
                         "url": url, "path": str(alias), "archive_matches_source": True})
     save(output / "source-inputs.json", records)
@@ -91,6 +115,11 @@ def main():
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     commands = json.loads((output / "build-commands.json").read_text()) if (output / "build-commands.json").exists() else []
+    previous_inputs = json.loads((output / "buildinputs.json").read_text()) if (output / "buildinputs.json").exists() else None
+    previous_success = (output / "drivers.json").exists() and not (output / "build-failure.json").exists()
+    # 取得失敗や途中の成果物更新でも、前回の成功を今回の結果として使わせない。
+    for name in ("drivers.json", "buildinputs.json"):
+        (output / name).unlink(missing_ok=True)
     selected = lambda language: args.only is None or args.only == language
 
     def execute(label, command, cwd=None, environment=None):
@@ -109,6 +138,17 @@ def main():
             raise RuntimeError(f"{label} failed: {log}")
 
     try:
+        if not __debug__:
+            raise RuntimeError("build requires assertions; run without -O or PYTHONOPTIMIZE")
+        if args.only:
+            if not previous_success or previous_inputs is None or previous_inputs["currentSnapshot"] != PINS:
+                raise RuntimeError("--only requires a successful build with the current pins; rebuild all drivers")
+            verify_artifacts(previous_inputs)
+            unchanged = lambda path: path.startswith("drivers/") and not path.startswith(f"drivers/{args.only}/")
+            expected = {path: sha for path, sha in previous_inputs["driver_sources"].items() if unchanged(path)}
+            actual = {path: sha for path, sha in source_fingerprints().items() if unchanged(path)}
+            if actual != expected:
+                raise RuntimeError("unselected driver sources changed; rebuild all drivers")
         sources = acquire(output)
         artifacts = java_artifacts(output, args.java_artifact_directory)
         jvm = output / "jvm"
@@ -165,13 +205,13 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
         files += list(jvm.rglob("*.class"))
         for path in sorted(set(files)):
             inputs["artifacts"].append({"path": str(path), "sha256": digest(path), "bytes": path.stat().st_size})
-        for path in sorted(HERE.rglob("*")):
-            if path.is_file() and "__pycache__" not in path.parts and not any(s.startswith(".") for s in path.relative_to(HERE).parts):
-                inputs["driver_sources"][str(path.relative_to(HERE))] = digest(path)
+        inputs["driver_sources"] = source_fingerprints()
         save(output / "buildinputs.json", inputs)
         save(output / "drivers.json", drivers)
         (output / "build-failure.json").unlink(missing_ok=True)
     except Exception as error:
+        for name in ("drivers.json", "buildinputs.json"):
+            (output / name).unlink(missing_ok=True)
         save(output / "build-failure.json", {"error": str(error), "commands": commands})
         raise
 
