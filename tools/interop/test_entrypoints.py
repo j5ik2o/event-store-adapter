@@ -58,6 +58,8 @@ class EntrypointTests(unittest.TestCase):
             self.archives[snapshot["repository"] + path.name] = path.read_bytes()
         self.bin = self.root / "bin"
         self.bin.mkdir()
+        (self.root / "lib").mkdir()
+        (self.root / "lib/gradle-launcher-fixture.jar").write_bytes(b"fixture installation")
         # 外部ビルドだけを代替し、生成物の列挙・取得・成功記録は実入口に任せる。
         executable = "#!" + sys.executable + "\n" + '''
 import json, os, sys
@@ -65,7 +67,10 @@ from pathlib import Path
 output = Path(os.environ["INTEROP_TEST_OUTPUT"])
 tool, args = Path(sys.argv[0]).name, sys.argv[1:]
 with (output / "tool-calls.jsonl").open("a") as stream:
-    stream.write(json.dumps({"tool": tool, "args": args, "gowork": os.environ.get("GOWORK")}) + "\\n")
+    stream.write(json.dumps({"tool": tool, "args": args, "gowork": os.environ.get("GOWORK"),
+        "goflags": os.environ.get("GOFLAGS"), "goenv": os.environ.get("GOENV"),
+        "cargo_environment": {name: os.environ.get(name) for name in
+            ("CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR", "CARGO_BUILD_BUILD_DIR")}}) + "\\n")
 def write(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
@@ -84,7 +89,11 @@ elif tool == "go" and args[0] == "build":
         raise SystemExit(23)
 elif tool == "cargo" and args[0] == "build":
     write(output / "rust-driver/Cargo.lock", b"rust lock fixture")
-    write(output / "rust-driver/target/debug/interop-driver", b"rust fixture")
+    target = Path(os.environ.get("CARGO_TARGET_DIR") or os.environ.get("CARGO_BUILD_TARGET_DIR") or output / "rust-driver/target")
+    write(target / "debug/interop-driver", b"rust fixture")
+elif tool == "cargo" and args[0] == "metadata":
+    print(json.dumps({"target_directory": str(Path(os.environ.get("CARGO_TARGET_DIR") or
+        os.environ.get("CARGO_BUILD_TARGET_DIR") or output / "rust-driver/target")), "packages": []}))
 elif tool == "pnpm" and "build" in args:
     library = output / "sources/js/packages/library"
     write(library / "dist/index.js", b"module.exports = {fixtureMarker: require('fixture-dependency')};\\n")
@@ -566,6 +575,155 @@ console.log(JSON.stringify({value: local(library).fixtureMarker,
                 self.assertNotIn("private-marker-value", attempt["error"])
                 self.assertEqual(acquire.call_count, 0)
                 self.assertEqual(os.environ[name], "private-marker-value")
+
+    def test_sources_parent_link_preserves_foreign_inventory_before_acquisition(self):
+        foreign = self.root / "foreign-source-cache"
+        foreign.mkdir()
+        (foreign / "go.tar.gz").write_bytes(b"other owner incomplete archive")
+        destination = foreign / f"event-store-adapter-go-{self.pins['sources']['go']}"
+        destination.mkdir()
+        (destination / "marker.txt").write_text(self.pins["sources"]["go"])
+        before = build.source_inventory(foreign, "go")
+        (self.output / "sources").symlink_to(foreign, target_is_directory=True)
+        with mock.patch.object(build, "acquire", wraps=build.acquire) as acquire:
+            attempt = self.attempt()
+        after = build.source_inventory(foreign, "go")
+        self.record(attempt=attempt, acquisition_calls=acquire.call_count, foreign_before=before, foreign_after=after)
+        self.assertFalse(attempt["accepted"], attempt)
+        self.assertIn("source cache directory", attempt["error"])
+        self.assertEqual(acquire.call_count, 0)
+        self.assertEqual(attempt["downloads"], [])
+        self.assertFalse((self.output / "tool-calls.jsonl").exists())
+        self.assertEqual(attempt["runner"]["resource_calls"], 0)
+        self.assertEqual(attempt["runner"]["driver_calls"], 0)
+        self.assertEqual(before, after)
+        self.assertTrue((self.output / "sources").is_symlink())
+        with mock.patch.object(build, "PINS", self.pins), mock.patch.object(build.urllib.request, "urlopen") as download:
+            with self.assertRaisesRegex(RuntimeError, "source cache directory"):
+                build.acquire(self.output)
+            self.assertEqual(download.call_count, 0)
+        self.assertEqual(build.source_inventory(foreign, "go"), before)
+
+    def test_sources_parent_rejects_files_and_dangling_links_without_mutation(self):
+        root = self.output / "sources"
+        for mode in ("file", "dangling-link"):
+            with self.subTest(mode=mode):
+                if mode == "file":
+                    root.write_bytes(b"foreign file")
+                else:
+                    root.symlink_to(self.root / "missing-foreign-directory", target_is_directory=True)
+                try:
+                    with mock.patch.object(build, "acquire", wraps=build.acquire) as acquire:
+                        attempt = self.attempt()
+                    self.record(mode=mode, attempt=attempt, acquisition_calls=acquire.call_count)
+                    self.assertFalse(attempt["accepted"], attempt)
+                    self.assertIn("source cache directory", attempt["error"])
+                    self.assertEqual(acquire.call_count, 0)
+                    self.assertEqual(attempt["downloads"], [])
+                    self.assertFalse((self.output / "tool-calls.jsonl").exists())
+                    if mode == "file":
+                        self.assertEqual(root.read_bytes(), b"foreign file")
+                    else:
+                        self.assertTrue(root.is_symlink())
+                finally:
+                    root.unlink()
+
+    def test_go_children_control_flags_and_persisted_environment_without_parent_changes(self):
+        config = self.root / "go-environment"
+        config.write_text("GOFLAGS=-overlay=private-overlay.json\n")
+        environment = {"GOFLAGS": "-overlay=private-overlay.json", "GOENV": str(config), "GOWORK": "private-go.work"}
+        with mock.patch.dict(os.environ, environment):
+            self.build()
+            self.build(only="go")
+            calls = [json.loads(line) for line in (self.output / "tool-calls.jsonl").read_text().splitlines()]
+            go_calls = [row for row in calls if row["tool"] == "go"]
+            self.record(go_calls=go_calls, parent_environment=environment)
+            self.assertEqual([row["args"][0] for row in go_calls], ["build", "list", "build", "list"])
+            self.assertTrue(all(row["goflags"] == "" and row["goenv"] == "off" and row["gowork"] == "off" for row in go_calls))
+            self.assertTrue(all(os.environ[name] == value for name, value in environment.items()))
+        self.assertEqual(config.read_text(), "GOFLAGS=-overlay=private-overlay.json\n")
+
+    def test_cargo_build_and_metadata_use_recorded_target_and_preserve_external_output(self):
+        external = self.root / "external-target"
+        external.mkdir()
+        (external / "keep").write_bytes(b"other owner target")
+        before = build.source_inventory(external, "go")
+        environment = {name: str(external) for name in ("CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR", "CARGO_BUILD_BUILD_DIR")}
+        with mock.patch.dict(os.environ, environment):
+            self.build()
+            self.build(only="rust")
+            calls = [json.loads(line) for line in (self.output / "tool-calls.jsonl").read_text().splitlines()]
+            cargo_calls = [row for row in calls if row["tool"] == "cargo"]
+            target = str(self.output.resolve() / "rust-driver/target")
+            self.record(cargo_calls=cargo_calls, external_before=before, external_after=build.source_inventory(external, "go"))
+            self.assertEqual([row["args"][0] for row in cargo_calls], ["build", "metadata", "build", "metadata"])
+            self.assertTrue(all(all(value == target for value in row["cargo_environment"].values()) for row in cargo_calls))
+            inputs = json.loads((self.output / "buildinputs.json").read_text())
+            self.assertEqual(inputs["drivers"]["rs"]["argv"], [str(Path(target) / "debug/interop-driver")])
+            self.assertTrue(all(os.environ[name] == value for name, value in environment.items()))
+        self.assertEqual(build.source_inventory(external, "go"), before)
+
+    def test_cargo_rejects_target_and_output_flags_before_acquisition_without_disclosure(self):
+        for name in ("CARGO_BUILD_TARGET", "RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "CARGO_BUILD_RUSTFLAGS", "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS"):
+            with self.subTest(variable=name), mock.patch.dict(os.environ, {name: "private-output-override"}):
+                with mock.patch.object(build, "acquire", wraps=build.acquire) as acquire:
+                    attempt = self.attempt()
+                self.record(variable=name, attempt=attempt, acquisition_calls=acquire.call_count)
+                self.assertFalse(attempt["accepted"], attempt)
+                self.assertIn(name, attempt["error"])
+                self.assertNotIn("private-output-override", attempt["error"])
+                self.assertEqual(acquire.call_count, 0)
+                self.assertEqual(os.environ[name], "private-output-override")
+
+    def test_gradle_rejects_user_and_installation_init_scripts_without_reading_or_mutating(self):
+        home = self.root / "gradle-home"
+        scripts = [home / "init.gradle", home / "init.gradle.kts", home / "init.d/marker.gradle",
+                   home / "init.d/marker.init.gradle.kts", self.root / "init.d/marker.init.gradle",
+                   self.root / "init.d/marker.gradle.kts"]
+        with mock.patch.dict(os.environ, {"GRADLE_USER_HOME": str(home)}):
+            for script in scripts:
+                with self.subTest(script=str(script)):
+                    self.build()
+                    script.parent.mkdir(parents=True, exist_ok=True)
+                    content = b"private-init-script-content"
+                    script.write_bytes(content)
+                    calls = (self.output / "tool-calls.jsonl").read_bytes()
+                    classes = build.source_inventory(self.output / "jvm/classes", "go")
+                    try:
+                        with mock.patch.object(build, "acquire", wraps=build.acquire) as acquire:
+                            attempt = self.attempt()
+                        self.record(script=str(script), attempt=attempt, acquisition_calls=acquire.call_count)
+                        self.assertFalse(attempt["accepted"], attempt)
+                        self.assertIn("unrecorded Gradle initialization script", attempt["error"])
+                        self.assertNotIn(content.decode(), attempt["error"])
+                        self.assertEqual(acquire.call_count, 0)
+                        self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+                        self.assertEqual(build.source_inventory(self.output / "jvm/classes", "go"), classes)
+                        self.assertEqual(script.read_bytes(), content)
+                        self.assertEqual(os.environ["GRADLE_USER_HOME"], str(home))
+                    finally:
+                        script.unlink()
+
+    def test_gradle_rechecks_init_scripts_before_jvm_cleanup_and_execution(self):
+        home = self.root / "gradle-home"
+        with mock.patch.dict(os.environ, {"GRADLE_USER_HOME": str(home)}):
+            self.build()
+            before = build.source_inventory(self.output / "jvm/classes", "go")
+            calls = (self.output / "tool-calls.jsonl").read_bytes()
+            script = home / "init.gradle"
+            acquire = build.acquire
+            def acquire_then_add_script(output):
+                sources = acquire(output)
+                home.mkdir(exist_ok=True)
+                script.write_text("harmless late init")
+                return sources
+            with mock.patch.object(build, "acquire", side_effect=acquire_then_add_script):
+                attempt = self.attempt()
+            self.record(attempt=attempt)
+            self.assertFalse(attempt["accepted"], attempt)
+            self.assertIn("unrecorded Gradle initialization script", attempt["error"])
+            self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+            self.assertEqual(build.source_inventory(self.output / "jvm/classes", "go"), before)
 
     def test_build_rejects_output_resolving_inside_source_before_side_effects(self):
         with self.copied_entrypoints() as here:

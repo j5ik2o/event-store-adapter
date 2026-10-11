@@ -68,6 +68,41 @@ def verify_jvm_output(output):
             raise RuntimeError(f"JVM output directory must be a real directory inside output: {path}")
 
 
+def verify_sources_root(output):
+    root = output / "sources"
+    if root.is_symlink() or (root.exists() and not root.is_dir()) or not root.resolve().is_relative_to(output.resolve()):
+        raise RuntimeError(f"source cache directory must be a real directory inside output: {root}")
+
+
+def gradle_init_inputs(command):
+    environment = child_environment()
+    executable = shutil.which(str(command), path=environment.get("PATH"))
+    if executable is None:
+        raise RuntimeError(f"Gradle launcher not found: {command}")
+    launcher = Path(executable).resolve()
+    installation = launcher.parent.parent
+    # ラッパーから先の配布物は起動前に確定できない。既存の配布物のbin/gradleを使う。
+    if launcher.parent.name != "bin" or launcher.name not in ("gradle", "gradle.bat") or not list((installation / "lib").glob("gradle-launcher-*.jar")):
+        raise RuntimeError(f"Gradle requires a distribution bin/gradle launcher: {launcher}")
+    home = Path(environment.get("GRADLE_USER_HOME") or Path.home() / ".gradle").expanduser()
+    if not home.is_absolute():
+        home = HERE / home
+    home = home.resolve()
+    files = [home / "init.gradle", home / "init.gradle.kts"]
+    directories = [home / "init.d", installation / "init.d"]
+    for directory in directories:
+        if directory.exists() and not directory.is_dir():
+            raise RuntimeError(f"unsupported Gradle initialization directory: {directory}")
+        files += sorted(path for path in directory.glob("*") if path.name.endswith((".gradle", ".gradle.kts")))
+    # 設定や認証情報の内容は読まず、実適用される初期化スクリプトの存在だけを検査する。
+    for path in files:
+        if path.exists() or path.is_symlink():
+            raise RuntimeError(f"unrecorded Gradle initialization script: {path}")
+    return {"launcher": str(launcher), "gradle_home": str(installation), "gradle_user_home": str(home),
+            "absent_init_files": [str(path) for path in files],
+            "init_directories": [{"path": str(path), "resolved_path": str(path.resolve()), "exists": path.exists()} for path in directories]}
+
+
 def cargo_config_inputs():
     environment = child_environment()
     cwd = HERE.resolve()
@@ -82,8 +117,12 @@ def cargo_config_inputs():
         if path.exists() or path.is_symlink():
             raise RuntimeError(f"unrecorded Cargo configuration: {path}")
     for name in ("RUSTC", "CARGO_BUILD_RUSTC", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER",
-                 "CARGO_BUILD_RUSTC_WRAPPER", "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER"):
+                 "CARGO_BUILD_RUSTC_WRAPPER", "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER", "CARGO_BUILD_TARGET",
+                 "RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "CARGO_BUILD_RUSTFLAGS"):
         if environment.get(name):
+            raise RuntimeError(f"unrecorded Cargo compiler environment: {name}")
+    for name, value in environment.items():
+        if name.startswith("CARGO_TARGET_") and name.endswith("_RUSTFLAGS") and value:
             raise RuntimeError(f"unrecorded Cargo compiler environment: {name}")
     return {"cwd": str(cwd), "cargo_home": str(home), "absent_config_files": [str(path) for path in paths]}
 
@@ -118,6 +157,7 @@ def inventory_digest(inventory):
 def verify_sources(records):
     for record in records:
         path = Path(record["path"])
+        verify_sources_root(path.parent.parent)
         if str(path.resolve()) != record["resolved_path"] or not path.is_symlink():
             raise RuntimeError(f"source alias mismatch: {path}")
         if digest(Path(record["archive_path"])) != record["archive_sha256"]:
@@ -179,6 +219,7 @@ def source_recovery(output, **record):
 
 
 def acquire(output):
+    verify_sources_root(output)
     archive_pins = PINS.get("source_archives", {})
     if set(archive_pins) != set(PINS["sources"]):
         raise RuntimeError("source archive pin mismatch: update source commits and archive digests together")
@@ -345,6 +386,7 @@ def main():
         print(label, "exit", result.returncode, flush=True)
         if result.returncode:
             raise RuntimeError(f"{label} failed: {log}")
+        return row
 
     try:
         # 成功を先に無効にし、部分ビルド用の前回入力も例外保護の中で読む。
@@ -354,6 +396,7 @@ def main():
         commands = json.loads((output / "build-commands.json").read_text()) if (output / "build-commands.json").exists() else []
         previous_inputs = json.loads(previous_text) if previous_text is not None else None
         cargo_inputs = previous_inputs.get("cargo_config_inputs") if previous_inputs else None
+        gradle_inputs = previous_inputs.get("gradle_init_inputs") if previous_inputs else None
         if not __debug__:
             raise RuntimeError("build requires assertions; run without -O or PYTHONOPTIMIZE")
         if args.only:
@@ -373,24 +416,32 @@ def main():
         go = output / "go-driver"
         rust = output / "rust-driver"
         jvm = output / "jvm"
+        go_environment = {"GOWORK": "off", "GOFLAGS": "", "GOENV": "off"}
+        cargo_environment = {name: str(rust / "target") for name in
+                             ("CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR", "CARGO_BUILD_BUILD_DIR")}
         # 生成パッケージの既知入力だけを上書きする。残留入力は消さず、取得・コンパイル前に拒否する。
         if selected("jvm"):
             verify_jvm_output(output)
+            gradle_inputs = gradle_init_inputs(args.gradle)
         if selected("go"):
             verify_generated_package(go, {"main.go", "go.mod", "go.sum", "driver"})
         if selected("rust"):
             verify_generated_package(rust, {"Cargo.toml", "Cargo.lock"}, {"src", "target"})
             verify_generated_package(rust / "src", {"main.rs"})
             cargo_inputs = cargo_config_inputs()
+        verify_sources_root(output)
         sources = acquire(output)
         artifacts = java_artifacts(output, args.java_artifact_directory)
         if selected("jvm"):
             # この入口が生成するクラスとリソースだけを再生成する。キャッシュは残す。
             verify_jvm_output(output)
+            if gradle_init_inputs(args.gradle) != gradle_inputs:
+                raise RuntimeError("Gradle initialization search changed before build")
             for path in (jvm / "classes", jvm / "resources"):
                 if path.exists():
                     shutil.rmtree(path)
-            execute("jvm", [args.gradle, "--no-daemon", "--console", "plain", "--project-cache-dir", output / "gradle-cache",
+            execute("jvm", [gradle_inputs["launcher"], "--no-daemon", "--console", "plain",
+                         "--gradle-user-home", gradle_inputs["gradle_user_home"], "--project-cache-dir", output / "gradle-cache",
                          "-p", HERE / "drivers/jvm", f"-PlibrarySources={sources}", f"-PoutputDir={jvm}",
                          f"-PjavaArtifact={artifacts[0]}", "writeClasspath"])
         if selected("go"):
@@ -402,7 +453,7 @@ def main():
             (go / "go.mod").write_text(original.replace(f"module {module}", "module interop-driver", 1)
                 + f"\nrequire {module} v2.0.0-00010101000000-000000000000\nreplace {module} => {json.dumps(str(sources / 'go'), ensure_ascii=False)}\n")
             shutil.copyfile(sources / "go/go.sum", go / "go.sum")
-            execute("go", ["go", "build", "-mod=mod", "-o", go / "driver", "."], cwd=go, environment={"GOWORK": "off"})
+            execute("go", ["go", "build", "-mod=mod", "-o", go / "driver", "."], cwd=go, environment=go_environment)
         if selected("rust"):
             (rust / "src").mkdir(parents=True, exist_ok=True)
             shutil.copyfile(HERE / "drivers/rust/main.rs", rust / "src/main.rs")
@@ -421,17 +472,21 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
         if selected("rust"):
             if cargo_config_inputs() != cargo_inputs:
                 raise RuntimeError("Cargo configuration search changed before build")
-            execute("rust", ["cargo", "build", "--manifest-path", rust / "Cargo.toml"])
+            execute("rust", ["cargo", "build", "--manifest-path", rust / "Cargo.toml", "--target-dir", rust / "target"],
+                    environment=cargo_environment)
             if cargo_config_inputs() != cargo_inputs:
                 raise RuntimeError("Cargo configuration search changed before metadata")
-            execute("rust-inputs", ["cargo", "metadata", "--format-version", "1", "--manifest-path", rust / "Cargo.toml"])
+            metadata = execute("rust-inputs", ["cargo", "metadata", "--format-version", "1", "--manifest-path", rust / "Cargo.toml"],
+                               environment=cargo_environment)
+            if Path(json.loads(Path(metadata["log"]).read_text())["target_directory"]).resolve() != rust / "target":
+                raise RuntimeError("Cargo target directory does not match the recorded binary")
         if selected("js"):
             execute("js-install", ["pnpm", "install", "--frozen-lockfile"], cwd=sources / "js")
             execute("js", ["pnpm", "--filter", "event-store-adapter-js", "build"], cwd=sources / "js")
             execute("js-inputs", ["node", HERE / "drivers/js/runtime-inputs.cjs", "--record",
                                   sources / "js/packages/library", output / "js-runtime-inputs.json"])
         if selected("go"):
-            execute("go-inputs", ["go", "list", "-m", "-json", "all"], cwd=go, environment={"GOWORK": "off"})
+            execute("go-inputs", ["go", "list", "-m", "-json", "all"], cwd=go, environment=go_environment)
         classpath = (jvm / "classpath.txt").read_text()
         drivers = {language: {"argv": ["java", "-cp", classpath, main], "env": {}}
                    for language, main in [("java", "interop.JavaDriver"), ("kotlin", "interop.KotlinDriverKt"), ("scala", "interop.ScalaDriver")]}
@@ -443,7 +498,9 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
         inputs = {"currentSnapshot": PINS, "sources": json.loads((output / "source-inputs.json").read_text()),
                   "java_sources_match_pinned_source": True, "artifacts": [], "driver_sources": {},
                   "js_runtime_inputs": str(output / "js-runtime-inputs.json"),
-                  "jvm_classpath_inputs": jvm_classpath_inputs(classpath), "cargo_config_inputs": cargo_inputs, "drivers": drivers}
+                  "jvm_classpath_inputs": jvm_classpath_inputs(classpath), "cargo_config_inputs": cargo_inputs,
+                  "gradle_init_inputs": gradle_inputs, "go_build_environment": go_environment,
+                  "cargo_build_environment": cargo_environment, "drivers": drivers}
         files = artifacts + [go / "driver", go / "go.mod", go / "go.sum", rust / "Cargo.lock", rust / "target/debug/interop-driver"]
         files += [Path(inputs["js_runtime_inputs"])]
         files += [Path(row["path"]) for row in json.loads(Path(inputs["js_runtime_inputs"]).read_text())["files"]]
