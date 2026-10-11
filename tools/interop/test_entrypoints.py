@@ -785,6 +785,99 @@ console.log(JSON.stringify({value: local(library).fixtureMarker,
             self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
             self.assertEqual(attempt["downloads"], [])
 
+    def test_dangling_jvm_links_rejected_before_acquisition_and_compilation(self):
+        with self.copied_entrypoints() as here:
+            self.build()
+            calls = (self.output / "tool-calls.jsonl").read_bytes()
+            target = self.root / "other-owner-missing-source"
+            for name in ("linked", ".hidden/linked", "Missing.kt", "Missing.scala"):
+                for only in (None, "jvm", "go"):
+                    with self.subTest(path=name, only=only):
+                        path = here / "drivers/jvm" / name
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        path.symlink_to(target)
+                        try:
+                            listing = next(os.walk(path.parent, followlinks=False))
+                            self.assertIn(path.name, listing[2])
+                            with mock.patch.object(build, "acquire", wraps=build.acquire) as acquire:
+                                attempt = self.attempt(only=only)
+                            self.record(path=name, only=only, attempt=attempt, acquisition_calls=acquire.call_count)
+                            self.assertFalse(attempt["accepted"], attempt)
+                            self.assertIn("JVM source", attempt["error"])
+                            self.assertEqual(acquire.call_count, 0)
+                            self.assertEqual(attempt["downloads"], [])
+                            self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+                            self.assertEqual(attempt["runner"]["resource_calls"], 0)
+                            self.assertTrue(path.is_symlink())
+                            self.assertFalse(target.exists())
+                        finally:
+                            path.unlink()
+
+    def test_dangling_jvm_link_added_during_acquisition_rejected_before_compile_cleanup(self):
+        with self.copied_entrypoints() as here:
+            self.build()
+            classes = build.source_inventory(self.output / "jvm/classes", "go")
+            calls = (self.output / "tool-calls.jsonl").read_bytes()
+            target = self.root / "other-owner-late-missing-source"
+            path = here / "drivers/jvm/.hidden/late-link"
+            acquire = build.acquire
+
+            def acquire_then_add_link(output):
+                sources = acquire(output)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.symlink_to(target)
+                return sources
+
+            with mock.patch.object(build, "acquire", side_effect=acquire_then_add_link) as acquisition:
+                attempt = self.attempt()
+            self.record(attempt=attempt, acquisition_calls=acquisition.call_count)
+            self.assertFalse(attempt["accepted"], attempt)
+            self.assertIn("JVM source", attempt["error"])
+            self.assertEqual(acquisition.call_count, 1)
+            self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+            self.assertEqual(build.source_inventory(self.output / "jvm/classes", "go"), classes)
+            self.assertTrue(path.is_symlink())
+            self.assertFalse(target.exists())
+            self.assertEqual(attempt["runner"]["resource_calls"], 0)
+
+    def test_dangling_jvm_link_blocks_measurement_before_resources(self):
+        with self.copied_entrypoints() as here:
+            self.build()
+            target = self.root / "other-owner-missing-source"
+            for name in ("linked", ".hidden/linked", "Missing.kt", "Missing.scala"):
+                with self.subTest(path=name):
+                    path = here / "drivers/jvm" / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.symlink_to(target)
+                    try:
+                        runner = self.probe_run()
+                        self.record(path=name, runner=runner)
+                        self.assertEqual(runner["resource_calls"], 0)
+                        self.assertEqual(runner["driver_calls"], 0)
+                        self.assertIn("JVM source", runner["error"])
+                        self.assertFalse(target.exists())
+                        self.assertTrue(path.is_symlink())
+                    finally:
+                        path.unlink()
+
+    def test_existing_jvm_file_links_keep_compile_source_fingerprints(self):
+        with self.copied_entrypoints() as here:
+            target = self.root / "other-owner-source-file"
+            target.write_bytes(b"unchanged compile source\n")
+            names = ("Linked.java", ".hidden/Linked.kt", ".hidden/Linked.scala")
+            for name in names:
+                path = here / "drivers/jvm" / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.symlink_to(target)
+            self.build()
+            inputs = json.loads((self.output / "buildinputs.json").read_text())["driver_sources"]
+            self.record(recorded=inputs, file_links=names)
+            for name in names:
+                self.assertEqual(inputs["drivers/jvm/" + name], build.digest(target))
+                self.assertTrue((here / "drivers/jvm" / name).is_symlink())
+            self.assertEqual(target.read_bytes(), b"unchanged compile source\n")
+            self.assertEqual(self.probe_run()["resource_calls"], 1)
+
     def test_selected_rust_target_cache_is_retained_outside_fresh_target(self):
         for only in (None, "rust"):
             with self.subTest(only=only):

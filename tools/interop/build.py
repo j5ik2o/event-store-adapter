@@ -57,11 +57,13 @@ def verify_jvm_sources():
     for path in (root.parent, root):
         if path.is_symlink():
             raise RuntimeError(f"JVM source directory must be a real directory: {path}")
-    # Gradleはdirectory linkを再帰するが、指紋列挙は再帰しない。隠し配下も先に拒否する。
-    for directory, directories, _ in os.walk(root, followlinks=False):
-        for name in directories:
+    # 欠落linkはfiles側に入る。取得後にdirectoryになる可能性もあるため先に拒否する。
+    for directory, directories, files in os.walk(root, followlinks=False):
+        for name in directories + files:
             path = Path(directory) / name
-            if path.is_symlink():
+            if path.is_symlink() and not path.exists():
+                raise RuntimeError(f"JVM source link target is missing: {path}")
+            if path.is_symlink() and path.is_dir():
                 raise RuntimeError(f"JVM source directory must be a real directory: {path}")
 
 
@@ -463,6 +465,7 @@ def main():
             verify_generated_package(rust / "src", {"main.rs"})
         verify_sources_root(output)
         sources = acquire(output)
+        verify_jvm_sources()
         artifacts = java_artifacts(output, args.java_artifact_directory)
         if selected("jvm"):
             # この入口が生成するクラスとリソースだけを再生成する。キャッシュは残す。
