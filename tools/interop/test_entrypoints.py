@@ -68,6 +68,7 @@ output = Path(os.environ["INTEROP_TEST_OUTPUT"])
 tool, args = Path(sys.argv[0]).name, sys.argv[1:]
 with (output / "tool-calls.jsonl").open("a") as stream:
     stream.write(json.dumps({"tool": tool, "args": args, "gowork": os.environ.get("GOWORK"),
+        "cargo_home": os.environ.get("CARGO_HOME"),
         "goflags": os.environ.get("GOFLAGS"), "goenv": os.environ.get("GOENV"),
         "cargo_environment": {name: os.environ.get(name) for name in
             ("CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR", "CARGO_BUILD_BUILD_DIR")}}) + "\\n")
@@ -88,17 +89,26 @@ elif tool == "go" and args[0] == "build":
     if failed:
         raise SystemExit(23)
 elif tool == "cargo" and args[0] == "build":
+    if (output / "fail-cargo-build").exists():
+        raise SystemExit(27)
     write(output / "rust-driver/Cargo.lock", b"rust lock fixture")
     target = Path(os.environ.get("CARGO_TARGET_DIR") or os.environ.get("CARGO_BUILD_TARGET_DIR") or output / "rust-driver/target")
     write(target / "debug/interop-driver", b"rust fixture")
+    write(Path(os.environ["CARGO_HOME"]) / "registry/src/fixture/normal/Cargo.toml", b"normal registry fixture")
 elif tool == "cargo" and args[0] == "metadata":
     if os.environ.get("CARGO_LOG"):
         print("TRACE cargo::core::resolver: fixture diagnostic", file=sys.stderr)
     if (output / "fail-cargo-metadata").exists():
         print("partial metadata")
         raise SystemExit(29)
+    registry = Path(os.environ["CARGO_HOME"]) / "registry/src/fixture/normal/Cargo.toml"
+    if (output / "foreign-cargo-metadata").exists():
+        registry = Path((output / "foreign-cargo-metadata").read_text())
     print(json.dumps({"target_directory": str(Path(os.environ.get("CARGO_TARGET_DIR") or
-        os.environ.get("CARGO_BUILD_TARGET_DIR") or output / "rust-driver/target")), "packages": []}))
+        os.environ.get("CARGO_BUILD_TARGET_DIR") or output / "rust-driver/target")), "packages": [
+            {"name": "interop-driver", "source": None, "manifest_path": str(output / "rust-driver/Cargo.toml")},
+            {"name": "event-store-adapter-rs", "source": None, "manifest_path": str(output / "sources/rs/lib/Cargo.toml")},
+            {"name": "normal", "source": "registry+fixture", "manifest_path": str(registry)}]}))
 elif tool == "pnpm" and "build" in args:
     library = output / "sources/js/packages/library"
     write(library / "dist/index.js", b"module.exports = {fixtureMarker: require('fixture-dependency')};\\n")
@@ -205,6 +215,102 @@ console.log(JSON.stringify({value: local(library).fixtureMarker,
     dependency: local.resolve('fixture-dependency')}));
 """, str(library)], capture_output=True, text=True, check=True)
         return json.loads(result.stdout)
+
+    def test_cargo_each_selected_build_uses_new_home_and_preserves_previous_and_parent(self):
+        inherited = self.root / "inherited-cargo-home"
+        for name in ("registry/src/fixture/normal/Cargo.toml", "registry/cache/fixture/normal.crate", "credentials.toml"):
+            path = inherited / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"retained ordinary parent fixture")
+        before = build.source_inventory(inherited, "go")
+        homes = []
+        with mock.patch.dict(os.environ, {"CARGO_HOME": str(inherited)}):
+            for only in (None, "rust", None):
+                prior = {str(home): build.source_inventory(home, "go") for home in homes}
+                self.build(only=only)
+                inputs = json.loads((self.output / "buildinputs.json").read_text())
+                home = Path(inputs["cargo_build_environment"]["CARGO_HOME"])
+                self.assertEqual(home.parent, self.output.resolve())
+                self.assertTrue(home.is_dir())
+                self.assertFalse(home.is_symlink())
+                self.assertNotIn(home, homes)
+                self.assertNotEqual(home, inherited)
+                self.assertEqual(inputs["cargo_config_inputs"]["cargo_home"], str(home))
+                self.assertEqual(inputs["cargo_metadata_inputs"]["cargo_home"], str(home))
+                self.assertEqual(inputs["cargo_metadata_inputs"]["registry_packages"], 1)
+                self.assertFalse((home / "credentials.toml").exists())
+                self.assertFalse((home / "registry/cache/fixture/normal.crate").exists())
+                self.assertEqual((home / "registry/src/fixture/normal/Cargo.toml").read_bytes(), b"normal registry fixture")
+                self.assertEqual({str(old): build.source_inventory(old, "go") for old in homes}, prior)
+                homes.append(home)
+                self.assertEqual(os.environ["CARGO_HOME"], str(inherited))
+            calls = [json.loads(line) for line in (self.output / "tool-calls.jsonl").read_text().splitlines()]
+            cargo = [row for row in calls if row["tool"] == "cargo"]
+            self.assertEqual([row["cargo_home"] for row in cargo], [str(home) for home in homes for _ in range(2)])
+            self.assertTrue(all(row["cargo_home"] == str(inherited) for row in calls if row["tool"] != "cargo"))
+        self.assertEqual(build.source_inventory(inherited, "go"), before)
+        unselected = build.source_inventory(homes[-1], "go")
+        self.build(only="go")
+        inputs = json.loads((self.output / "buildinputs.json").read_text())
+        self.assertEqual(inputs["cargo_build_environment"]["CARGO_HOME"], str(homes[-1]))
+        self.assertEqual(build.source_inventory(homes[-1], "go"), unselected)
+        self.assertEqual(len(list(self.output.glob(".cargo-home-*"))), 3)
+        self.assertEqual(self.probe_run()["resource_calls"], 1)
+        self.record(homes=[str(home) for home in homes], cargo_calls=cargo, parent_preserved=True)
+
+    def test_cargo_home_link_added_during_acquisition_preserves_external_files(self):
+        self.build()
+        external = self.root / "other-owner-home"
+        external.mkdir()
+        (external / "keep").write_bytes(b"other owner")
+        before = build.source_inventory(external, "go")
+        acquire = build.acquire
+        homes = set(self.output.glob(".cargo-home-*"))
+
+        def acquire_then_link(output):
+            sources = acquire(output)
+            home = (set(output.glob(".cargo-home-*")) - homes).pop()
+            home.rename(output / "retained-new-home")
+            home.symlink_to(external, target_is_directory=True)
+            return sources
+
+        with mock.patch.object(build, "acquire", side_effect=acquire_then_link), \
+                mock.patch.object(build.subprocess, "run", wraps=build.subprocess.run) as child:
+            attempt = self.attempt(only="rust")
+        self.assertFalse(attempt["accepted"], attempt)
+        self.assertIn("Cargo home must be a real directory", attempt["error"])
+        self.assertFalse(any(Path(call.args[0][0]).name == "cargo" for call in child.call_args_list))
+        self.assertEqual(build.source_inventory(external, "go"), before)
+        self.assertEqual(attempt["runner"]["resource_calls"], 0)
+        self.record(attempt=attempt, external_preserved=True)
+
+    def test_cargo_metadata_rejects_registry_source_outside_new_home(self):
+        self.build()
+        external = self.root / "shared-registry/Cargo.toml"
+        external.parent.mkdir()
+        external.write_bytes(b"ordinary shared source")
+        (self.output / "foreign-cargo-metadata").write_text(str(external))
+        attempt = self.attempt(only="rust")
+        self.assertFalse(attempt["accepted"], attempt)
+        self.assertIn("Cargo registry source must be inside the fresh Cargo home", attempt["error"])
+        self.assertEqual(external.read_bytes(), b"ordinary shared source")
+        self.assertEqual(attempt["runner"]["resource_calls"], 0)
+        self.record(attempt=attempt, external_preserved=True)
+
+    def test_cargo_build_failure_retains_new_home_and_invalidates_success(self):
+        self.build()
+        previous = set(self.output.glob(".cargo-home-*"))
+        (self.output / "fail-cargo-build").touch()
+        attempt = self.attempt(only="rust")
+        row = json.loads((self.output / "build-failure.json").read_text())["commands"][-1]
+        self.assertFalse(attempt["accepted"], attempt)
+        self.assertEqual(row["label"], "rust")
+        self.assertEqual(row["exit"], 27)
+        self.assertEqual(attempt["metadata"], {"drivers.json": False, "buildinputs.json": False, "build-failure.json": True})
+        self.assertEqual(len(set(self.output.glob(".cargo-home-*")) - previous), 1)
+        self.assertTrue(all(home.is_dir() for home in previous))
+        self.assertEqual(attempt["runner"]["resource_calls"], 0)
+        self.record(attempt=attempt, command=row)
 
     def test_acquire_retries_interrupted_extraction(self):
         original = tarfile.TarFile.extractall

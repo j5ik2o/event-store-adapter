@@ -188,8 +188,8 @@ def gradle_init_inputs(command):
             "init_directories": [{"path": str(path), "resolved_path": str(path.resolve()), "exists": path.exists()} for path in directories]}
 
 
-def cargo_config_inputs():
-    environment = child_environment()
+def cargo_config_inputs(extra=None):
+    environment = child_environment(extra)
     cwd = HERE.resolve()
     home = Path(environment.get("CARGO_HOME") or Path.home() / ".cargo").expanduser()
     if not home.is_absolute():
@@ -210,6 +210,33 @@ def cargo_config_inputs():
         if name.startswith("CARGO_TARGET_") and name.endswith(("_RUSTFLAGS", "_LINKER")) and value:
             raise RuntimeError(f"unrecorded Cargo compiler environment: {name}")
     return {"cwd": str(cwd), "cargo_home": str(home), "absent_config_files": [str(path) for path in paths]}
+
+
+def verify_cargo_home(home, output):
+    if home.is_symlink() or not home.is_dir() or home.parent != output or home.resolve() != home:
+        raise RuntimeError(f"Cargo home must be a real directory inside output: {home}")
+
+
+def verify_cargo_metadata(metadata, home, rust, sources):
+    if Path(metadata["target_directory"]).resolve() != rust / "target":
+        raise RuntimeError("Cargo target directory does not match the recorded binary")
+    manifests = {package["name"]: Path(package["manifest_path"]).resolve()
+                 for package in metadata["packages"] if package["source"] is None}
+    if (manifests.get("interop-driver") != rust / "Cargo.toml" or
+            manifests.get("event-store-adapter-rs") != (sources / "rs/lib/Cargo.toml").resolve()):
+        raise RuntimeError("Cargo package sources do not match the generated driver and pinned library")
+    registry_packages = 0
+    for package in metadata["packages"]:
+        if not (package["source"] or "").startswith("registry+"):
+            continue
+        manifest = Path(package["manifest_path"])
+        if (manifest.is_symlink() or not manifest.is_file() or
+                not manifest.resolve().is_relative_to(home / "registry/src")):
+            raise RuntimeError("Cargo registry source must be inside the fresh Cargo home")
+        registry_packages += 1
+    return {"cargo_home": str(home), "registry_packages": registry_packages,
+            "driver_manifest": str(manifests["interop-driver"]),
+            "library_manifest": str(manifests["event-store-adapter-rs"])}
 
 
 def source_inventory(root, language):
@@ -493,13 +520,15 @@ def main():
         commands = json.loads((output / "build-commands.json").read_text()) if (output / "build-commands.json").exists() else []
         previous_inputs = json.loads(previous_text) if previous_text is not None else None
         cargo_inputs = previous_inputs.get("cargo_config_inputs") if previous_inputs else None
+        cargo_inherited_inputs = previous_inputs.get("cargo_inherited_config_inputs") if previous_inputs else None
+        cargo_metadata_inputs = previous_inputs.get("cargo_metadata_inputs") if previous_inputs else None
         gradle_inputs = previous_inputs.get("gradle_init_inputs") if previous_inputs else None
         pnpm_inputs = previous_inputs.get("pnpm_hook_settings") if previous_inputs else None
         if not __debug__:
             raise RuntimeError("build requires assertions; run without -O or PYTHONOPTIMIZE")
         verify_driver_sources()
         if selected("rust"):
-            cargo_inputs = cargo_config_inputs()
+            cargo_inherited_inputs = cargo_config_inputs()
         if args.only:
             if not previous_success or previous_inputs is None or previous_inputs["currentSnapshot"] != PINS:
                 raise RuntimeError("--only requires a successful build with the current pins; rebuild all drivers")
@@ -520,6 +549,8 @@ def main():
         go_environment = {"GOWORK": "off", "GOFLAGS": "", "GOENV": "off"}
         cargo_environment = {name: str(rust / "target") for name in
                              ("CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR", "CARGO_BUILD_BUILD_DIR")}
+        if not selected("rust") and previous_inputs:
+            cargo_environment = previous_inputs["cargo_build_environment"]
         # 生成パッケージの既知入力だけを上書きする。残留入力は消さず、取得・コンパイル前に拒否する。
         if selected("jvm"):
             verify_jvm_output(output)
@@ -529,6 +560,11 @@ def main():
         if selected("rust"):
             verify_generated_package(rust, {"Cargo.toml", "Cargo.lock"}, {"src", "target"})
             verify_generated_package(rust / "src", {"main.rs"})
+            # 継承homeや前回の専用homeから依存を写さず、通常の取得で毎回展開する。
+            cargo_home = Path(tempfile.mkdtemp(prefix=".cargo-home-", dir=output))
+            verify_cargo_home(cargo_home, output)
+            cargo_environment["CARGO_HOME"] = str(cargo_home)
+            cargo_inputs = cargo_config_inputs(cargo_environment)
         verify_sources_root(output)
         sources = acquire(output)
         verify_driver_sources()
@@ -573,7 +609,9 @@ serde_json = "1.0"
 tokio = {{ version = "1.37.0", features = ["full"] }}
 ''')
         if selected("rust"):
-            if cargo_config_inputs() != cargo_inputs:
+            verify_cargo_home(cargo_home, output)
+            if (cargo_config_inputs() != cargo_inherited_inputs or
+                    cargo_config_inputs(cargo_environment) != cargo_inputs):
                 raise RuntimeError("Cargo configuration search changed before build")
             # 依存のfresh判定を以前のソースから引き継がない。元の全データは退避して残す。
             verify_generated_package(rust, {"Cargo.toml", "Cargo.lock"}, {"src", "target"})
@@ -582,12 +620,18 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
                 (rust / "target").rename(backup / "target")
             execute("rust", ["cargo", "build", "--manifest-path", rust / "Cargo.toml", "--target-dir", rust / "target"],
                     environment=cargo_environment)
-            if cargo_config_inputs() != cargo_inputs:
+            verify_cargo_home(cargo_home, output)
+            if (cargo_config_inputs() != cargo_inherited_inputs or
+                    cargo_config_inputs(cargo_environment) != cargo_inputs):
                 raise RuntimeError("Cargo configuration search changed before metadata")
             metadata = execute("rust-inputs", ["cargo", "metadata", "--format-version", "1", "--manifest-path", rust / "Cargo.toml"],
                                environment=cargo_environment, capture_stdout=True)
-            if Path(json.loads(Path(metadata["stdout"]).read_text())["target_directory"]).resolve() != rust / "target":
-                raise RuntimeError("Cargo target directory does not match the recorded binary")
+            verify_cargo_home(cargo_home, output)
+            if (cargo_config_inputs() != cargo_inherited_inputs or
+                    cargo_config_inputs(cargo_environment) != cargo_inputs):
+                raise RuntimeError("Cargo configuration search changed after metadata")
+            cargo_metadata_inputs = verify_cargo_metadata(json.loads(Path(metadata["stdout"]).read_text()),
+                                                         cargo_home, rust, sources)
         if selected("js"):
             pnpm_environment = pnpm_hook_environment()
             pnpm_inputs = {"ignore_pnpmfile": True, "arguments": ["--ignore-pnpmfile"], "environment": pnpm_environment}
@@ -620,6 +664,7 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
                   "java_sources_match_pinned_source": True, "artifacts": [], "driver_sources": {},
                   "js_runtime_inputs": str(output / "js-runtime-inputs.json"),
                   "jvm_classpath_inputs": jvm_classpath_inputs(classpath), "cargo_config_inputs": cargo_inputs,
+                  "cargo_inherited_config_inputs": cargo_inherited_inputs, "cargo_metadata_inputs": cargo_metadata_inputs,
                   "gradle_init_inputs": gradle_inputs, "go_build_environment": go_environment,
                   "cargo_build_environment": cargo_environment, "pnpm_hook_settings": pnpm_inputs, "drivers": drivers}
         files = artifacts + [go / "driver", go / "go.mod", go / "go.sum", rust / "Cargo.lock", rust / "target/debug/interop-driver"]
