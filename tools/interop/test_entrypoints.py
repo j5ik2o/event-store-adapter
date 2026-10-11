@@ -2738,5 +2738,127 @@ if tool == "go" and args == ["mod", "verify"]:
         self.record(kept=before, unselected_link=str(path), external=self.file_state(external))
 
 
+    def test_missing_source_recovery_retains_complete_original_cache(self):
+        self.build()
+        source = (self.output / "sources/js").resolve()
+        generated = source / "node_modules/retained"
+        generated.mkdir()
+        contents = b"retained dependency and binary bytes\x00\xff"
+        (generated / "binary").write_bytes(contents)
+        (generated / "internal-link").symlink_to("binary")
+        external = self.root / "external-cache-alias"
+        external.symlink_to(generated / "binary")
+        link = os.readlink(external)
+        (source / "marker.txt").unlink()
+        before = build.source_inventory(source, "go")
+        dependencies = (source / "node_modules/retained/binary").stat()
+        acquire = build.acquire
+        downloads = self.build()
+        records = [json.loads(row) for row in (self.output / "source-recovery.jsonl").read_text().splitlines()]
+        recovered = [row for row in records if row.get("language") == "js" and
+                     row.get("kind") == "directory" and row.get("phase") == "acquired"][-1]
+        backup = Path(recovered["backup_path"]) if "backup_path" in recovered else self.output / "missing-backup"
+        self.record(recovery=recovered, original_inventory=before, backup_exists=backup.is_dir())
+        self.assertEqual(downloads, 0)
+        self.assertTrue(backup.is_dir(), recovered)
+        self.assertEqual(backup.parent.parent, self.output.resolve())
+        self.assertEqual(build.source_inventory(backup, "go"), before)
+        self.assertEqual((backup / "node_modules/retained/binary").read_bytes(), contents)
+        self.assertEqual((backup / "node_modules/retained/internal-link").read_bytes(), contents)
+        self.assertEqual((backup / "node_modules/retained/binary").stat().st_ino, dependencies.st_ino)
+        self.assertEqual(os.readlink(external), link)
+        self.assertEqual((source / "marker.txt").read_text(), self.pins["sources"]["js"])
+        with mock.patch.object(build, "PINS", self.pins):
+            acquire(self.output)
+        self.assertEqual(build.source_inventory(backup, "go"), before)
+        self.assertEqual(self.probe_run()["resource_calls"], 1)
+
+    def test_missing_source_candidate_placement_failure_restores_original_cache(self):
+        self.build()
+        source = (self.output / "sources/js").resolve()
+        (source / "marker.txt").unlink()
+        before = build.source_inventory(source, "go")
+        inode = source.stat().st_ino
+        alias = os.readlink(self.output / "sources/js")
+        previous_rows = len((self.output / "source-recovery.jsonl").read_text().splitlines())
+        rename = Path.rename
+
+        def fail_candidate(path, target):
+            if path.name == source.name and path.parent.name.startswith(".js-extract-") and Path(target) == source:
+                raise OSError("fixture candidate placement failure")
+            return rename(path, target)
+
+        with mock.patch.object(Path, "rename", fail_candidate):
+            attempt = self.attempt()
+        rows = [json.loads(row) for row in (self.output / "source-recovery.jsonl").read_text().splitlines()[previous_rows:]]
+        self.record(attempt=attempt, recovery=rows, original_inventory=before, inode_before=inode,
+                    inode_after=source.stat().st_ino)
+        self.assertFalse(attempt["accepted"], attempt)
+        self.assertIn("fixture candidate placement failure", attempt["error"])
+        self.assertEqual(build.source_inventory(source, "go"), before)
+        self.assertEqual(source.stat().st_ino, inode)
+        self.assertEqual(os.readlink(self.output / "sources/js"), alias)
+        self.assertFalse(any(row.get("language") == "js" and row.get("phase") == "acquired" for row in rows))
+        self.assertEqual(attempt["metadata"], {"drivers.json": False, "buildinputs.json": False,
+                                               "build-failure.json": True})
+        self.assertEqual(attempt["runner"]["resource_calls"], 0)
+
+    def test_unselected_missing_js_source_preserves_cache_before_rejection(self):
+        self.build()
+        source = (self.output / "sources/js").resolve()
+        (source / "marker.txt").unlink()
+        before = build.source_inventory(source, "go")
+        calls = (self.output / "tool-calls.jsonl").read_bytes()
+        alias = os.readlink(self.output / "sources/js")
+        attempt = self.attempt(only="go")
+        self.record(attempt=attempt, original_inventory=before)
+        self.assertFalse(attempt["accepted"], attempt)
+        self.assertIn("source inventory mismatch", attempt["error"])
+        self.assertEqual(build.source_inventory(source, "go"), before)
+        self.assertEqual(os.readlink(self.output / "sources/js"), alias)
+        self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+        self.assertEqual(attempt["runner"]["resource_calls"], 0)
+
+    def test_dynamic_diagnostic_hardlinks_reject_before_child_and_preserve_inode(self):
+        for label, suffix, selected in (("jvm", ".log", "jvm"), ("rust-inputs", ".log", "rust"),
+                                         ("rust-inputs", ".stdout", "rust")):
+            for only in (None, selected):
+                with self.subTest(label=label, suffix=suffix, only=only):
+                    self.build()
+                    commands = json.loads((self.output / "build-commands.json").read_text())
+                    attempt_number = 1 + sum(row["label"] == label for row in commands)
+                    path = self.output / f"build-{label}-{attempt_number}{suffix}"
+                    external = self.root / "external-hardlink-sample"
+                    contents = b"original shared diagnostic inode bytes\x00\xff"
+                    external.write_bytes(contents)
+                    os.link(external, path)
+                    before = external.stat()
+                    calls = len((self.output / "tool-calls.jsonl").read_text().splitlines())
+                    try:
+                        attempt = self.attempt(only=only)
+                        new_calls = [json.loads(row) for row in
+                                     (self.output / "tool-calls.jsonl").read_text().splitlines()[calls:]]
+                        self.record(label=label, suffix=suffix, only=only, attempt=attempt, new_calls=new_calls,
+                                    external=self.file_state(external), diagnostic=self.file_state(path),
+                                    inode_before={"device": before.st_dev, "inode": before.st_ino, "links": before.st_nlink},
+                                    inode_after={str(name): {"device": name.stat().st_dev, "inode": name.stat().st_ino,
+                                                 "links": name.stat().st_nlink} for name in (external, path)})
+                        self.assertFalse(attempt["accepted"], attempt)
+                        self.assertIn("build diagnostic must not have multiple hard links", attempt["error"])
+                        self.assertFalse(any(row["tool"] == "gradle" if label == "jvm" else
+                                             row["tool"] == "cargo" and row["args"][0] == "metadata"
+                                             for row in new_calls))
+                        for name in (external, path):
+                            self.assertEqual(name.read_bytes(), contents)
+                            self.assertEqual((name.stat().st_dev, name.stat().st_ino, name.stat().st_nlink),
+                                             (before.st_dev, before.st_ino, 2))
+                        self.assertEqual(json.loads((self.output / "build-commands.json").read_text())[:len(commands)], commands)
+                        self.assertEqual(attempt["metadata"], {"drivers.json": False, "buildinputs.json": False,
+                                                               "build-failure.json": True})
+                        self.assertEqual(attempt["runner"]["resource_calls"], 0)
+                    finally:
+                        path.unlink()
+
+
 if __name__ == "__main__":
     unittest.main()

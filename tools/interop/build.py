@@ -408,16 +408,19 @@ def acquire(output):
                 actual = source_inventory(candidate, language)
                 if actual != expected:
                     raise RuntimeError(f"source archive mismatch after extraction: {language}")
-                backup = temporary / "incomplete-cache"
+                backup = None
                 if destination.exists():
+                    # 元の依存・生成物・リンクも含めて保持し、退避世代は自動削除しない。
+                    backup = Path(tempfile.mkdtemp(prefix=f".source-cache-backup-{language}-", dir=output)) / destination.name
                     destination.rename(backup)
                 try:
                     candidate.rename(destination)
                 except Exception:
-                    if backup.exists():
+                    if backup is not None:
                         backup.rename(destination)
                     raise
-            source_recovery(output, language=language, path=str(destination), kind="directory", phase="acquired", missing=missing)
+            source_recovery(output, language=language, path=str(destination), kind="directory", phase="acquired", missing=missing,
+                            **({"backup_path": str(backup)} if backup is not None else {}))
         alias = sources / language
         if alias.is_symlink():
             alias.unlink()
@@ -494,6 +497,8 @@ def main():
         for path in [log] + ([stdout] if capture_stdout else []):
             if path.is_symlink() or (path.exists() and not path.is_file()) or not path.resolve().is_relative_to(output):
                 raise RuntimeError(f"build diagnostic must be a regular file inside output: {path}")
+            if path.exists() and path.stat().st_nlink > 1:
+                raise RuntimeError(f"build diagnostic must not have multiple hard links: {path}")
         row = {"label": label, "argv": [str(v) for v in command], "cwd": str(cwd or HERE), "log": str(log)}
         commands.append(row)
         save(output / "build-commands.json", commands)
