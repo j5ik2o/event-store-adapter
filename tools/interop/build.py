@@ -37,6 +37,7 @@ def save(path, value):
 
 
 def source_fingerprints():
+    verify_jvm_sources()
     fingerprints = {}
     for path in sorted(HERE.rglob("*")):
         if not path.is_file():
@@ -49,6 +50,19 @@ def source_fingerprints():
         if jvm_source or ("__pycache__" not in relative.parts and not any(part.startswith(".") for part in relative.parts)):
             fingerprints[str(relative)] = digest(path)
     return fingerprints
+
+
+def verify_jvm_sources():
+    root = HERE / "drivers/jvm"
+    for path in (root.parent, root):
+        if path.is_symlink():
+            raise RuntimeError(f"JVM source directory must be a real directory: {path}")
+    # Gradleはdirectory linkを再帰するが、指紋列挙は再帰しない。隠し配下も先に拒否する。
+    for directory, directories, _ in os.walk(root, followlinks=False):
+        for name in directories:
+            path = Path(directory) / name
+            if path.is_symlink():
+                raise RuntimeError(f"JVM source directory must be a real directory: {path}")
 
 
 def external_output(path):
@@ -415,6 +429,7 @@ def main():
         gradle_inputs = previous_inputs.get("gradle_init_inputs") if previous_inputs else None
         if not __debug__:
             raise RuntimeError("build requires assertions; run without -O or PYTHONOPTIMIZE")
+        verify_jvm_sources()
         if selected("rust"):
             cargo_inputs = cargo_config_inputs()
         if args.only:
@@ -489,6 +504,11 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
         if selected("rust"):
             if cargo_config_inputs() != cargo_inputs:
                 raise RuntimeError("Cargo configuration search changed before build")
+            # 依存のfresh判定を以前のソースから引き継がない。元の全データは退避して残す。
+            verify_generated_package(rust, {"Cargo.toml", "Cargo.lock"}, {"src", "target"})
+            if (rust / "target").exists():
+                backup = Path(tempfile.mkdtemp(prefix=".rust-target-backup-", dir=output))
+                (rust / "target").rename(backup / "target")
             execute("rust", ["cargo", "build", "--manifest-path", rust / "Cargo.toml", "--target-dir", rust / "target"],
                     environment=cargo_environment)
             if cargo_config_inputs() != cargo_inputs:

@@ -733,6 +733,99 @@ console.log(JSON.stringify({value: local(library).fixtureMarker,
         self.assertEqual(attempt["metadata"], {"drivers.json": False, "buildinputs.json": False, "build-failure.json": True})
         self.assertEqual(attempt["runner"]["resource_calls"], 0)
 
+    def test_jvm_directory_links_rejected_before_acquisition_and_compilation(self):
+        for name in ("drivers", "drivers/jvm", "drivers/jvm/linked", "drivers/jvm/.hidden/linked"):
+            for only in (None, "jvm"):
+                with self.subTest(path=name, only=only), self.copied_entrypoints() as here:
+                    self.build()
+                    path = here / name
+                    foreign = self.root / "other-owner-jvm"
+                    foreign.mkdir(exist_ok=True)
+                    (foreign / "Linked.kt").write_text("class LinkedKotlin\n")
+                    (foreign / "Linked.scala").write_text("class LinkedScala\n")
+                    previous = build.source_inventory(foreign, "go")
+                    saved = self.root / "saved-jvm-source"
+                    if path.exists():
+                        path.rename(saved)
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.symlink_to(foreign, target_is_directory=True)
+                    calls = (self.output / "tool-calls.jsonl").read_bytes()
+                    try:
+                        with mock.patch.object(build, "acquire", wraps=build.acquire) as acquire:
+                            attempt = self.attempt(only=only)
+                        self.record(path=name, only=only, attempt=attempt, acquisition_calls=acquire.call_count)
+                        self.assertFalse(attempt["accepted"], attempt)
+                        self.assertIn("JVM source directory", attempt["error"])
+                        self.assertEqual(acquire.call_count, 0)
+                        self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+                        self.assertEqual(build.source_inventory(foreign, "go"), previous)
+                        self.assertTrue(path.is_symlink())
+                        self.assertEqual(attempt["runner"]["resource_calls"], 0)
+                    finally:
+                        path.unlink()
+                        if saved.exists():
+                            saved.rename(path)
+                        shutil.rmtree(here)
+
+    def test_jvm_directory_links_block_measurement_and_unselected_partial_build(self):
+        with self.copied_entrypoints() as here:
+            self.build()
+            foreign = self.root / "linked-jvm-source"
+            foreign.mkdir()
+            (foreign / "Linked.kt").write_text("class LinkedKotlin\n")
+            path = here / "drivers/jvm/.linked"
+            path.symlink_to(foreign, target_is_directory=True)
+            calls = (self.output / "tool-calls.jsonl").read_bytes()
+            runner = self.probe_run()
+            attempt = self.attempt(only="go")
+            self.record(runner=runner, partial=attempt)
+            self.assertEqual(runner["resource_calls"], 0)
+            self.assertFalse(attempt["accepted"], attempt)
+            self.assertIn("JVM source directory", attempt["error"])
+            self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+            self.assertEqual(attempt["downloads"], [])
+
+    def test_selected_rust_target_cache_is_retained_outside_fresh_target(self):
+        for only in (None, "rust"):
+            with self.subTest(only=only):
+                self.build()
+                target = self.output / "rust-driver/target"
+                marker = target / "debug/.fingerprint/poisoned-dependency"
+                marker.parent.mkdir(parents=True, exist_ok=True)
+                marker.write_bytes(b"unrecorded dependency artifact and freshness")
+                foreign = self.root / "other-owner-cache"
+                foreign.mkdir(exist_ok=True)
+                (foreign / "keep").write_bytes(b"other owner cache")
+                (target / "other-owner-link").symlink_to(foreign, target_is_directory=True)
+                previous = build.source_inventory(target, "go")
+                lock = (self.output / "rust-driver/Cargo.lock").read_bytes()
+                backups = set(self.output.glob(".rust-target-backup-*"))
+                self.build(only=only)
+                created = set(self.output.glob(".rust-target-backup-*")) - backups
+                self.record(only=only, backups=[str(p) for p in created], old_inventory=previous,
+                            marker_remains_in_selected_target=marker.exists())
+                self.assertEqual(len(created), 1)
+                backup = created.pop() / "target"
+                self.assertEqual(build.source_inventory(backup, "go"), previous)
+                self.assertFalse(marker.exists())
+                self.assertFalse((target / "other-owner-link").exists())
+                self.assertEqual((foreign / "keep").read_bytes(), b"other owner cache")
+                self.assertEqual((self.output / "rust-driver/Cargo.lock").read_bytes(), lock)
+                self.assertEqual(self.probe_run()["resource_calls"], 1)
+
+    def test_unselected_rust_target_and_lock_are_unchanged(self):
+        self.build()
+        target = self.output / "rust-driver/target"
+        (target / "keep").write_bytes(b"unselected Rust cache")
+        previous = build.source_inventory(target, "go")
+        lock = (self.output / "rust-driver/Cargo.lock").read_bytes()
+        backups = set(self.output.glob(".rust-target-backup-*"))
+        self.build(only="jvm")
+        self.record(previous=previous, current=build.source_inventory(target, "go"))
+        self.assertEqual(build.source_inventory(target, "go"), previous)
+        self.assertEqual((self.output / "rust-driver/Cargo.lock").read_bytes(), lock)
+        self.assertEqual(set(self.output.glob(".rust-target-backup-*")), backups)
+
     def test_hidden_jvm_fingerprints_cover_compile_inputs_without_unrelated_caches(self):
         with self.copied_entrypoints() as here:
             compiled = (".Injected.java", ".Injected.kt", ".Injected.scala", ".parent/Directory.kt",
