@@ -16,6 +16,8 @@ import zipfile
 
 HERE = Path(__file__).resolve().parent
 PINS = json.loads((HERE / "snapshots.json").read_text())
+JS_DEPENDENCY_DIRECTORIES = ("node_modules", "packages/library/node_modules", "packages/examples/node_modules",
+                             "packages/tests/node_modules")
 
 
 def child_environment(extra=None):
@@ -33,11 +35,27 @@ def digest(path):
 
 
 def save(path, value):
-    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
+    # 失敗記録の保存先がlinkでも参照先へ書かず、同じ親で置換する。
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, delete=False) as stream:
+        temporary = Path(stream.name)
+        try:
+            stream.write(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
+            stream.close()
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+
+def verify_metadata_output(output):
+    for name in ("build-commands.json", "buildinputs.json", "drivers.json", "build-failure.json",
+                 "source-inputs.json", "js-runtime-inputs.json", "source-recovery.jsonl"):
+        path = output / name
+        if path.is_symlink() or (path.exists() and not path.is_file()):
+            raise RuntimeError(f"build metadata must be a regular file: {path}")
 
 
 def source_fingerprints():
-    verify_jvm_sources()
+    verify_driver_sources()
     fingerprints = {}
     for path in sorted(HERE.rglob("*")):
         if not path.is_file():
@@ -65,6 +83,18 @@ def verify_jvm_sources():
                 raise RuntimeError(f"JVM source link target is missing: {path}")
             if path.is_symlink() and path.is_dir():
                 raise RuntimeError(f"JVM source directory must be a real directory: {path}")
+
+
+def verify_driver_sources():
+    verify_jvm_sources()
+    # rglobが降りないdirectory linkを、全driverで取得・起動より前に拒否する。
+    for directory, directories, files in os.walk(HERE / "drivers", followlinks=False):
+        for name in directories + files:
+            path = Path(directory) / name
+            if path.is_symlink() and not path.exists():
+                raise RuntimeError(f"driver source link target is missing: {path}")
+            if path.is_symlink() and path.is_dir():
+                raise RuntimeError(f"driver source directory must be a real directory: {path}")
 
 
 def external_output(path):
@@ -123,8 +153,17 @@ def gradle_init_inputs(command):
     for path in files:
         if path.exists() or path.is_symlink():
             raise RuntimeError(f"unrecorded Gradle initialization script: {path}")
+    properties = []
+    for path in dict.fromkeys((home / "gradle.properties", HERE / "drivers/jvm/gradle.properties",
+                               installation / "gradle.properties")):
+        # 実適用先だけを調べる。空の通常fileは記録し、設定・秘密の内容は読まない。
+        exists = path.exists()
+        if path.is_symlink() or exists and (not path.is_file() or path.stat().st_size):
+            raise RuntimeError(f"unrecorded Gradle properties: {path}")
+        properties.append({"path": str(path), "exists": exists, "bytes": 0 if exists else None})
     return {"launcher": str(launcher), "gradle_home": str(installation), "gradle_user_home": str(home),
             "absent_init_files": [str(path) for path in files],
+            "properties_files": properties,
             "init_directories": [{"path": str(path), "resolved_path": str(path.resolve()), "exists": path.exists()} for path in directories]}
 
 
@@ -154,8 +193,7 @@ def cargo_config_inputs():
 
 def source_inventory(root, language):
     # この入口の pnpm/tsc が作る場所だけを除く。他言語の出力はソース外に置く。
-    generated = {"node_modules", "packages/library/node_modules", "packages/examples/node_modules",
-                 "packages/tests/node_modules", "packages/library/dist"} if language == "js" else set()
+    generated = set(JS_DEPENDENCY_DIRECTORIES) | {"packages/library/dist"} if language == "js" else set()
     inventory = {}
     for directory, directories, files in os.walk(root, followlinks=False):
         for name in directories + files:
@@ -423,6 +461,7 @@ def main():
         return row
 
     try:
+        verify_metadata_output(output)
         # 成功を先に無効にし、部分ビルド用の前回入力も例外保護の中で読む。
         (output / "drivers.json").unlink(missing_ok=True)
         previous_text = (output / "buildinputs.json").read_text() if (output / "buildinputs.json").exists() else None
@@ -433,7 +472,7 @@ def main():
         gradle_inputs = previous_inputs.get("gradle_init_inputs") if previous_inputs else None
         if not __debug__:
             raise RuntimeError("build requires assertions; run without -O or PYTHONOPTIMIZE")
-        verify_jvm_sources()
+        verify_driver_sources()
         if selected("rust"):
             cargo_inputs = cargo_config_inputs()
         if args.only:
@@ -467,7 +506,7 @@ def main():
             verify_generated_package(rust / "src", {"main.rs"})
         verify_sources_root(output)
         sources = acquire(output)
-        verify_jvm_sources()
+        verify_driver_sources()
         artifacts = java_artifacts(output, args.java_artifact_directory)
         if selected("jvm"):
             # この入口が生成するクラスとリソースだけを再生成する。キャッシュは残す。
@@ -523,6 +562,15 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
             if Path(json.loads(Path(metadata["stdout"]).read_text())["target_directory"]).resolve() != rust / "target":
                 raise RuntimeError("Cargo target directory does not match the recorded binary")
         if selected("js"):
+            source_inventory(sources / "js", "js")
+            # 温かいinstallが残す依存改変を採用しない。既知rootの全byteとaliasは退避して残す。
+            roots = [name for name in JS_DEPENDENCY_DIRECTORIES if (sources / "js" / name).exists()]
+            if roots:
+                backup = Path(tempfile.mkdtemp(prefix=".js-dependencies-backup-", dir=output))
+                for name in roots:
+                    destination = backup / name
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    (sources / "js" / name).rename(destination)
             execute("js-install", ["pnpm", "install", "--frozen-lockfile"], cwd=sources / "js")
             execute("js", ["pnpm", "--filter", "event-store-adapter-js", "build"], cwd=sources / "js")
             execute("js-inputs", ["node", HERE / "drivers/js/runtime-inputs.cjs", "--record",

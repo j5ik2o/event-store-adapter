@@ -1950,5 +1950,251 @@ raise SystemExit(module.main())
                     self.assertIn("requires assertions", result.stderr)
 
 
+    def test_non_jvm_directory_links_block_build_and_measurement_before_resources(self):
+        for language in ("js", "go", "rust"):
+            for suffix in ("", "/nested", "/.hidden/nested"):
+                with self.subTest(language=language, suffix=suffix), self.copied_entrypoints() as here:
+                    self.build()
+                    path = here / "drivers" / (language + suffix)
+                    foreign = self.root / "other-owner-driver"
+                    foreign.mkdir(exist_ok=True)
+                    (foreign / "marker.txt").write_bytes(b"other owner input\n")
+                    before = build.source_inventory(foreign, "go")
+                    if path.exists():
+                        path.rename(self.root / "saved-driver")
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.symlink_to(foreign, target_is_directory=True)
+                    calls = (self.output / "tool-calls.jsonl").read_bytes()
+                    runner = self.probe_run()
+                    with mock.patch.object(build, "acquire", wraps=build.acquire) as acquire:
+                        attempt = self.attempt()
+                    self.record(language=language, suffix=suffix, runner=runner, attempt=attempt,
+                                acquisition_calls=acquire.call_count)
+                    self.assertFalse(attempt["accepted"], attempt)
+                    self.assertIn("driver source directory", attempt["error"])
+                    self.assertEqual(acquire.call_count, 0)
+                    self.assertEqual(runner["resource_calls"], 0)
+                    self.assertEqual(runner["driver_calls"], 0)
+                    self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+                    self.assertEqual(build.source_inventory(foreign, "go"), before)
+                    self.assertTrue(path.is_symlink())
+                    path.unlink()
+                    shutil.rmtree(here)
+                    shutil.rmtree(self.root / "saved-driver", ignore_errors=True)
+
+    def test_non_jvm_directory_link_added_during_acquisition_blocks_children(self):
+        with self.copied_entrypoints() as here:
+            self.build()
+            calls = (self.output / "tool-calls.jsonl").read_bytes()
+            classes = build.source_inventory(self.output / "jvm/classes", "go")
+            foreign = self.root / "late-other-owner-driver"
+            foreign.mkdir()
+            (foreign / "marker.txt").write_bytes(b"preserve late driver\n")
+            before = build.source_inventory(foreign, "go")
+            acquire = build.acquire
+
+            def acquire_then_link(output):
+                sources = acquire(output)
+                (here / "drivers/js/.late").symlink_to(foreign, target_is_directory=True)
+                return sources
+
+            with mock.patch.object(build, "acquire", side_effect=acquire_then_link):
+                attempt = self.attempt()
+            self.record(attempt=attempt)
+            self.assertFalse(attempt["accepted"], attempt)
+            self.assertIn("driver source directory", attempt["error"])
+            self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+            self.assertEqual(build.source_inventory(self.output / "jvm/classes", "go"), classes)
+            self.assertEqual(build.source_inventory(foreign, "go"), before)
+            self.assertEqual(attempt["runner"]["resource_calls"], 0)
+
+    def test_existing_non_jvm_file_links_are_fingerprinted_and_remain_usable(self):
+        with self.copied_entrypoints() as here:
+            names = ("drivers/js/driver.mjs", "drivers/js/runtime-inputs.cjs", "drivers/go/main.go", "drivers/rust/main.rs")
+            for index, name in enumerate(names):
+                path = here / name
+                target = self.root / f"other-owner-file-{index}"
+                path.rename(target)
+                path.symlink_to(target)
+            self.build()
+            inputs = json.loads((self.output / "buildinputs.json").read_text())["driver_sources"]
+            for name in names:
+                self.assertEqual(inputs[name], build.digest(here / name))
+                self.assertTrue((here / name).is_symlink())
+            self.assertEqual(self.probe_run()["resource_calls"], 1)
+            self.record(file_links=names, recorded=inputs)
+
+    def test_metadata_links_preserve_external_bytes_and_record_failure_before_acquisition(self):
+        names = ("build-commands.json", "buildinputs.json", "drivers.json", "build-failure.json",
+                 "source-inputs.json", "js-runtime-inputs.json", "source-recovery.jsonl")
+        for name in names:
+            for only in (None, "go"):
+                with self.subTest(name=name, only=only):
+                    self.build()
+                    path = self.output / name
+                    external = self.root / "other-owner-metadata.json"
+                    contents = path.read_bytes() if path.exists() else b"[]\n"
+                    external.write_bytes(contents)
+                    path.unlink(missing_ok=True)
+                    path.symlink_to(external)
+                    calls = (self.output / "tool-calls.jsonl").read_bytes()
+                    with mock.patch.object(build, "acquire", wraps=build.acquire) as acquire:
+                        attempt = self.attempt(only=only)
+                    self.record(name=name, only=only, attempt=attempt, external=self.file_state(external))
+                    self.assertFalse(attempt["accepted"], attempt)
+                    self.assertIn("build metadata must be a regular file", attempt["error"])
+                    self.assertEqual(acquire.call_count, 0)
+                    self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+                    self.assertEqual(external.read_bytes(), contents)
+                    self.assertEqual(attempt["metadata"], {"drivers.json": False, "buildinputs.json": False,
+                                                           "build-failure.json": True})
+                    self.assertFalse((self.output / "build-failure.json").is_symlink())
+                    self.assertEqual(attempt["runner"]["resource_calls"], 0)
+                    path.unlink(missing_ok=True)
+                    self.build()
+                    self.assertEqual(self.probe_run()["resource_calls"], 1)
+
+    def test_js_rebuild_regenerates_dependencies_and_retains_all_previous_bytes_and_aliases(self):
+        self.build()
+        source = self.output / "sources/js"
+        dependency = source / "node_modules/fixture-dependency/index.js"
+        replacement = dependency.with_name(".replacement")
+        replacement.write_bytes(b"module.exports = 'modified cached dependency';\n")
+        replacement.replace(dependency)
+        foreign = self.root / "other-owner-module"
+        foreign.mkdir()
+        (foreign / "index.js").write_bytes(b"module.exports = 'other owner';\n")
+        foreign_before = build.source_inventory(foreign, "go")
+        previous = {}
+        for name in build.JS_DEPENDENCY_DIRECTORIES:
+            root = source / name
+            root.mkdir(parents=True, exist_ok=True)
+            (root / ".saved-marker").write_bytes(name.encode())
+            (root / "other-owner-alias").symlink_to(foreign, target_is_directory=True)
+            previous[name] = build.source_inventory(root, "go")
+        backups = set(self.output.glob(".js-dependencies-backup-*"))
+        self.build()
+        created = set(self.output.glob(".js-dependencies-backup-*")) - backups
+        self.assertEqual(len(created), 1)
+        backup = created.pop()
+        for name in build.JS_DEPENDENCY_DIRECTORIES:
+            self.assertEqual(build.source_inventory(backup / name, "go"), previous[name])
+            self.assertFalse((source / name / ".saved-marker").exists())
+        self.assertEqual(build.source_inventory(foreign, "go"), foreign_before)
+        self.assertEqual(self.js_value()["value"], "original dependency")
+        self.assertEqual(self.probe_run()["resource_calls"], 1)
+        self.record(backup=str(backup), previous=previous, foreign_inventory=foreign_before)
+
+    def test_unselected_js_dependency_cache_and_aliases_are_unchanged(self):
+        self.build()
+        source = self.output / "sources/js"
+        for name in build.JS_DEPENDENCY_DIRECTORIES:
+            root = source / name
+            root.mkdir(parents=True, exist_ok=True)
+            (root / ".keep-marker").write_bytes(name.encode())
+        before = {name: build.source_inventory(source / name, "go") for name in build.JS_DEPENDENCY_DIRECTORIES}
+        backups = set(self.output.glob(".js-dependencies-backup-*"))
+        self.build(only="go")
+        after = {name: build.source_inventory(source / name, "go") for name in build.JS_DEPENDENCY_DIRECTORIES}
+        self.assertEqual(after, before)
+        self.assertEqual(set(self.output.glob(".js-dependencies-backup-*")), backups)
+        self.record(before=before, after=after)
+
+    def test_gradle_rejects_only_applicable_nonempty_properties_before_acquisition(self):
+        with self.copied_entrypoints() as here:
+            home = self.root / "selected-gradle-home"
+            properties = [home / "gradle.properties", here / "drivers/jvm/gradle.properties",
+                          self.root / "gradle.properties"]
+            with mock.patch.dict(os.environ, {"GRADLE_USER_HOME": str(home)}):
+                for path in properties:
+                    for only in (None, "jvm"):
+                        with self.subTest(path=str(path), only=only):
+                            self.build()
+                            path.parent.mkdir(parents=True, exist_ok=True)
+                            contents = b"org.gradle.jvmargs=-javaagent:private-unrecorded-agent.jar\n"
+                            path.write_bytes(contents)
+                            calls = (self.output / "tool-calls.jsonl").read_bytes()
+                            classes = build.source_inventory(self.output / "jvm/classes", "go")
+                            try:
+                                with mock.patch.object(build, "acquire", wraps=build.acquire) as acquire:
+                                    attempt = self.attempt(only=only)
+                                self.record(path=str(path), only=only, attempt=attempt)
+                                self.assertFalse(attempt["accepted"], attempt)
+                                self.assertIn("unrecorded Gradle properties", attempt["error"])
+                                self.assertNotIn("private-unrecorded-agent", attempt["error"])
+                                self.assertEqual(acquire.call_count, 0)
+                                self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+                                self.assertEqual(build.source_inventory(self.output / "jvm/classes", "go"), classes)
+                                self.assertEqual(path.read_bytes(), contents)
+                            finally:
+                                path.unlink()
+
+    def test_gradle_rechecks_late_properties_before_cleanup_and_execution(self):
+        home = self.root / "selected-gradle-home"
+        with mock.patch.dict(os.environ, {"GRADLE_USER_HOME": str(home)}):
+            self.build()
+            calls = (self.output / "tool-calls.jsonl").read_bytes()
+            classes = build.source_inventory(self.output / "jvm/classes", "go")
+            acquire = build.acquire
+            path = home / "gradle.properties"
+
+            def acquire_then_add_properties(output):
+                sources = acquire(output)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"org.gradle.jvmargs=-javaagent:late-agent.jar\n")
+                return sources
+
+            with mock.patch.object(build, "acquire", side_effect=acquire_then_add_properties):
+                attempt = self.attempt()
+            self.record(attempt=attempt)
+            self.assertFalse(attempt["accepted"], attempt)
+            self.assertIn("unrecorded Gradle properties", attempt["error"])
+            self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+            self.assertEqual(build.source_inventory(self.output / "jvm/classes", "go"), classes)
+
+    def test_empty_gradle_properties_are_recorded_without_rejecting_unapplied_files(self):
+        with self.copied_entrypoints() as here:
+            home = self.root / "selected-gradle-home"
+            applied = [home / "gradle.properties", here / "drivers/jvm/gradle.properties", self.root / "gradle.properties"]
+            for path in applied:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.touch()
+            unrelated = here / "gradle.properties"
+            unrelated.write_bytes(b"org.gradle.jvmargs=-javaagent:not-applied.jar\n")
+            with mock.patch.dict(os.environ, {"GRADLE_USER_HOME": str(home)}):
+                self.build()
+                inputs = json.loads((self.output / "buildinputs.json").read_text())["gradle_init_inputs"]
+                observed = [dict(row, path=str(Path(row["path"]).resolve())) for row in inputs["properties_files"]]
+                self.assertEqual(observed, [{"path": str(path.resolve()), "exists": True, "bytes": 0} for path in applied])
+                self.assertEqual(self.probe_run()["resource_calls"], 1)
+                self.record(recorded=inputs, unapplied=self.file_state(unrelated))
+            for path in applied:
+                self.assertEqual(path.read_bytes(), b"")
+            self.assertIn(b"not-applied", unrelated.read_bytes())
+
+    def test_unselected_gradle_properties_and_external_link_targets_are_preserved(self):
+        home = self.root / "selected-gradle-home"
+        with mock.patch.dict(os.environ, {"GRADLE_USER_HOME": str(home)}):
+            self.build()
+            home.mkdir()
+            external = self.root / "other-owner-gradle.properties"
+            contents = b"org.gradle.jvmargs=-javaagent:other-owner.jar\n"
+            external.write_bytes(contents)
+            path = home / "gradle.properties"
+            path.symlink_to(external)
+            self.build(only="go")
+            self.assertEqual(external.read_bytes(), contents)
+            calls = (self.output / "tool-calls.jsonl").read_bytes()
+            with mock.patch.object(build, "acquire", wraps=build.acquire) as acquire:
+                attempt = self.attempt(only="jvm")
+            self.assertFalse(attempt["accepted"], attempt)
+            self.assertIn("unrecorded Gradle properties", attempt["error"])
+            self.assertEqual(acquire.call_count, 0)
+            self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+            self.assertEqual(external.read_bytes(), contents)
+            self.assertTrue(path.is_symlink())
+            self.record(attempt=attempt, external=self.file_state(external))
+
+
 if __name__ == "__main__":
     unittest.main()
