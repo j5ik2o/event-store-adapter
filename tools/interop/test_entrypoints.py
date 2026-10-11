@@ -860,6 +860,81 @@ console.log(JSON.stringify({value: local(library).fixtureMarker,
                     finally:
                         path.unlink()
 
+    def test_gradle_cache_link_rejected_before_acquisition_and_children(self):
+        for only in (None, "jvm"):
+            with self.subTest(only=only):
+                self.build()
+                cache = self.output / "gradle-cache"
+                foreign = self.root / "other-owner-gradle-cache"
+                foreign.mkdir(exist_ok=True)
+                (foreign / "keep").write_bytes(b"other owner cache")
+                cache.symlink_to(foreign, target_is_directory=True)
+                before = build.source_inventory(foreign, "go")
+                calls = (self.output / "tool-calls.jsonl").read_bytes()
+                try:
+                    with mock.patch.object(build, "acquire", wraps=build.acquire) as acquire, \
+                            mock.patch.object(build.subprocess, "run", wraps=build.subprocess.run) as child:
+                        attempt = self.attempt(only=only)
+                    self.record(only=only, attempt=attempt, acquisition_calls=acquire.call_count,
+                                subprocess_calls=child.call_count, foreign_inventory=before)
+                    self.assertFalse(attempt["accepted"], attempt)
+                    self.assertIn("gradle-cache", attempt["error"])
+                    self.assertEqual(acquire.call_count, 0)
+                    self.assertEqual(child.call_count, 0 if only is None else 1)
+                    if only:
+                        self.assertEqual(child.call_args.args[0][0], "node")
+                        self.assertIn("--verify", child.call_args.args[0])
+                    self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+                    self.assertEqual(build.source_inventory(foreign, "go"), before)
+                    self.assertTrue(cache.is_symlink())
+                    self.assertEqual(attempt["runner"]["resource_calls"], 0)
+                    self.assertEqual(attempt["metadata"], {"drivers.json": False, "buildinputs.json": False,
+                                                          "build-failure.json": True})
+                finally:
+                    cache.unlink()
+
+    def test_gradle_cache_added_during_acquisition_rejected_before_cleanup(self):
+        self.build()
+        classes = build.source_inventory(self.output / "jvm/classes", "go")
+        foreign = self.root / "late-other-owner-gradle-cache"
+        foreign.mkdir()
+        (foreign / "keep").write_bytes(b"other owner cache")
+        before = build.source_inventory(foreign, "go")
+        acquire = build.acquire
+
+        def acquire_then_link(output):
+            sources = acquire(output)
+            (output / "gradle-cache").symlink_to(foreign, target_is_directory=True)
+            return sources
+
+        with mock.patch.object(build, "acquire", side_effect=acquire_then_link), \
+                mock.patch.object(build.subprocess, "run", wraps=build.subprocess.run) as child:
+            attempt = self.attempt()
+        self.record(attempt=attempt, subprocess_calls=child.call_count)
+        self.assertFalse(attempt["accepted"], attempt)
+        self.assertIn("gradle-cache", attempt["error"])
+        self.assertEqual(child.call_count, 0)
+        self.assertEqual(build.source_inventory(self.output / "jvm/classes", "go"), classes)
+        self.assertEqual(build.source_inventory(foreign, "go"), before)
+        self.assertEqual(attempt["runner"]["resource_calls"], 0)
+
+    def test_gradle_regular_cache_reused_and_unselected_link_preserved(self):
+        self.build()
+        cache = self.output / "gradle-cache"
+        cache.mkdir()
+        (cache / "keep").write_bytes(b"existing project cache")
+        before = build.source_inventory(cache, "go")
+        self.build(only="jvm")
+        self.assertEqual(build.source_inventory(cache, "go"), before)
+        foreign = self.root / "unselected-project-cache"
+        cache.rename(foreign)
+        cache.symlink_to(foreign, target_is_directory=True)
+        self.build(only="go")
+        self.record(foreign_inventory=build.source_inventory(foreign, "go"), cache_link=cache.is_symlink())
+        self.assertTrue(cache.is_symlink())
+        self.assertEqual(build.source_inventory(foreign, "go"), before)
+        self.assertEqual(self.probe_run()["resource_calls"], 1)
+
     def test_existing_jvm_file_links_keep_compile_source_fingerprints(self):
         with self.copied_entrypoints() as here:
             target = self.root / "other-owner-source-file"
@@ -1243,6 +1318,82 @@ console.log(JSON.stringify({value: local(library).fixtureMarker,
                 self.record(language=language, added_file=name, acquisition=outcome)
                 self.assertFalse(outcome["accepted"], outcome)
                 self.assertIn(name, outcome["error"])
+
+    def test_js_generated_roots_require_real_directories_before_build(self):
+        names = ("node_modules", "packages/library/node_modules", "packages/examples/node_modules",
+                 "packages/tests/node_modules", "packages/library/dist")
+        for name in names:
+            for mode in ("directory-link", "dangling-link", "file", "fifo"):
+                with self.subTest(path=name, mode=mode):
+                    self.output = self.root / (name.replace("/", "-") + "-" + mode)
+                    self.output.mkdir()
+                    self.build()
+                    path = self.output / "sources/js" / name
+                    if path.exists():
+                        shutil.rmtree(path)
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    foreign = self.root / ("foreign-" + self.output.name)
+                    foreign.mkdir()
+                    (foreign / "keep").write_bytes(b"other owner generated input")
+                    before = build.source_inventory(foreign, "go")
+                    if mode == "directory-link":
+                        path.symlink_to(foreign, target_is_directory=True)
+                    elif mode == "dangling-link":
+                        path.symlink_to(foreign / "missing", target_is_directory=True)
+                    elif mode == "file":
+                        path.write_bytes(b"unexpected generated root file")
+                    else:
+                        os.mkfifo(path)
+                    calls = (self.output / "tool-calls.jsonl").read_bytes()
+                    with mock.patch.object(build.subprocess, "run", wraps=build.subprocess.run) as child:
+                        attempt = self.attempt()
+                    self.record(path=name, mode=mode, attempt=attempt, subprocess_calls=child.call_count)
+                    self.assertFalse(attempt["accepted"], attempt)
+                    self.assertIn("generated source directory", attempt["error"])
+                    self.assertEqual(child.call_count, 0)
+                    self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+                    self.assertEqual(build.source_inventory(foreign, "go"), before)
+                    self.assertEqual(attempt["runner"]["resource_calls"], 0)
+                    self.assertEqual(attempt["metadata"], {"drivers.json": False, "buildinputs.json": False,
+                                                          "build-failure.json": True})
+
+    def test_js_generated_link_blocks_partial_build_and_measurement(self):
+        self.build()
+        path = self.output / "sources/js/packages/library/dist"
+        foreign = self.root / "other-owner-js-dist"
+        path.rename(foreign)
+        path.symlink_to(foreign, target_is_directory=True)
+        before = build.source_inventory(foreign, "go")
+        runner = self.probe_run()
+        with mock.patch.object(build, "acquire", wraps=build.acquire) as acquire, \
+                mock.patch.object(build.subprocess, "run", wraps=build.subprocess.run) as child:
+            attempt = self.attempt(only="js")
+        self.record(runner=runner, partial=attempt, acquisition_calls=acquire.call_count,
+                    subprocess_calls=child.call_count)
+        self.assertEqual(runner["resource_calls"], 0)
+        self.assertFalse(attempt["accepted"], attempt)
+        self.assertIn("generated source directory", attempt["error"])
+        self.assertEqual(acquire.call_count, 0)
+        self.assertEqual(child.call_count, 0)
+        self.assertTrue(path.is_symlink())
+        self.assertEqual(build.source_inventory(foreign, "go"), before)
+
+    def test_js_generated_directory_external_parent_rejected_by_source_pin(self):
+        self.build()
+        path = self.output / "sources/js/packages"
+        foreign = self.root / "other-owner-js-packages"
+        path.rename(foreign)
+        path.symlink_to(foreign, target_is_directory=True)
+        before = build.source_inventory(foreign, "go")
+        with mock.patch.object(build.subprocess, "run", wraps=build.subprocess.run) as child:
+            attempt = self.attempt()
+        self.record(attempt=attempt, subprocess_calls=child.call_count)
+        self.assertFalse(attempt["accepted"], attempt)
+        self.assertIn("source archive mismatch", attempt["error"])
+        self.assertEqual(child.call_count, 0)
+        self.assertTrue(path.is_symlink())
+        self.assertEqual(build.source_inventory(foreign, "go"), before)
+        self.assertEqual(attempt["runner"]["resource_calls"], 0)
 
     def test_acquire_preserves_known_js_generated_directories(self):
         self.build()

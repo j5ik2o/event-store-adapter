@@ -88,7 +88,7 @@ def verify_generated_package(root, files, directories=()):
 def verify_jvm_output(output):
     root = output / "jvm"
     # 両子を消す前に親も確認する。親のリンク経由では子のis_symlinkだけでは足りない。
-    for path in (root, root / "classes", root / "resources"):
+    for path in (root, root / "classes", root / "resources", output / "gradle-cache"):
         if path.is_symlink() or (path.exists() and not path.is_dir()) or not path.resolve().is_relative_to(output):
             raise RuntimeError(f"JVM output directory must be a real directory inside output: {path}")
 
@@ -158,9 +158,11 @@ def source_inventory(root, language):
                  "packages/tests/node_modules", "packages/library/dist"} if language == "js" else set()
     inventory = {}
     for directory, directories, files in os.walk(root, followlinks=False):
-        for name in list(directories):
+        for name in directories + files:
             path = Path(directory) / name
             if str(path.relative_to(root)) in generated:
+                if path.is_symlink() or not path.is_dir() or not path.resolve().is_relative_to(root.resolve()):
+                    raise RuntimeError(f"generated source directory must be a real directory inside source cache: {path}")
                 directories.remove(name)
         for name in directories + files:
             path = Path(directory) / name
