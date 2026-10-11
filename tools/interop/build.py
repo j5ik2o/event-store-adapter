@@ -60,6 +60,15 @@ def verify_metadata_output(output):
         path = output / name
         if path.is_symlink() or (path.exists() and not path.is_file()):
             raise RuntimeError(f"build metadata must be a regular file: {path}")
+    verify_source_recovery_output(output)
+
+
+def verify_source_recovery_output(output):
+    path = output / "source-recovery.jsonl"
+    if path.is_symlink() or (path.exists() and not path.is_file()):
+        raise RuntimeError(f"build metadata must be a regular file: {path}")
+    if path.exists() and path.stat().st_nlink > 1:
+        raise RuntimeError(f"source recovery log must not have multiple hard links: {path}")
 
 
 def source_fingerprints():
@@ -144,6 +153,8 @@ def verify_jvm_output(output):
         path = root / name
         if path.is_symlink() or (path.exists() and not path.is_file()) or not path.resolve().is_relative_to(output):
             raise RuntimeError(f"JVM output file must be a regular file inside output: {path}")
+        if path.exists() and path.stat().st_nlink > 1:
+            raise RuntimeError(f"JVM output file must not have multiple hard links: {path}")
 
 
 def verify_sources_root(output):
@@ -329,6 +340,7 @@ def verify_artifacts(inputs):
 
 
 def source_recovery(output, **record):
+    verify_source_recovery_output(output)
     with (output / "source-recovery.jsonl").open("a") as stream:
         stream.write(json.dumps(record, ensure_ascii=False) + "\n")
 

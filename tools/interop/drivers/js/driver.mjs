@@ -6,9 +6,14 @@ const { AggregateId, EventEnvelope, SnapshotEnvelope, EventStore } = require(pro
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const unwrap = result => { if (result.type === 'err') throw result.error; return result.value; };
 const id = input => unwrap(AggregateId.of(input.type_name, input.value));
+const eventDate = input => {
+  const nanos = BigInt(input);
+  const millis = nanos / 1_000_000n - (nanos % 1_000_000n < 0n ? 1n : 0n);
+  return new Date(Number(millis));
+};
 const event = input => unwrap(EventEnvelope.create({
   aggregateId: id(input), seqNr: input.seq_nr,
-  occurredAt: new Date(Number(BigInt(input.occurred_at_ns) / 1_000_000n)),
+  occurredAt: eventDate(input.occurred_at_ns),
   manifest: input.manifest, payload: input.payload,
 }));
 const observedEvent = value => ({

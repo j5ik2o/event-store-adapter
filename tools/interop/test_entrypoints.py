@@ -2860,5 +2860,191 @@ if tool == "go" and args == ["mod", "verify"]:
                         path.unlink()
 
 
+    def test_jvm_text_hardlinks_reject_before_acquisition_and_preserve_inode(self):
+        for name in ("classpath.txt", "dependencies.txt"):
+            for only in (None, "jvm"):
+                with self.subTest(name=name, only=only):
+                    self.build()
+                    path = self.output / "jvm" / name
+                    contents = b"original JVM listing bytes\x00\xff"
+                    external = self.root / "external-jvm-listing"
+                    external.write_bytes(contents)
+                    path.unlink(missing_ok=True)
+                    os.link(external, path)
+                    before = external.stat()
+                    calls = (self.output / "tool-calls.jsonl").read_bytes()
+                    classes = build.source_inventory(self.output / "jvm/classes", "go")
+                    try:
+                        with mock.patch.object(build, "acquire", wraps=build.acquire) as acquire:
+                            attempt = self.attempt(only=only)
+                        self.record(name=name, only=only, stage="before-acquisition", attempt=attempt,
+                                    acquire_calls=acquire.call_count, child_calls_unchanged=(self.output / "tool-calls.jsonl").read_bytes() == calls,
+                                    contents_hex=contents.hex(),
+                                    files={str(p): dict(self.file_state(p), contents_hex=p.read_bytes().hex(),
+                                             device=p.stat().st_dev, inode=p.stat().st_ino, links=p.stat().st_nlink)
+                                           for p in (external, path)},
+                                    inode_before={"device": before.st_dev, "inode": before.st_ino, "links": before.st_nlink})
+                        self.assertFalse(attempt["accepted"], attempt)
+                        self.assertIn("JVM output file must not have multiple hard links", attempt["error"])
+                        self.assertEqual(acquire.call_count, 0)
+                        self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+                        self.assertEqual(build.source_inventory(self.output / "jvm/classes", "go"), classes)
+                        for p in (external, path):
+                            self.assertEqual(p.read_bytes(), contents)
+                            self.assertEqual((p.stat().st_dev, p.stat().st_ino, p.stat().st_nlink),
+                                             (before.st_dev, before.st_ino, 2))
+                        self.assertEqual(attempt["metadata"], {"drivers.json": False, "buildinputs.json": False,
+                                                               "build-failure.json": True})
+                        self.assertEqual(attempt["runner"]["resource_calls"], 0)
+                        self.assertEqual(attempt["runner"]["driver_calls"], 0)
+                    finally:
+                        path.unlink()
+
+    def test_jvm_text_hardlinks_recheck_before_cleanup_and_gradle(self):
+        for name in ("classpath.txt", "dependencies.txt"):
+            for only in (None, "jvm"):
+                for stage in ("after-acquisition", "after-cleanup"):
+                    with self.subTest(name=name, only=only, stage=stage):
+                        self.build()
+                        path = self.output / "jvm" / name
+                        contents = b"late JVM listing bytes\x00\xff"
+                        external = self.root / "late-external-jvm-listing"
+                        external.write_bytes(contents)
+                        calls = (self.output / "tool-calls.jsonl").read_bytes()
+                        classes = build.source_inventory(self.output / "jvm/classes", "go")
+                        acquire, remove = build.acquire, shutil.rmtree
+
+                        def link():
+                            path.unlink(missing_ok=True)
+                            os.link(external, path)
+
+                        def acquire_then_link(output):
+                            result = acquire(output)
+                            if stage == "after-acquisition":
+                                link()
+                            return result
+
+                        def remove_then_link(tree, *args, **kwargs):
+                            result = remove(tree, *args, **kwargs)
+                            if stage == "after-cleanup" and Path(tree).resolve() == (self.output / "jvm/classes").resolve():
+                                link()
+                            return result
+
+                        before = external.stat()
+                        try:
+                            with mock.patch.object(build, "acquire", side_effect=acquire_then_link), \
+                                    mock.patch.object(shutil, "rmtree", side_effect=remove_then_link):
+                                attempt = self.attempt(only=only)
+                            self.record(name=name, only=only, stage=stage, attempt=attempt, contents_hex=contents.hex(),
+                                        child_calls_unchanged=(self.output / "tool-calls.jsonl").read_bytes() == calls,
+                                        files={str(p): dict(self.file_state(p), contents_hex=p.read_bytes().hex(),
+                                                 device=p.stat().st_dev, inode=p.stat().st_ino, links=p.stat().st_nlink)
+                                               for p in (external, path)},
+                                        inode_before={"device": before.st_dev, "inode": before.st_ino, "links": 2})
+                            self.assertFalse(attempt["accepted"], attempt)
+                            self.assertIn("JVM output file must not have multiple hard links", attempt["error"])
+                            self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+                            if stage == "after-acquisition":
+                                self.assertEqual(build.source_inventory(self.output / "jvm/classes", "go"), classes)
+                            for p in (external, path):
+                                self.assertEqual(p.read_bytes(), contents)
+                                self.assertEqual((p.stat().st_dev, p.stat().st_ino, p.stat().st_nlink),
+                                                 (before.st_dev, before.st_ino, 2))
+                            self.assertEqual(attempt["metadata"], {"drivers.json": False, "buildinputs.json": False,
+                                                                   "build-failure.json": True})
+                            self.assertEqual(attempt["runner"]["resource_calls"], 0)
+                            self.assertEqual(attempt["runner"]["driver_calls"], 0)
+                        finally:
+                            path.unlink(missing_ok=True)
+
+    def test_source_recovery_hardlinks_reject_before_acquisition_and_preserve_inode(self):
+        for only in (None, "js"):
+            with self.subTest(only=only):
+                self.build()
+                if only is None:
+                    (self.output / "sources/js/marker.txt").unlink()
+                path = self.output / "source-recovery.jsonl"
+                contents = path.read_bytes() if path.exists() else b'{"original":"recovery bytes"}\n'
+                external = self.root / "external-source-recovery"
+                external.write_bytes(contents)
+                path.unlink(missing_ok=True)
+                os.link(external, path)
+                before = external.stat()
+                calls = (self.output / "tool-calls.jsonl").read_bytes()
+                inventory = build.source_inventory(self.output / "sources/js", "js")
+                try:
+                    with mock.patch.object(build, "acquire", wraps=build.acquire) as acquire:
+                        attempt = self.attempt(only=only)
+                    self.record(only=only, stage="before-acquisition", attempt=attempt, acquire_calls=acquire.call_count,
+                                child_calls_unchanged=(self.output / "tool-calls.jsonl").read_bytes() == calls,
+                                contents_hex=contents.hex(),
+                                files={str(p): dict(self.file_state(p), contents_hex=p.read_bytes().hex(),
+                                         device=p.stat().st_dev, inode=p.stat().st_ino, links=p.stat().st_nlink)
+                                       for p in (external, path)},
+                                inode_before={"device": before.st_dev, "inode": before.st_ino, "links": before.st_nlink})
+                    self.assertFalse(attempt["accepted"], attempt)
+                    self.assertIn("source recovery log must not have multiple hard links", attempt["error"])
+                    self.assertEqual(acquire.call_count, 0)
+                    self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+                    self.assertEqual(build.source_inventory(self.output / "sources/js", "js"), inventory)
+                    for p in (external, path):
+                        self.assertEqual(p.read_bytes(), contents)
+                        self.assertEqual((p.stat().st_dev, p.stat().st_ino, p.stat().st_nlink),
+                                         (before.st_dev, before.st_ino, 2))
+                    self.assertEqual(attempt["metadata"], {"drivers.json": False, "buildinputs.json": False,
+                                                           "build-failure.json": True})
+                    self.assertEqual(attempt["runner"]["resource_calls"], 0)
+                    self.assertEqual(attempt["runner"]["driver_calls"], 0)
+                finally:
+                    path.unlink()
+
+    def test_source_recovery_hardlinks_reject_direct_append_and_preserve_inode(self):
+        path = self.output / "source-recovery.jsonl"
+        external = self.root / "external-direct-recovery"
+        contents = b'{"original":"recovery bytes"}\n'
+        external.write_bytes(contents)
+        os.link(external, path)
+        before = external.stat()
+        with self.assertRaisesRegex(RuntimeError, "source recovery log must not have multiple hard links"):
+            build.source_recovery(self.output, phase="incomplete", kind="archive")
+        self.record(stage="direct-append", contents_hex=contents.hex(),
+                    files={str(p): dict(self.file_state(p), contents_hex=p.read_bytes().hex(),
+                             device=p.stat().st_dev, inode=p.stat().st_ino, links=p.stat().st_nlink)
+                           for p in (external, path)},
+                    inode_before={"device": before.st_dev, "inode": before.st_ino, "links": before.st_nlink})
+        for p in (external, path):
+            self.assertEqual(p.read_bytes(), contents)
+            self.assertEqual((p.stat().st_dev, p.stat().st_ino, p.stat().st_nlink),
+                             (before.st_dev, before.st_ino, 2))
+
+    def test_js_negative_timestamp_conversion_matches_existing_floor_precision(self):
+        nanos = [-1, -999999, -1000001, -1000000, -2000000, 0, 1, 999999, 1000001]
+        script = """
+const fs = require('node:fs');
+const vm = require('node:vm');
+const source = fs.readFileSync(process.argv[1], 'utf8');
+const transformation = source.slice(source.indexOf('const unwrap ='), source.indexOf('const categories ='));
+const observed = JSON.parse(process.argv[2]).map(nanos => {
+  const input = { type_name: 'pure', value: 'timestamp', seq_nr: 1, occurred_at_ns: nanos,
+                  manifest: 'pure conversion', payload: { value: 1 } };
+  const value = vm.runInNewContext(transformation + '\\nobservedEvent(event(input));', {
+    input, AggregateId: { of: () => ({ type: 'ok', value: 'pure-timestamp' }),
+                         asString: value => ({ type: 'ok', value }) },
+    EventEnvelope: { create: value => ({ type: 'ok', value }) },
+  });
+  return { input_ns: nanos, observed_ns: value.occurred_at_ns };
+});
+console.log(JSON.stringify(observed));
+"""
+        result = subprocess.run(["node", "-e", script, str(build.HERE / "drivers/js/driver.mjs"),
+                                 json.dumps([str(value) for value in nanos])],
+                                capture_output=True, text=True, env=build.child_environment())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        observed = json.loads(result.stdout)
+        expected = [{"input_ns": str(value), "observed_ns": str(value // 1_000_000 * 1_000_000)} for value in nanos]
+        self.record(kind="pure-current-driver-transformation", observed=observed, expected=expected)
+        self.assertEqual(observed, expected)
+
+
 if __name__ == "__main__":
     unittest.main()
