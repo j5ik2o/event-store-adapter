@@ -643,7 +643,7 @@ console.log(JSON.stringify({value: local(library).fixtureMarker,
             calls = [json.loads(line) for line in (self.output / "tool-calls.jsonl").read_text().splitlines()]
             go_calls = [row for row in calls if row["tool"] == "go"]
             self.record(go_calls=go_calls, parent_environment=environment)
-            self.assertEqual([row["args"][0] for row in go_calls], ["build", "list", "build", "list"])
+            self.assertEqual([row["args"][0] for row in go_calls], ["mod", "build", "list", "mod", "build", "list"])
             self.assertTrue(all(row["goflags"] == "" and row["goenv"] == "off" and row["gowork"] == "off" for row in go_calls))
             self.assertTrue(all(os.environ[name] == value for name, value in environment.items()))
         self.assertEqual(config.read_text(), "GOFLAGS=-overlay=private-overlay.json\n")
@@ -2358,6 +2358,174 @@ if os.environ.get("PNPM_CONFIG_GLOBAL_PNPMFILE") and "--ignore-pnpmfile" not in 
         self.assertEqual(current, previous)
         self.assertEqual(self.probe_run()["resource_calls"], 1)
         self.record(previous=previous, current=current)
+
+
+    def test_go_cached_dependency_verification_precedes_compile_and_records_failure(self):
+        go = self.bin / "go"
+        go.write_text(go.read_text() + '''
+if tool == "go" and args == ["mod", "verify"]:
+    if (output / "fail-go-verify").exists():
+        print("cached dependency dir has been modified", file=sys.stderr)
+        raise SystemExit(31)
+    print("all modules verified")
+''')
+        cache = self.root / "dedicated-go-cache"
+        cache.mkdir()
+        dependency = cache / "dependency.go"
+        dependency.write_bytes(b"dedicated modified dependency\x00\xff")
+        environment = {"GOMODCACHE": str(cache), "GOCACHE": str(self.root / "dedicated-go-build-cache")}
+        for only in (None, "go"):
+            with self.subTest(only=only), mock.patch.dict(os.environ, environment):
+                (self.output / "fail-go-verify").unlink(missing_ok=True)
+                self.build()
+                self.build(only="go")
+                commands = json.loads((self.output / "build-commands.json").read_text())
+                self.assertEqual([row["label"] for row in commands[-3:]], ["go-verify", "go", "go-inputs"])
+                count = len(commands)
+                other = {str(path): self.file_state(path) for path in
+                         (self.output / "rust-driver/target/debug/interop-driver",
+                          self.output / "sources/js/packages/library/dist/index.js")}
+                (self.output / "fail-go-verify").write_text("reject before compilation")
+                before = dependency.read_bytes()
+                attempt = self.attempt(only=only)
+                latest = json.loads((self.output / "build-commands.json").read_text())[count:]
+                self.assertFalse(attempt["accepted"], attempt)
+                self.assertEqual([row["label"] for row in latest], ["jvm", "go-verify"] if only is None else ["go-verify"])
+                self.assertEqual(latest[-1]["argv"], ["go", "mod", "verify"])
+                self.assertEqual(latest[-1]["exit"], 31)
+                self.assertEqual(dependency.read_bytes(), before)
+                self.assertEqual(os.environ["GOMODCACHE"], str(cache))
+                self.assertEqual(other, {path: self.file_state(Path(path)) for path in other})
+                self.assertEqual(attempt["runner"]["resource_calls"], 0)
+                self.assertFalse(attempt["metadata"]["drivers.json"])
+                self.assertFalse(attempt["metadata"]["buildinputs.json"])
+                self.record(only=only, attempt=attempt, actual_commands=latest, cache=self.file_state(dependency))
+
+    def test_jvm_work_tree_links_and_non_directories_reject_before_acquisition(self):
+        for name in ("tmp", "kotlin", "generated", "reports"):
+            for only in (None, "jvm"):
+                for kind in ("root-link", "root-file", "nested-directory-link", "nested-file-link", "dangling-file-link"):
+                    with self.subTest(name=name, only=only, kind=kind):
+                        self.build()
+                        root = self.output / "jvm" / name
+                        external = self.root / f"external-{name}-{only}-{kind}"
+                        external.mkdir()
+                        (external / "state").write_bytes(b"other owner initial bytes\x00\xff")
+                        if root.exists():
+                            shutil.rmtree(root)
+                        if kind == "root-file":
+                            root.write_bytes(b"unknown existing file")
+                            linked = root
+                        elif kind == "root-link":
+                            root.symlink_to(external, target_is_directory=True)
+                            linked = root
+                        else:
+                            root.mkdir()
+                            linked = root / "task" / "state"
+                            linked.parent.mkdir()
+                            linked.symlink_to(external if kind == "nested-directory-link" else
+                                              self.root / "missing-work-file" if kind == "dangling-file-link" else external / "state",
+                                              target_is_directory=kind == "nested-directory-link")
+                        foreign = build.source_inventory(external, "go")
+                        classes = build.source_inventory(self.output / "jvm/classes", "go")
+                        calls = (self.output / "tool-calls.jsonl").read_bytes()
+                        try:
+                            with mock.patch.object(build, "acquire", wraps=build.acquire) as acquire:
+                                attempt = self.attempt(only=only)
+                            self.assertFalse(attempt["accepted"], attempt)
+                            self.assertIn("JVM", attempt["error"])
+                            self.assertEqual(acquire.call_count, 0)
+                            self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+                            self.assertEqual(build.source_inventory(external, "go"), foreign)
+                            self.assertEqual(build.source_inventory(self.output / "jvm/classes", "go"), classes)
+                            self.assertEqual(attempt["runner"]["resource_calls"], 0)
+                            self.record(name=name, only=only, kind=kind, attempt=attempt, external=foreign)
+                        finally:
+                            linked.unlink()
+                            if root.exists():
+                                shutil.rmtree(root)
+
+    def test_jvm_work_links_added_during_acquisition_preserve_classes_and_external_bytes(self):
+        for relative in ("tmp", "kotlin/compileKotlin/cacheable/last-build.bin",
+                         "generated/sources/annotationProcessor/java/main/foreign", "reports/problems/report.html"):
+            with self.subTest(relative=relative):
+                self.build()
+                path = self.output / "jvm" / relative
+                external = self.root / ("late-" + relative.replace("/", "-"))
+                external.write_bytes(b"late other owner bytes\x00\xff")
+                calls = (self.output / "tool-calls.jsonl").read_bytes()
+                classes = build.source_inventory(self.output / "jvm/classes", "go")
+                acquire = build.acquire
+
+                def acquire_then_link(output):
+                    result = acquire(output)
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.symlink_to(external)
+                    return result
+
+                try:
+                    with mock.patch.object(build, "acquire", side_effect=acquire_then_link):
+                        attempt = self.attempt()
+                    self.assertFalse(attempt["accepted"], attempt)
+                    self.assertIn("JVM", attempt["error"])
+                    self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+                    self.assertEqual(build.source_inventory(self.output / "jvm/classes", "go"), classes)
+                    self.assertEqual(external.read_bytes(), b"late other owner bytes\x00\xff")
+                    self.assertTrue(path.is_symlink())
+                    self.record(relative=relative, attempt=attempt, external=self.file_state(external))
+                finally:
+                    path.unlink()
+
+    def test_jvm_work_links_added_after_cleanup_reject_before_gradle_child(self):
+        self.build()
+        path = self.output / "jvm/tmp/compileJava/previous-compilation-data.bin"
+        path.parent.mkdir(parents=True)
+        external = self.root / "after-cleanup-external-state"
+        external.write_bytes(b"preserve external work state\x00\xff")
+        calls = (self.output / "tool-calls.jsonl").read_bytes()
+        cleanup = shutil.rmtree
+
+        def clean_then_link(root, *args, **kwargs):
+            cleanup(root, *args, **kwargs)
+            if root == self.output.resolve() / "jvm/classes":
+                path.symlink_to(external)
+
+        try:
+            with mock.patch.object(build.shutil, "rmtree", side_effect=clean_then_link):
+                attempt = self.attempt(only="jvm")
+            self.assertFalse(attempt["accepted"], attempt)
+            self.assertIn("JVM", attempt["error"])
+            self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+            self.assertEqual(external.read_bytes(), b"preserve external work state\x00\xff")
+            self.assertTrue(path.is_symlink())
+            self.assertEqual(attempt["runner"]["resource_calls"], 0)
+            self.record(attempt=attempt, external=self.file_state(external))
+        finally:
+            path.unlink()
+
+    def test_jvm_regular_work_trees_and_unselected_links_preserve_owner_files(self):
+        self.build()
+        kept = []
+        for name in ("tmp/compileJava/state", "kotlin/compileKotlin/state", "generated/sources/state",
+                     "reports/problems/state", "user-resource", "../gradle-cache/keep"):
+            path = self.output / "jvm" / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"owner work file\x00\xff")
+            kept.append(path)
+        before = {str(path): self.file_state(path) for path in kept}
+        for only in (None, "jvm"):
+            self.build(only=only)
+            self.assertEqual(before, {str(path): self.file_state(path) for path in kept})
+            self.assertEqual(self.probe_run()["resource_calls"], 1)
+        path = self.output / "jvm/tmp/compileJava/unselected-link"
+        external = self.root / "unselected-external-state"
+        external.write_bytes(b"unselected other owner bytes")
+        path.symlink_to(external)
+        self.build(only="go")
+        self.assertTrue(path.is_symlink())
+        self.assertEqual(external.read_bytes(), b"unselected other owner bytes")
+        self.assertEqual(before, {str(path): self.file_state(path) for path in kept})
+        self.record(kept=before, unselected_link=str(path), external=self.file_state(external))
 
 
 if __name__ == "__main__":

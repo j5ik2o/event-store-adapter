@@ -125,10 +125,19 @@ def verify_generated_package(root, files, directories=()):
 
 def verify_jvm_output(output):
     root = output / "jvm"
+    generated = [root / name for name in ("classes", "resources", "tmp", "kotlin", "generated", "reports")]
     # 両子を消す前に親も確認する。親のリンク経由では子のis_symlinkだけでは足りない。
-    for path in (root, root / "classes", root / "resources", output / "gradle-cache"):
+    for path in (root, *generated, output / "gradle-cache"):
         if path.is_symlink() or (path.exists() and not path.is_dir()) or not path.resolve().is_relative_to(output):
             raise RuntimeError(f"JVM output directory must be a real directory inside output: {path}")
+    # 固定Gradleの既知生成先では、作業状態のfile linkも外部への書込みになる。
+    for tree in generated:
+        for directory, directories, files in os.walk(tree, followlinks=False):
+            for name in directories + files:
+                path = Path(directory) / name
+                mode = path.lstat().st_mode
+                if not (stat.S_ISREG(mode) or stat.S_ISDIR(mode)):
+                    raise RuntimeError(f"JVM output entry must be a regular file or directory: {path}")
     for name in ("classpath.txt", "dependencies.txt"):
         path = root / name
         if path.is_symlink() or (path.exists() and not path.is_file()) or not path.resolve().is_relative_to(output):
@@ -532,6 +541,7 @@ def main():
             for path in (jvm / "classes", jvm / "resources"):
                 if path.exists():
                     shutil.rmtree(path)
+            verify_jvm_output(output)
             execute("jvm", [gradle_inputs["launcher"], "--no-daemon", "--console", "plain",
                          "--gradle-user-home", gradle_inputs["gradle_user_home"], "--project-cache-dir", output / "gradle-cache",
                          "-p", HERE / "drivers/jvm", f"-PlibrarySources={sources}", f"-PoutputDir={jvm}",
@@ -545,6 +555,7 @@ def main():
             (go / "go.mod").write_text(original.replace(f"module {module}", "module interop-driver", 1)
                 + f"\nrequire {module} v2.0.0-00010101000000-000000000000\nreplace {module} => {json.dumps(str(sources / 'go'), ensure_ascii=False)}\n")
             shutil.copyfile(sources / "go/go.sum", go / "go.sum")
+            execute("go-verify", ["go", "mod", "verify"], cwd=go, environment=go_environment)
             execute("go", ["go", "build", "-mod=mod", "-o", go / "driver", "."], cwd=go, environment=go_environment)
         if selected("rust"):
             (rust / "src").mkdir(parents=True, exist_ok=True)
