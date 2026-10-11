@@ -265,7 +265,7 @@ console.log(JSON.stringify({value: local(library).fixtureMarker,
         (external / "keep").write_bytes(b"other owner")
         before = build.source_inventory(external, "go")
         acquire = build.acquire
-        homes = set(self.output.glob(".cargo-home-*"))
+        homes = set(self.output.resolve().glob(".cargo-home-*"))
 
         def acquire_then_link(output):
             sources = acquire(output)
@@ -2454,6 +2454,110 @@ if os.environ.get("PNPM_CONFIG_GLOBAL_PNPMFILE") and "--ignore-pnpmfile" not in 
                          "environment": {name: "true" for name in environment if "IGNORE" in name or "ignore" in name}})
         self.assertEqual(self.probe_run()["resource_calls"], 1)
         self.record(commands=observed, recorded=inputs["pnpm_hook_settings"], marker_exists=marker.exists())
+
+    def test_build_rejects_resolved_classpath_separator_before_side_effects(self):
+        target = self.root / ("classpath" + os.pathsep + "output")
+        existing = self.root / ("existing" + os.pathsep + "output")
+        existing.mkdir()
+        (existing / "keep").write_bytes(b"other owner data")
+        alias = self.root / "classpath-alias"
+        alias.symlink_to(existing, target_is_directory=True)
+        for output in (target, existing, alias):
+            for only in (None, "jvm", "go", "rust", "js"):
+                with self.subTest(output=str(output), only=only):
+                    self.output = output
+                    before = build.source_inventory(existing, "go")
+                    with mock.patch.object(build, "acquire") as acquire, \
+                            mock.patch.object(build.subprocess, "run") as child:
+                        with self.assertRaisesRegex(RuntimeError, "Java classpath separator"):
+                            self.build(only=only)
+                    self.assertEqual(acquire.call_count, 0)
+                    self.assertEqual(child.call_count, 0)
+                    self.assertFalse(target.exists())
+                    self.assertEqual(build.source_inventory(existing, "go"), before)
+                    self.record(output=str(output), only=only, acquisition_calls=acquire.call_count,
+                                subprocess_calls=child.call_count, missing_output_preserved=not target.exists(),
+                                existing_output_preserved=True)
+
+    def test_run_rejects_resolved_classpath_separator_before_resources(self):
+        target = self.root / ("result" + os.pathsep + "output")
+        existing = self.root / ("existing-result" + os.pathsep + "output")
+        existing.mkdir()
+        (existing / "keep").write_bytes(b"other owner result")
+        alias = self.root / "result-alias"
+        alias.symlink_to(existing, target_is_directory=True)
+        for output in (target, existing, alias):
+            with self.subTest(output=str(output)):
+                before = build.source_inventory(existing, "go")
+                argv = ["run.py", "--build", str(self.output), "--output", str(output)]
+                with mock.patch.object(sys, "argv", argv), mock.patch.object(run, "verify_artifacts") as verify, \
+                        mock.patch.object(run, "Local") as local, mock.patch.object(run, "Driver") as driver:
+                    with self.assertRaisesRegex(RuntimeError, "Java classpath separator"):
+                        run.main()
+                self.assertEqual(verify.call_count, 0)
+                self.assertEqual(local.call_count, 0)
+                self.assertEqual(driver.call_count, 0)
+                self.assertFalse(target.exists())
+                self.assertEqual(build.source_inventory(existing, "go"), before)
+                self.record(output=str(output), artifact_verification_calls=verify.call_count,
+                            resource_calls=local.call_count, driver_calls=driver.call_count,
+                            missing_output_preserved=not target.exists(), existing_output_preserved=True)
+
+    def test_pnpm_virtual_store_is_owned_and_preserves_inherited_paths_and_backups(self):
+        executable = self.bin / "pnpm"
+        original = executable.read_text()
+        executable.write_text(original.split("\n", 1)[0] + "\n" + '''
+import os, sys
+from pathlib import Path
+output = Path(os.environ["INTEROP_TEST_OUTPUT"])
+if "install" in sys.argv:
+    store = Path(sys.argv[sys.argv.index("--virtual-store-dir") + 1] if "--virtual-store-dir" in sys.argv else
+        os.environ.get("PNPM_CONFIG_VIRTUAL_STORE_DIR") or os.environ["pnpm_config_virtual_store_dir"])
+    store.mkdir(parents=True, exist_ok=True)
+    (output / "observed-virtual-store.txt").write_text(str(store))
+''' + original.split("\n", 1)[1].replace('output / "sources/js/node_modules/fixture-dependency"',
+                                        'Path((output / "observed-virtual-store.txt").read_text()) / "fixture-dependency"'))
+        for index, name in enumerate(("PNPM_CONFIG_VIRTUAL_STORE_DIR", "pnpm_config_virtual_store_dir")):
+            with self.subTest(setting=name):
+                external = self.root / (str(index) + "-external")
+                external.mkdir()
+                (external / "keep").write_bytes(b"external virtual store data")
+                before = build.source_inventory(external, "go")
+                with mock.patch.dict(os.environ, {name: str(external)}):
+                    self.build()
+                    first = json.loads((self.output / "buildinputs.json").read_text())
+                    node_modules = self.output / "sources/js/node_modules"
+                    previous = build.source_inventory(node_modules, "go")
+                    backups = set(self.output.glob(".js-dependencies-backup-*"))
+                    self.build(only="js")
+                    self.assertEqual(os.environ[name], str(external))
+                current = json.loads((self.output / "buildinputs.json").read_text())
+                store = (node_modules / ".pnpm").resolve()
+                self.assertEqual(current["pnpm_virtual_store_dir"], str(store))
+                self.assertEqual((self.output / "observed-virtual-store.txt").read_text(), str(store))
+                self.assertTrue(store.is_relative_to(self.output.resolve()))
+                self.assertEqual(build.source_inventory(external, "go"), before)
+                new_backups = set(self.output.glob(".js-dependencies-backup-*")) - backups
+                self.assertEqual(len(new_backups), 1)
+                self.assertEqual(build.source_inventory(next(iter(new_backups)) / "node_modules", "go"), previous)
+                unchanged = [row for row in first["artifacts"] if not Path(row["path"]).is_relative_to(
+                    (self.output / "sources/js").resolve()) and row["path"] != first["js_runtime_inputs"]]
+                self.assertTrue(all(row in current["artifacts"] for row in unchanged))
+                runtime = json.loads((self.output / "js-runtime-inputs.json").read_text())
+                self.assertTrue(any(Path(row["path"]).is_relative_to(store) for row in runtime["files"]))
+                self.assertEqual(self.probe_run()["resource_calls"], 1)
+                self.record(setting=name, virtual_store=str(store), external_preserved=True,
+                            backup_preserved=True, unselected_artifacts=len(unchanged), runtime_inputs=runtime)
+
+    def test_unselected_partial_build_preserves_recorded_pnpm_virtual_store(self):
+        self.build()
+        previous = json.loads((self.output / "buildinputs.json").read_text())["pnpm_virtual_store_dir"]
+        with mock.patch.dict(os.environ, {"PNPM_CONFIG_VIRTUAL_STORE_DIR": str(self.root / "unselected-external")}):
+            self.build(only="go")
+        current = json.loads((self.output / "buildinputs.json").read_text())["pnpm_virtual_store_dir"]
+        self.assertEqual(current, previous)
+        self.assertEqual(self.probe_run()["resource_calls"], 1)
+        self.record(previous=previous, current=current)
 
     def test_unselected_partial_build_preserves_recorded_pnpm_hook_settings(self):
         self.build()

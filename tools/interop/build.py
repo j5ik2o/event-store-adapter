@@ -109,6 +109,8 @@ def external_output(path):
     output = path.resolve()
     if output.is_relative_to(HERE.resolve()):
         raise RuntimeError(f"output must be outside tools/interop: {output}")
+    if os.pathsep in str(output):
+        raise RuntimeError(f"output must not contain the Java classpath separator {os.pathsep!r}: {output}")
     return output
 
 
@@ -524,6 +526,7 @@ def main():
         cargo_metadata_inputs = previous_inputs.get("cargo_metadata_inputs") if previous_inputs else None
         gradle_inputs = previous_inputs.get("gradle_init_inputs") if previous_inputs else None
         pnpm_inputs = previous_inputs.get("pnpm_hook_settings") if previous_inputs else None
+        pnpm_virtual_store = previous_inputs.get("pnpm_virtual_store_dir") if previous_inputs else None
         if not __debug__:
             raise RuntimeError("build requires assertions; run without -O or PYTHONOPTIMIZE")
         verify_driver_sources()
@@ -644,7 +647,10 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
                     destination = backup / name
                     destination.parent.mkdir(parents=True, exist_ok=True)
                     (sources / "js" / name).rename(destination)
-            execute("js-install", ["pnpm", "--ignore-pnpmfile", "install", "--frozen-lockfile"],
+            # 既知の生成・退避領域内に固定し、継承設定の外部依存配置先を使わない。
+            pnpm_virtual_store = str((sources / "js/node_modules/.pnpm").resolve())
+            execute("js-install", ["pnpm", "--ignore-pnpmfile", "install", "--frozen-lockfile",
+                                   "--virtual-store-dir", pnpm_virtual_store],
                     cwd=sources / "js", environment=pnpm_environment)
             execute("js", ["pnpm", "--ignore-pnpmfile", "--filter", "event-store-adapter-js", "build"],
                     cwd=sources / "js", environment=pnpm_environment)
@@ -666,7 +672,8 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
                   "jvm_classpath_inputs": jvm_classpath_inputs(classpath), "cargo_config_inputs": cargo_inputs,
                   "cargo_inherited_config_inputs": cargo_inherited_inputs, "cargo_metadata_inputs": cargo_metadata_inputs,
                   "gradle_init_inputs": gradle_inputs, "go_build_environment": go_environment,
-                  "cargo_build_environment": cargo_environment, "pnpm_hook_settings": pnpm_inputs, "drivers": drivers}
+                  "cargo_build_environment": cargo_environment, "pnpm_hook_settings": pnpm_inputs,
+                  "pnpm_virtual_store_dir": pnpm_virtual_store, "drivers": drivers}
         files = artifacts + [go / "driver", go / "go.mod", go / "go.sum", rust / "Cargo.lock", rust / "target/debug/interop-driver"]
         files += [Path(inputs["js_runtime_inputs"])]
         files += [Path(row["path"]) for row in json.loads(Path(inputs["js_runtime_inputs"]).read_text())["files"]]
