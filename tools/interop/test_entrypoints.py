@@ -92,6 +92,11 @@ elif tool == "cargo" and args[0] == "build":
     target = Path(os.environ.get("CARGO_TARGET_DIR") or os.environ.get("CARGO_BUILD_TARGET_DIR") or output / "rust-driver/target")
     write(target / "debug/interop-driver", b"rust fixture")
 elif tool == "cargo" and args[0] == "metadata":
+    if os.environ.get("CARGO_LOG"):
+        print("TRACE cargo::core::resolver: fixture diagnostic", file=sys.stderr)
+    if (output / "fail-cargo-metadata").exists():
+        print("partial metadata")
+        raise SystemExit(29)
     print(json.dumps({"target_directory": str(Path(os.environ.get("CARGO_TARGET_DIR") or
         os.environ.get("CARGO_BUILD_TARGET_DIR") or output / "rust-driver/target")), "packages": []}))
 elif tool == "pnpm" and "build" in args:
@@ -674,6 +679,96 @@ console.log(JSON.stringify({value: local(library).fixtureMarker,
                 self.assertNotIn("private-output-override", attempt["error"])
                 self.assertEqual(acquire.call_count, 0)
                 self.assertEqual(os.environ[name], "private-output-override")
+
+    def test_cargo_rejects_target_linkers_before_children_on_full_and_partial_builds(self):
+        for name in ("CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER", "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER"):
+            for only in (None, "rust"):
+                with self.subTest(variable=name, only=only):
+                    self.build()
+                    calls = (self.output / "tool-calls.jsonl").read_bytes()
+                    with mock.patch.dict(os.environ, {name: "private-linker-path"}), \
+                            mock.patch.object(build, "acquire", wraps=build.acquire) as acquire, \
+                            mock.patch.object(build.subprocess, "run", wraps=build.subprocess.run) as child:
+                        attempt = self.attempt(only=only)
+                        self.assertEqual(os.environ[name], "private-linker-path")
+                    self.record(variable=name, only=only, attempt=attempt,
+                                acquisition_calls=acquire.call_count, subprocess_calls=child.call_count)
+                    self.assertFalse(attempt["accepted"], attempt)
+                    self.assertIn(name, attempt["error"])
+                    self.assertNotIn("private-linker-path", attempt["error"])
+                    self.assertNotIn("private-linker-path", (self.output / "build-failure.json").read_text())
+                    self.assertEqual(acquire.call_count, 0)
+                    self.assertEqual(child.call_count, 0)
+                    self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+                    self.assertEqual(attempt["runner"]["resource_calls"], 0)
+
+    def test_cargo_metadata_parses_stdout_and_retains_stderr_on_full_and_partial_builds(self):
+        with mock.patch.dict(os.environ, {"CARGO_LOG": "cargo::core::resolver=trace"}):
+            self.build()
+            self.build(only="rust")
+            self.assertEqual(os.environ["CARGO_LOG"], "cargo::core::resolver=trace")
+        rows = [row for row in json.loads((self.output / "build-commands.json").read_text()) if row["label"] == "rust-inputs"]
+        self.record(commands=rows, metadata=self.metadata())
+        self.assertEqual(len(rows), 2)
+        for row in rows:
+            self.assertEqual(row["exit"], 0)
+            self.assertIn("fixture diagnostic", Path(row["log"]).read_text())
+            metadata = json.loads(Path(row["stdout"]).read_text())
+            self.assertEqual(Path(metadata["target_directory"]), self.output.resolve() / "rust-driver/target")
+        self.assertFalse(self.metadata()["build-failure.json"])
+        self.assertEqual(self.probe_run()["resource_calls"], 1)
+
+    def test_cargo_metadata_failure_retains_actual_exit_and_invalidates_success(self):
+        self.build()
+        (self.output / "fail-cargo-metadata").touch()
+        with mock.patch.dict(os.environ, {"CARGO_LOG": "cargo::core::resolver=trace"}):
+            attempt = self.attempt(only="rust")
+        row = json.loads((self.output / "build-failure.json").read_text())["commands"][-1]
+        self.record(attempt=attempt, command=row)
+        self.assertFalse(attempt["accepted"], attempt)
+        self.assertEqual(row["label"], "rust-inputs")
+        self.assertEqual(row["exit"], 29)
+        self.assertEqual(Path(row["stdout"]).read_text(), "partial metadata\n")
+        self.assertIn("fixture diagnostic", Path(row["log"]).read_text())
+        self.assertEqual(attempt["metadata"], {"drivers.json": False, "buildinputs.json": False, "build-failure.json": True})
+        self.assertEqual(attempt["runner"]["resource_calls"], 0)
+
+    def test_hidden_jvm_fingerprints_cover_compile_inputs_without_unrelated_caches(self):
+        with self.copied_entrypoints() as here:
+            compiled = (".Injected.java", ".Injected.kt", ".Injected.scala", ".parent/Directory.kt",
+                        ".parent/Directory.scala", "visible/.Nested.kt", "visible/.Nested.scala")
+            unrelated = (".cache/data.bin", ".settings/config.json", ".parent/Directory.java")
+            for name in compiled + unrelated:
+                path = here / "drivers/jvm" / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("fixture input\n")
+            self.build()
+            inputs = json.loads((self.output / "buildinputs.json").read_text())["driver_sources"]
+            self.record(recorded=inputs, compiled=compiled, unrelated=unrelated)
+            for name in compiled:
+                self.assertEqual(inputs["drivers/jvm/" + name], build.digest(here / "drivers/jvm" / name))
+            for name in unrelated:
+                self.assertNotIn("drivers/jvm/" + name, inputs)
+
+    def test_hidden_jvm_changes_block_runner_and_unselected_partial_rebuild(self):
+        with self.copied_entrypoints() as here:
+            for name in (".Injected.java", ".Injected.kt", ".Injected.scala", ".parent/Directory.kt", ".parent/Directory.scala"):
+                with self.subTest(source=name):
+                    path = here / "drivers/jvm" / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text("original source\n")
+                    self.build()
+                    path.write_text("changed source\n")
+                    runner = self.probe_run()
+                    calls = (self.output / "tool-calls.jsonl").read_bytes()
+                    attempt = self.attempt(only="go")
+                    self.record(source=name, runner=runner, partial=attempt)
+                    self.assertEqual(runner["resource_calls"], 0)
+                    self.assertIn("stale", runner["error"])
+                    self.assertFalse(attempt["accepted"], attempt)
+                    self.assertIn("unselected driver sources changed", attempt["error"])
+                    self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+                    self.assertEqual(attempt["downloads"], [])
 
     def test_gradle_rejects_user_and_installation_init_scripts_without_reading_or_mutating(self):
         home = self.root / "gradle-home"

@@ -37,9 +37,18 @@ def save(path, value):
 
 
 def source_fingerprints():
-    return {str(path.relative_to(HERE)): digest(path) for path in sorted(HERE.rglob("*"))
-            if path.is_file() and "__pycache__" not in path.parts
-            and not any(part.startswith(".") for part in path.relative_to(HERE).parts)}
+    fingerprints = {}
+    for path in sorted(HERE.rglob("*")):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(HERE)
+        # GradleのJavaは直下、Kotlin・Scalaは再帰で、隠しファイルもコンパイルする。
+        jvm_source = relative.parts[:2] == ("drivers", "jvm") and (
+            relative.name.endswith((".kt", ".scala")) or
+            len(relative.parts) == 3 and relative.name.endswith(".java"))
+        if jvm_source or ("__pycache__" not in relative.parts and not any(part.startswith(".") for part in relative.parts)):
+            fingerprints[str(relative)] = digest(path)
+    return fingerprints
 
 
 def external_output(path):
@@ -122,7 +131,7 @@ def cargo_config_inputs():
         if environment.get(name):
             raise RuntimeError(f"unrecorded Cargo compiler environment: {name}")
     for name, value in environment.items():
-        if name.startswith("CARGO_TARGET_") and name.endswith("_RUSTFLAGS") and value:
+        if name.startswith("CARGO_TARGET_") and name.endswith(("_RUSTFLAGS", "_LINKER")) and value:
             raise RuntimeError(f"unrecorded Cargo compiler environment: {name}")
     return {"cwd": str(cwd), "cargo_home": str(home), "absent_config_files": [str(path) for path in paths]}
 
@@ -372,15 +381,22 @@ def main():
     previous_success = (output / "drivers.json").exists() and not (output / "build-failure.json").exists()
     selected = lambda language: args.only is None or args.only == language
 
-    def execute(label, command, cwd=None, environment=None):
+    def execute(label, command, cwd=None, environment=None, capture_stdout=False):
         attempt = 1 + sum(row["label"] == label for row in commands)
         log = output / f"build-{label}-{attempt}.log"
         row = {"label": label, "argv": [str(v) for v in command], "cwd": str(cwd or HERE), "log": str(log)}
         commands.append(row)
         save(output / "build-commands.json", commands)
         started = time.monotonic()
-        with log.open("w") as stream:
-            result = subprocess.run(row["argv"], cwd=cwd or HERE, env=child_environment(environment), stdout=stream, stderr=subprocess.STDOUT)
+        with log.open("wb") as stream:
+            result = subprocess.run(row["argv"], cwd=cwd or HERE, env=child_environment(environment),
+                                    stdout=subprocess.PIPE if capture_stdout else stream,
+                                    stderr=stream if capture_stdout else subprocess.STDOUT)
+            if capture_stdout:
+                stdout = output / f"build-{label}-{attempt}.stdout"
+                stdout.write_bytes(result.stdout)
+                row["stdout"] = str(stdout)
+                stream.write(result.stdout)
         row.update(exit=result.returncode, elapsed_seconds=round(time.monotonic() - started, 3))
         save(output / "build-commands.json", commands)
         print(label, "exit", result.returncode, flush=True)
@@ -399,6 +415,8 @@ def main():
         gradle_inputs = previous_inputs.get("gradle_init_inputs") if previous_inputs else None
         if not __debug__:
             raise RuntimeError("build requires assertions; run without -O or PYTHONOPTIMIZE")
+        if selected("rust"):
+            cargo_inputs = cargo_config_inputs()
         if args.only:
             if not previous_success or previous_inputs is None or previous_inputs["currentSnapshot"] != PINS:
                 raise RuntimeError("--only requires a successful build with the current pins; rebuild all drivers")
@@ -428,7 +446,6 @@ def main():
         if selected("rust"):
             verify_generated_package(rust, {"Cargo.toml", "Cargo.lock"}, {"src", "target"})
             verify_generated_package(rust / "src", {"main.rs"})
-            cargo_inputs = cargo_config_inputs()
         verify_sources_root(output)
         sources = acquire(output)
         artifacts = java_artifacts(output, args.java_artifact_directory)
@@ -477,8 +494,8 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
             if cargo_config_inputs() != cargo_inputs:
                 raise RuntimeError("Cargo configuration search changed before metadata")
             metadata = execute("rust-inputs", ["cargo", "metadata", "--format-version", "1", "--manifest-path", rust / "Cargo.toml"],
-                               environment=cargo_environment)
-            if Path(json.loads(Path(metadata["log"]).read_text())["target_directory"]).resolve() != rust / "target":
+                               environment=cargo_environment, capture_stdout=True)
+            if Path(json.loads(Path(metadata["stdout"]).read_text())["target_directory"]).resolve() != rust / "target":
                 raise RuntimeError("Cargo target directory does not match the recorded binary")
         if selected("js"):
             execute("js-install", ["pnpm", "install", "--frozen-lockfile"], cwd=sources / "js")
