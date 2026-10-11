@@ -30,6 +30,14 @@ def child_environment(extra=None):
     return environment
 
 
+def pnpm_hook_environment():
+    # 同じ設定の大小文字・区切り違いも子だけで固定し、入れ子のpnpmへ引き継ぐ。
+    environment = {name: "true" for name in os.environ if name.lower().startswith("pnpm_config_") and
+                   name[len("pnpm_config_"):].lower().replace("_", "").replace("-", "") == "ignorepnpmfile"}
+    environment["PNPM_CONFIG_IGNORE_PNPMFILE"] = "true"
+    return environment
+
+
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -121,6 +129,10 @@ def verify_jvm_output(output):
     for path in (root, root / "classes", root / "resources", output / "gradle-cache"):
         if path.is_symlink() or (path.exists() and not path.is_dir()) or not path.resolve().is_relative_to(output):
             raise RuntimeError(f"JVM output directory must be a real directory inside output: {path}")
+    for name in ("classpath.txt", "dependencies.txt"):
+        path = root / name
+        if path.is_symlink() or (path.exists() and not path.is_file()) or not path.resolve().is_relative_to(output):
+            raise RuntimeError(f"JVM output file must be a regular file inside output: {path}")
 
 
 def verify_sources_root(output):
@@ -440,6 +452,10 @@ def main():
     def execute(label, command, cwd=None, environment=None, capture_stdout=False):
         attempt = 1 + sum(row["label"] == label for row in commands)
         log = output / f"build-{label}-{attempt}.log"
+        stdout = output / f"build-{label}-{attempt}.stdout"
+        for path in [log] + ([stdout] if capture_stdout else []):
+            if path.is_symlink() or (path.exists() and not path.is_file()) or not path.resolve().is_relative_to(output):
+                raise RuntimeError(f"build diagnostic must be a regular file inside output: {path}")
         row = {"label": label, "argv": [str(v) for v in command], "cwd": str(cwd or HERE), "log": str(log)}
         commands.append(row)
         save(output / "build-commands.json", commands)
@@ -449,7 +465,6 @@ def main():
                                     stdout=subprocess.PIPE if capture_stdout else stream,
                                     stderr=stream if capture_stdout else subprocess.STDOUT)
             if capture_stdout:
-                stdout = output / f"build-{label}-{attempt}.stdout"
                 stdout.write_bytes(result.stdout)
                 row["stdout"] = str(stdout)
                 stream.write(result.stdout)
@@ -470,6 +485,7 @@ def main():
         previous_inputs = json.loads(previous_text) if previous_text is not None else None
         cargo_inputs = previous_inputs.get("cargo_config_inputs") if previous_inputs else None
         gradle_inputs = previous_inputs.get("gradle_init_inputs") if previous_inputs else None
+        pnpm_inputs = previous_inputs.get("pnpm_hook_settings") if previous_inputs else None
         if not __debug__:
             raise RuntimeError("build requires assertions; run without -O or PYTHONOPTIMIZE")
         verify_driver_sources()
@@ -562,6 +578,8 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
             if Path(json.loads(Path(metadata["stdout"]).read_text())["target_directory"]).resolve() != rust / "target":
                 raise RuntimeError("Cargo target directory does not match the recorded binary")
         if selected("js"):
+            pnpm_environment = pnpm_hook_environment()
+            pnpm_inputs = {"ignore_pnpmfile": True, "arguments": ["--ignore-pnpmfile"], "environment": pnpm_environment}
             source_inventory(sources / "js", "js")
             # 温かいinstallが残す依存改変を採用しない。既知rootの全byteとaliasは退避して残す。
             roots = [name for name in JS_DEPENDENCY_DIRECTORIES if (sources / "js" / name).exists()]
@@ -571,10 +589,12 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
                     destination = backup / name
                     destination.parent.mkdir(parents=True, exist_ok=True)
                     (sources / "js" / name).rename(destination)
-            execute("js-install", ["pnpm", "install", "--frozen-lockfile"], cwd=sources / "js")
-            execute("js", ["pnpm", "--filter", "event-store-adapter-js", "build"], cwd=sources / "js")
+            execute("js-install", ["pnpm", "--ignore-pnpmfile", "install", "--frozen-lockfile"],
+                    cwd=sources / "js", environment=pnpm_environment)
+            execute("js", ["pnpm", "--ignore-pnpmfile", "--filter", "event-store-adapter-js", "build"],
+                    cwd=sources / "js", environment=pnpm_environment)
             execute("js-inputs", ["node", HERE / "drivers/js/runtime-inputs.cjs", "--record",
-                                  sources / "js/packages/library", output / "js-runtime-inputs.json"])
+                                  sources / "js/packages/library", output / "js-runtime-inputs.json"], environment=pnpm_environment)
         if selected("go"):
             execute("go-inputs", ["go", "list", "-m", "-json", "all"], cwd=go, environment=go_environment)
         classpath = (jvm / "classpath.txt").read_text()
@@ -590,7 +610,7 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
                   "js_runtime_inputs": str(output / "js-runtime-inputs.json"),
                   "jvm_classpath_inputs": jvm_classpath_inputs(classpath), "cargo_config_inputs": cargo_inputs,
                   "gradle_init_inputs": gradle_inputs, "go_build_environment": go_environment,
-                  "cargo_build_environment": cargo_environment, "drivers": drivers}
+                  "cargo_build_environment": cargo_environment, "pnpm_hook_settings": pnpm_inputs, "drivers": drivers}
         files = artifacts + [go / "driver", go / "go.mod", go / "go.sum", rust / "Cargo.lock", rust / "target/debug/interop-driver"]
         files += [Path(inputs["js_runtime_inputs"])]
         files += [Path(row["path"]) for row in json.loads(Path(inputs["js_runtime_inputs"]).read_text())["files"]]

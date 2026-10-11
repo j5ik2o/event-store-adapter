@@ -2195,6 +2195,170 @@ raise SystemExit(module.main())
             self.assertTrue(path.is_symlink())
             self.record(attempt=attempt, external=self.file_state(external))
 
+    def test_jvm_generated_files_reject_links_and_nonfiles_before_acquisition(self):
+        for name in ("classpath.txt", "dependencies.txt"):
+            for only in (None, "jvm"):
+                for kind in ("external-link", "dangling-link", "directory"):
+                    with self.subTest(name=name, only=only, kind=kind):
+                        self.build()
+                        path = self.output / "jvm" / name
+                        contents = path.read_bytes() if path.exists() else b"other owner bytes\x00\xff"
+                        external = self.root / "other-owner-jvm-file"
+                        external.write_bytes(contents)
+                        path.unlink(missing_ok=True)
+                        if kind == "directory":
+                            path.mkdir()
+                        else:
+                            path.symlink_to(external if kind == "external-link" else self.root / f"missing-jvm-file-{name}-{only}")
+                        calls = (self.output / "tool-calls.jsonl").read_bytes()
+                        classes = build.source_inventory(self.output / "jvm/classes", "go")
+                        try:
+                            with mock.patch.object(build, "acquire", wraps=build.acquire) as acquire:
+                                attempt = self.attempt(only=only)
+                            self.record(name=name, only=only, kind=kind, attempt=attempt, external=self.file_state(external))
+                            self.assertFalse(attempt["accepted"], attempt)
+                            self.assertIn("JVM output file must be a regular file inside output", attempt["error"])
+                            self.assertEqual(acquire.call_count, 0)
+                            self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+                            self.assertEqual(build.source_inventory(self.output / "jvm/classes", "go"), classes)
+                            self.assertEqual(external.read_bytes(), contents)
+                            self.assertEqual(attempt["runner"]["resource_calls"], 0)
+                        finally:
+                            if kind == "directory":
+                                path.rmdir()
+                            else:
+                                path.unlink()
+
+    def test_jvm_generated_files_added_during_acquisition_preserve_classes_and_external_bytes(self):
+        for name in ("classpath.txt", "dependencies.txt"):
+            with self.subTest(name=name):
+                self.build()
+                calls = (self.output / "tool-calls.jsonl").read_bytes()
+                classes = build.source_inventory(self.output / "jvm/classes", "go")
+                path = self.output / "jvm" / name
+                external = self.root / "late-jvm-file"
+                contents = b"late other owner bytes\x00\xff"
+                external.write_bytes(contents)
+                acquire = build.acquire
+
+                def acquire_then_link(output):
+                    sources = acquire(output)
+                    path.unlink(missing_ok=True)
+                    path.symlink_to(external)
+                    return sources
+
+                try:
+                    with mock.patch.object(build, "acquire", side_effect=acquire_then_link):
+                        attempt = self.attempt()
+                    self.record(name=name, attempt=attempt, external=self.file_state(external))
+                    self.assertFalse(attempt["accepted"], attempt)
+                    self.assertIn("JVM output file must be a regular file inside output", attempt["error"])
+                    self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+                    self.assertEqual(build.source_inventory(self.output / "jvm/classes", "go"), classes)
+                    self.assertEqual(external.read_bytes(), contents)
+                    self.assertTrue(path.is_symlink())
+                finally:
+                    path.unlink()
+
+    def test_dynamic_diagnostic_links_reject_before_their_child_on_full_and_partial_builds(self):
+        for label, suffix, selected in (("jvm", ".log", "jvm"), ("rust-inputs", ".log", "rust"),
+                                         ("rust-inputs", ".stdout", "rust")):
+            for only in (None, selected):
+                with self.subTest(label=label, suffix=suffix, only=only):
+                    self.build()
+                    commands = json.loads((self.output / "build-commands.json").read_text())
+                    attempt_number = 1 + sum(row["label"] == label for row in commands)
+                    path = self.output / f"build-{label}-{attempt_number}{suffix}"
+                    external = self.root / "other-owner-diagnostic"
+                    contents = b"other owner diagnostic bytes\x00\xff"
+                    external.write_bytes(contents)
+                    path.symlink_to(external)
+                    calls = len((self.output / "tool-calls.jsonl").read_text().splitlines())
+                    try:
+                        attempt = self.attempt(only=only)
+                        new_calls = [json.loads(line) for line in (self.output / "tool-calls.jsonl").read_text().splitlines()[calls:]]
+                        self.record(label=label, suffix=suffix, only=only, attempt=attempt, new_calls=new_calls,
+                                    external=self.file_state(external))
+                        self.assertFalse(attempt["accepted"], attempt)
+                        self.assertIn("build diagnostic must be a regular file inside output", attempt["error"])
+                        self.assertFalse(any(row["tool"] == "gradle" if label == "jvm" else
+                                             row["tool"] == "cargo" and row["args"][0] == "metadata" for row in new_calls))
+                        self.assertEqual(external.read_bytes(), contents)
+                        self.assertTrue(path.is_symlink())
+                        self.assertEqual(attempt["metadata"], {"drivers.json": False, "buildinputs.json": False,
+                                                               "build-failure.json": True})
+                        self.assertEqual(attempt["runner"]["resource_calls"], 0)
+                    finally:
+                        path.unlink()
+
+    def test_dynamic_diagnostic_rejection_allows_retry_without_losing_previous_command_results(self):
+        self.build()
+        commands = json.loads((self.output / "build-commands.json").read_text())
+        attempt_number = 1 + sum(row["label"] == "jvm" for row in commands)
+        path = self.output / f"build-jvm-{attempt_number}.log"
+        path.mkdir()
+        attempt = self.attempt(only="jvm")
+        self.assertFalse(attempt["accepted"], attempt)
+        self.assertIn("build diagnostic must be a regular file inside output", attempt["error"])
+        self.assertEqual(json.loads((self.output / "build-commands.json").read_text()), commands)
+        path.rmdir()
+        self.build()
+        rows = json.loads((self.output / "build-commands.json").read_text())
+        self.assertEqual(rows[:len(commands)], commands)
+        self.assertTrue(all(row["exit"] == 0 for row in rows[len(commands):]))
+        self.assertEqual(self.probe_run()["resource_calls"], 1)
+        self.record(attempt=attempt, previous_commands=commands, retry_commands=rows[len(commands):])
+
+    def test_pnpm_install_build_and_record_exclude_hooks_and_preserve_parent_settings(self):
+        hook = self.root / "external-global-hook.cjs"
+        marker = self.root / "external-hook-marker"
+        hook.write_text("require('node:fs').appendFileSync(process.env.INTEROP_TEST_HOOK_MARKER, 'loaded\\n');\n")
+        userconfig = self.root / "dedicated.npmrc"
+        userconfig.write_text(f"global-pnpmfile={hook}\n")
+        executable = self.bin / "pnpm"
+        original = executable.read_text()
+        executable.write_text(original.split("\n", 1)[0] + "\n" + '''
+import os, subprocess, sys
+if os.environ.get("PNPM_CONFIG_GLOBAL_PNPMFILE") and "--ignore-pnpmfile" not in sys.argv and os.environ.get("PNPM_CONFIG_IGNORE_PNPMFILE") != "true":
+    subprocess.run(["node", os.environ["PNPM_CONFIG_GLOBAL_PNPMFILE"]], check=True)
+''' + original.split("\n", 1)[1])
+        environment = {"PNPM_CONFIG_GLOBAL_PNPMFILE": str(hook), "NPM_CONFIG_USERCONFIG": str(userconfig),
+                       "INTEROP_TEST_HOOK_MARKER": str(marker), "PNPM_CONFIG_IGNORE_PNPMFILE": "false",
+                       "pnpm_config_ignore_pnpmfile": "false", "pnpm_config_ignorePnpmfile": "false"}
+        files = {path: self.file_state(path) for path in (hook, userconfig)}
+        observed = []
+        execute = subprocess.run
+
+        def capture(command, *args, **kwargs):
+            if Path(str(command[0])).name == "pnpm":
+                observed.append({"argv": list(map(str, command)), "environment": {name: kwargs["env"].get(name)
+                                 for name in environment if "IGNORE" in name or "ignore" in name}})
+            return execute(command, *args, **kwargs)
+
+        with mock.patch.dict(os.environ, environment), mock.patch.object(build.subprocess, "run", side_effect=capture):
+            self.build()
+            self.build(only="js")
+            self.assertTrue(all(os.environ[name] == value for name, value in environment.items()))
+        self.assertFalse(marker.exists())
+        self.assertEqual(files, {path: self.file_state(path) for path in files})
+        self.assertEqual(len(observed), 4)
+        self.assertTrue(all("--ignore-pnpmfile" in row["argv"] and set(row["environment"].values()) == {"true"} for row in observed))
+        inputs = json.loads((self.output / "buildinputs.json").read_text())
+        self.assertEqual(inputs["pnpm_hook_settings"], {"ignore_pnpmfile": True, "arguments": ["--ignore-pnpmfile"],
+                         "environment": {name: "true" for name in environment if "IGNORE" in name or "ignore" in name}})
+        self.assertEqual(self.probe_run()["resource_calls"], 1)
+        self.record(commands=observed, recorded=inputs["pnpm_hook_settings"], marker_exists=marker.exists())
+
+    def test_unselected_partial_build_preserves_recorded_pnpm_hook_settings(self):
+        self.build()
+        previous = json.loads((self.output / "buildinputs.json").read_text())["pnpm_hook_settings"]
+        with mock.patch.dict(os.environ, {"PNPM_CONFIG_GLOBAL_PNPMFILE": str(self.root / "unselected-hook.cjs")}):
+            self.build(only="go")
+        current = json.loads((self.output / "buildinputs.json").read_text())["pnpm_hook_settings"]
+        self.assertEqual(current, previous)
+        self.assertEqual(self.probe_run()["resource_calls"], 1)
+        self.record(previous=previous, current=current)
+
 
 if __name__ == "__main__":
     unittest.main()
