@@ -45,6 +45,11 @@ def pnpm_store_environment():
     return environment
 
 
+def pnpm_script_shell_environment():
+    # 固定pnpmが実採用する2表記だけを子で固定し、入れ子にも同じ選択を渡す。
+    return {"PNPM_CONFIG_SCRIPT_SHELL": "/bin/sh", "pnpm_config_script_shell": "/bin/sh"}
+
+
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -76,6 +81,15 @@ def verify_source_recovery_output(output):
         raise RuntimeError(f"build metadata must be a regular file: {path}")
     if path.exists() and path.stat().st_nlink > 1:
         raise RuntimeError(f"source recovery log must not have multiple hard links: {path}")
+
+
+def verify_js_runtime_output(output):
+    path = output / "js-runtime-inputs.json"
+    if path.is_symlink() or (path.exists() and not path.is_file()):
+        raise RuntimeError(f"build metadata must be a regular file: {path}")
+    # この記録だけはNodeが直接書く。非選択時や原子的saveの別JSONには広げない。
+    if path.exists() and path.stat().st_nlink > 1:
+        raise RuntimeError(f"JavaScript runtime inputs must not have multiple hard links: {path}")
 
 
 def source_fingerprints():
@@ -150,8 +164,8 @@ def verify_jvm_output(output):
     for path in (root, *generated, output / "gradle-cache"):
         if path.is_symlink() or (path.exists() and not path.is_dir()) or not path.resolve().is_relative_to(output):
             raise RuntimeError(f"JVM output directory must be a real directory inside output: {path}")
-    # 固定Gradleの既知生成先では、作業状態のfile linkも外部への書込みになる。
-    for tree in generated:
+    # 固定Gradleの既知生成先とproject-cacheでは、内部file linkも外部への書込みになる。
+    for tree in (*generated, output / "gradle-cache"):
         for directory, directories, files in os.walk(tree, followlinks=False):
             for name in directories + files:
                 path = Path(directory) / name
@@ -556,10 +570,13 @@ def main():
         gradle_inputs = previous_inputs.get("gradle_init_inputs") if previous_inputs else None
         pnpm_inputs = previous_inputs.get("pnpm_hook_settings") if previous_inputs else None
         pnpm_store_inputs = previous_inputs.get("pnpm_store_settings") if previous_inputs else None
+        pnpm_shell_inputs = previous_inputs.get("pnpm_script_shell_settings") if previous_inputs else None
         pnpm_virtual_store = previous_inputs.get("pnpm_virtual_store_dir") if previous_inputs else None
         if not __debug__:
             raise RuntimeError("build requires assertions; run without -O or PYTHONOPTIMIZE")
         verify_driver_sources()
+        if selected("js"):
+            verify_js_runtime_output(output)
         if selected("rust"):
             cargo_inherited_inputs = cargo_config_inputs()
         if args.only:
@@ -672,6 +689,10 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
             pnpm_store_inputs = {"verify_store_integrity": True, "arguments": ["--verify-store-integrity=true"],
                                  "environment": pnpm_store}
             pnpm_environment.update(pnpm_store)
+            pnpm_shell = pnpm_script_shell_environment()
+            pnpm_shell_inputs = {"script_shell": "/bin/sh", "arguments": ["--config.scriptShell=/bin/sh"],
+                                 "environment": pnpm_shell}
+            pnpm_environment.update(pnpm_shell)
             source_inventory(sources / "js", "js")
             # 温かいinstallが残す依存改変を採用しない。既知rootの全byteとaliasは退避して残す。
             roots = [name for name in JS_DEPENDENCY_DIRECTORIES if (sources / "js" / name).exists()]
@@ -683,11 +704,12 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
                     (sources / "js" / name).rename(destination)
             # 既知の生成・退避領域内に固定し、継承設定の外部依存配置先を使わない。
             pnpm_virtual_store = str((sources / "js/node_modules/.pnpm").resolve())
-            execute("js-install", ["pnpm", "--ignore-pnpmfile", "install", "--verify-store-integrity=true", "--frozen-lockfile",
+            execute("js-install", ["pnpm", "--ignore-pnpmfile", "--config.scriptShell=/bin/sh", "install", "--verify-store-integrity=true", "--frozen-lockfile",
                                    "--virtual-store-dir", pnpm_virtual_store],
                     cwd=sources / "js", environment=pnpm_environment)
-            execute("js", ["pnpm", "--ignore-pnpmfile", "--filter", "event-store-adapter-js", "build"],
+            execute("js", ["pnpm", "--ignore-pnpmfile", "--config.scriptShell=/bin/sh", "--filter", "event-store-adapter-js", "build"],
                     cwd=sources / "js", environment=pnpm_environment)
+            verify_js_runtime_output(output)
             execute("js-inputs", ["node", HERE / "drivers/js/runtime-inputs.cjs", "--record",
                                   sources / "js/packages/library", output / "js-runtime-inputs.json"], environment=pnpm_environment)
         if selected("go"):
@@ -709,6 +731,7 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
                   "gradle_init_inputs": gradle_inputs, "go_build_environment": go_environment,
                   "cargo_build_environment": cargo_environment, "pnpm_hook_settings": pnpm_inputs,
                   "pnpm_store_settings": pnpm_store_inputs,
+                  "pnpm_script_shell_settings": pnpm_shell_inputs,
                   "pnpm_virtual_store_dir": pnpm_virtual_store, "drivers": drivers}
         files = artifacts + [go / "driver", go / "go.mod", go / "go.sum", rust / "Cargo.lock", rust / "target/debug/interop-driver"]
         files += [Path(inputs["js_runtime_inputs"])]

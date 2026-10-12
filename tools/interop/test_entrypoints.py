@@ -3311,5 +3311,244 @@ console.log(JSON.stringify(observed));
         self.record(single_link_files=before, directory_link_counts=directories, selected=(None, "jvm"))
 
 
+    def check_gradle_cache_entries(self, stage):
+        for kind in ("file-symlink", "directory-symlink", "hardlink", "fifo"):
+            for only in (None, "jvm"):
+                with self.subTest(kind=kind, stage=stage, only=only):
+                    self.build()
+                    root = self.output.resolve()
+                    owner = self.root.resolve() / f"cache-owner-{stage}-{kind}-{only}"
+                    owner.mkdir()
+                    external = owner / "last-build.bin"
+                    external.write_bytes(b"retained cache owner data\x00\xff")
+                    cache = root / "gradle-cache/9.8.0/fileChanges"
+                    path = cache if kind == "directory-symlink" else cache / "last-build.bin"
+                    acquire_original, cleanup_original = build.acquire, shutil.rmtree
+                    calls = (root / "tool-calls.jsonl").read_bytes()
+                    before = {}
+
+                    def state(target):
+                        info = target.lstat()
+                        result = {"device": info.st_dev, "inode": info.st_ino, "links": info.st_nlink,
+                                  "mode": info.st_mode}
+                        if target.is_symlink():
+                            result["link"] = os.readlink(target)
+                        if target.is_file():
+                            result["contents_hex"] = target.read_bytes().hex()
+                        elif target.is_dir():
+                            result["contents"] = {p.name: p.read_bytes().hex() for p in target.iterdir()}
+                        return result
+
+                    def inject():
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        if kind == "file-symlink":
+                            path.symlink_to(external)
+                        elif kind == "directory-symlink":
+                            if path.exists():
+                                path.rmdir()
+                            path.symlink_to(owner, target_is_directory=True)
+                        elif kind == "hardlink":
+                            os.link(external, path)
+                        else:
+                            os.mkfifo(path)
+                        before.update({str(p): state(p) for p in (external, path)})
+
+                    def acquire_then_inject(*args, **kwargs):
+                        result = acquire_original(*args, **kwargs)
+                        if stage == "after-acquisition":
+                            inject()
+                        if stage == "after-cleanup":
+                            (root / "jvm/resources").mkdir(exist_ok=True)
+                        return result
+
+                    def cleanup_then_inject(target, *args, **kwargs):
+                        result = cleanup_original(target, *args, **kwargs)
+                        if Path(target).resolve() == root / "jvm/resources":
+                            inject()
+                        return result
+
+                    if stage == "before-acquisition":
+                        inject()
+                    try:
+                        with mock.patch.object(build, "acquire", side_effect=acquire_then_inject) as acquisition, \
+                                mock.patch.object(build.shutil, "rmtree", side_effect=cleanup_then_inject
+                                                  if stage == "after-cleanup" else cleanup_original):
+                            attempt = self.attempt(only=only)
+                        after = {str(p): state(p) for p in (external, path)}
+                        unchanged = (root / "tool-calls.jsonl").read_bytes() == calls
+                        self.record(kind=kind, stage=stage, only=only, attempt=attempt,
+                                    acquire_calls=acquisition.call_count, before=before, after=after,
+                                    compiler_calls_unchanged=unchanged)
+                        self.assertFalse(attempt["accepted"], attempt)
+                        self.assertIn("JVM output", attempt["error"])
+                        self.assertEqual(acquisition.call_count, 0 if stage == "before-acquisition" else 1)
+                        self.assertEqual(after, before)
+                        self.assertTrue(unchanged)
+                        self.assertEqual(attempt["metadata"], {"drivers.json": False, "buildinputs.json": False,
+                                                              "build-failure.json": True})
+                        self.assertEqual(attempt["runner"]["resource_calls"], 0)
+                        self.assertEqual(attempt["runner"]["driver_calls"], 0)
+                    finally:
+                        path.unlink(missing_ok=True)
+
+    def test_gradle_cache_entries_reject_before_acquisition(self):
+        self.check_gradle_cache_entries("before-acquisition")
+
+    def test_gradle_cache_entries_reject_after_acquisition(self):
+        self.check_gradle_cache_entries("after-acquisition")
+
+    def test_gradle_cache_entries_reject_after_cleanup_before_gradle(self):
+        self.check_gradle_cache_entries("after-cleanup")
+
+    def test_gradle_cache_normal_entries_and_unselected_cache_are_preserved(self):
+        self.build()
+        path = self.output.resolve() / "gradle-cache/9.8.0/fileChanges/last-build.bin"
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b"normal cache data\x00\xff")
+        before = self.file_state(path)
+        directories = {str(p): p.stat().st_nlink for p in (path.parent, path.parent.parent)}
+        self.assertEqual(path.stat().st_nlink, 1)
+        self.assertTrue(all(n >= 2 for n in directories.values()))
+        for only in (None, "jvm"):
+            self.build(only=only)
+            self.assertEqual(self.file_state(path), before)
+        external = self.root.resolve() / "unselected-cache-owner"
+        os.link(path, external)
+        identity = (path.stat().st_dev, path.stat().st_ino, path.stat().st_nlink)
+        self.build(only="js")
+        self.assertEqual(self.file_state(path), before)
+        self.assertEqual(external.read_bytes(), path.read_bytes())
+        self.assertEqual((external.stat().st_dev, external.stat().st_ino, external.stat().st_nlink), identity)
+        self.assertEqual((path.stat().st_dev, path.stat().st_ino, path.stat().st_nlink), identity)
+        self.assertEqual(self.probe_run()["resource_calls"], 1)
+        self.record(normal=before, directories=directories, unselected_identity=identity)
+
+    def check_js_runtime_hardlink(self, stage):
+        for only in (None, "js"):
+            with self.subTest(stage=stage, only=only):
+                self.build()
+                path = self.output.resolve() / "js-runtime-inputs.json"
+                external = self.root.resolve() / f"manifest-owner-{stage}-{only}"
+                external.write_bytes(path.read_bytes())
+                original_run = subprocess.run
+                observed, before = [], {}
+
+                def state(target):
+                    info = target.stat()
+                    return {"contents_hex": target.read_bytes().hex(), "device": info.st_dev,
+                            "inode": info.st_ino, "links": info.st_nlink}
+
+                def inject():
+                    path.unlink()
+                    os.link(external, path)
+                    before.update({str(p): state(p) for p in (external, path)})
+
+                def capture(command, *args, **kwargs):
+                    observed.append(list(map(str, command)))
+                    result = original_run(command, *args, **kwargs)
+                    if stage == "before-node-record" and Path(str(command[0])).name == "pnpm" and "build" in command:
+                        inject()
+                    return result
+
+                if stage == "before-acquisition":
+                    inject()
+                try:
+                    with mock.patch.object(build, "acquire", wraps=build.acquire) as acquisition, \
+                            mock.patch.object(build.subprocess, "run", side_effect=capture):
+                        attempt = self.attempt(only=only)
+                    after = {str(p): state(p) for p in (external, path)}
+                    self.record(stage=stage, only=only, attempt=attempt, acquire_calls=acquisition.call_count,
+                                before=before, after=after, commands=observed)
+                    self.assertFalse(attempt["accepted"], attempt)
+                    self.assertIn("JavaScript runtime inputs must not have multiple hard links", attempt["error"])
+                    self.assertEqual(acquisition.call_count, 0 if stage == "before-acquisition" else 1)
+                    self.assertEqual(after, before)
+                    self.assertFalse(any("--record" in command for command in observed))
+                    self.assertEqual(attempt["metadata"], {"drivers.json": False, "buildinputs.json": False,
+                                                          "build-failure.json": True})
+                    self.assertEqual(attempt["runner"]["resource_calls"], 0)
+                    self.assertEqual(attempt["runner"]["driver_calls"], 0)
+                finally:
+                    path.unlink(missing_ok=True)
+
+    def test_js_runtime_hardlink_rejects_before_acquisition(self):
+        self.check_js_runtime_hardlink("before-acquisition")
+
+    def test_js_runtime_hardlink_rejects_before_node_record(self):
+        self.check_js_runtime_hardlink("before-node-record")
+
+    def test_js_runtime_single_link_and_unselected_hardlink_are_preserved(self):
+        self.build()
+        self.build(only="js")
+        path = self.output.resolve() / "js-runtime-inputs.json"
+        self.assertEqual(path.stat().st_nlink, 1)
+        external = self.root.resolve() / "unselected-manifest-owner"
+        os.link(path, external)
+        data = path.read_bytes()
+        info = path.stat()
+        previous = json.loads((self.output / "buildinputs.json").read_text())
+        self.build(only="jvm")
+        current = json.loads((self.output / "buildinputs.json").read_text())
+        for target in (path, external):
+            self.assertEqual(target.read_bytes(), data)
+            self.assertEqual((target.stat().st_dev, target.stat().st_ino, target.stat().st_nlink),
+                             (info.st_dev, info.st_ino, 2))
+        artifact = next(row for row in previous["artifacts"] if row["path"] == str(path))
+        self.assertIn(artifact, current["artifacts"])
+        self.assertEqual(self.probe_run()["resource_calls"], 1)
+        self.record(single_link_accepted=True, preserved_artifact=artifact, unselected_links=2)
+
+    def test_pnpm_script_shell_is_fixed_in_children_and_recorded_separately(self):
+        inherited = {"PNPM_CONFIG_SCRIPT_SHELL": "/owned/parent-shell",
+                     "pnpm_config_script_shell": "/owned/parent-shell", "pnpm_config_scriptShell": "/owned/unused"}
+        observed = []
+        original_run = subprocess.run
+
+        def capture(command, *args, **kwargs):
+            if Path(str(command[0])).name == "pnpm" or "--record" in command:
+                environment = kwargs["env"]
+                nested = original_run([sys.executable, "-c", "import json,os; print(json.dumps({name: os.environ.get(name) "
+                                      "for name in json.loads(os.environ['INTEROP_SHELL_NAMES'])}))"],
+                                      env=dict(environment, INTEROP_SHELL_NAMES=json.dumps(list(inherited))),
+                                      capture_output=True, text=True, check=True)
+                observed.append({"argv": list(map(str, command)),
+                                 "environment": {name: environment.get(name) for name in inherited},
+                                 "nested_environment": json.loads(nested.stdout)})
+            return original_run(command, *args, **kwargs)
+
+        with mock.patch.dict(os.environ, inherited), mock.patch.object(build.subprocess, "run", side_effect=capture):
+            self.build()
+            self.build(only="js")
+            self.assertEqual({name: os.environ[name] for name in inherited}, inherited)
+        inputs = json.loads((self.output / "buildinputs.json").read_text())
+        expected = {"PNPM_CONFIG_SCRIPT_SHELL": "/bin/sh", "pnpm_config_script_shell": "/bin/sh"}
+        self.record(commands=observed, recorded=inputs.get("pnpm_script_shell_settings"), parent=inherited)
+        self.assertEqual(len(observed), 6)
+        for row in observed:
+            self.assertEqual(row["environment"], dict(expected, pnpm_config_scriptShell=inherited["pnpm_config_scriptShell"]))
+            self.assertEqual(row["nested_environment"], row["environment"])
+            if Path(row["argv"][0]).name == "pnpm":
+                self.assertIn("--config.scriptShell=/bin/sh", row["argv"])
+        self.assertEqual(inputs["pnpm_script_shell_settings"], {"script_shell": "/bin/sh",
+                         "arguments": ["--config.scriptShell=/bin/sh"], "environment": expected})
+        for name in ("pnpm_hook_settings", "pnpm_store_settings"):
+            self.assertFalse(any("shell" in key.lower() for key in inputs[name]["environment"]))
+        self.assertEqual(self.probe_run()["resource_calls"], 1)
+
+    def test_unselected_jvm_build_preserves_script_shell_record_and_all_artifacts(self):
+        self.build()
+        previous = json.loads((self.output / "buildinputs.json").read_text())
+        with mock.patch.dict(os.environ, {"PNPM_CONFIG_SCRIPT_SHELL": "/owned/parent-shell"}):
+            self.build(only="jvm")
+            self.assertEqual(os.environ["PNPM_CONFIG_SCRIPT_SHELL"], "/owned/parent-shell")
+        current = json.loads((self.output / "buildinputs.json").read_text())
+        for name in ("pnpm_script_shell_settings", "pnpm_hook_settings", "pnpm_store_settings", "pnpm_virtual_store_dir"):
+            self.assertEqual(current[name], previous[name])
+        self.assertEqual(current["artifacts"], previous["artifacts"])
+        self.record(previous=previous.get("pnpm_script_shell_settings"), current=current.get("pnpm_script_shell_settings"),
+                    artifacts_preserved=len(current["artifacts"]))
+        self.assertEqual(self.probe_run()["resource_calls"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()
