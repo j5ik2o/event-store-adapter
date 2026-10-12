@@ -1,7 +1,8 @@
 import { createInterface } from 'node:readline';
-import runtimeInputs from './runtime-inputs.cjs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
 
-const require = runtimeInputs.verifiedRequire(process.env.INTEROP_JS_INPUTS, process.env.INTEROP_JS_LIBRARY);
+const require = createRequire(join(process.env.INTEROP_JS_LIBRARY, 'package.json'));
 const { AggregateId, EventEnvelope, SnapshotEnvelope, EventStore } = require(process.env.INTEROP_JS_LIBRARY);
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const unwrap = result => { if (result.type === 'err') throw result.error; return result.value; };

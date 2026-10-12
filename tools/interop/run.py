@@ -16,7 +16,7 @@ import uuid
 
 import boto3
 from botocore.config import Config
-from build import child_environment, external_output, source_fingerprints, verify_artifacts, verify_sources
+from build import external_output
 from query_observer import QueryObserver, item_bytes
 
 HERE = Path(__file__).resolve().parent
@@ -65,7 +65,7 @@ class Driver:
         self.replies = queue.Queue()
         self.count = 0
         self.stderr = (output / f"{language}-stderr.log").open("w")
-        environment = child_environment(definition["env"])
+        environment = {**os.environ, **definition["env"]}
         self.process = subprocess.Popen(definition["argv"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                         stderr=self.stderr, text=True, env=environment)
 
@@ -126,7 +126,7 @@ class Local:
         self.tables = {kind: f"{prefix}_{kind}" for kind in ("journal", "snapshot", "head")}
 
     def command(self, argv):
-        result = subprocess.run(argv, capture_output=True, text=True, env=child_environment())
+        result = subprocess.run(argv, capture_output=True, text=True)
         row = {"argv": argv, "exit": result.returncode, "stdout": result.stdout, "stderr": result.stderr}
         self.commands.append(row)
         save(self.output / "resource-commands.json", self.commands)
@@ -293,14 +293,10 @@ def main():
     output = external_output(args.output)
     if (args.build / "build-failure.json").exists():
         raise RuntimeError("build failed; rebuild successfully before running")
-    inputs = json.loads((args.build / "buildinputs.json").read_text())
-    if inputs["currentSnapshot"] != PINS or inputs["driver_sources"] != source_fingerprints():
-        raise RuntimeError("build inputs are stale; rebuild before running")
-    verify_sources(inputs["sources"])
-    verify_artifacts(inputs)
     definition = json.loads((args.build / "drivers.json").read_text())
-    if definition != inputs["drivers"]:
-        raise RuntimeError("driver definitions changed; rebuild before running")
+    inputs = json.loads((args.build / "buildinputs.json").read_text())
+    if inputs["currentSnapshot"] != PINS:
+        raise RuntimeError("snapshots.json changed after the build; rebuild before running")
     output.mkdir(parents=True, exist_ok=False)
     local = Local(output)
     drivers, observer = {}, None
@@ -475,7 +471,6 @@ def main():
         report["cleanup"] = local.close()
         if report["cleanup"]["errors"] or any(row.get("exit") != 0 or row.get("terminated") for row in report["driver_exits"]):
             report["status"] = "failed"
-        report["source_sha256"] = source_fingerprints()
         checkpoint()
     print(json.dumps({"status": report["status"], "matrix": len(report["matrix"]), "output": str(output)}, ensure_ascii=False))
     return 1 if report["status"] == "failed" else 0

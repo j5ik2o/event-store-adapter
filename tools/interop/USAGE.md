@@ -1,99 +1,40 @@
 # 6言語で同じ DynamoDB Local を読み書きする
 
-共通契約 v4 と [DynamoDB 保存仕様](../../docs/spec/storage/dynamodb.md) の相互運用を実測する入口です。
-各言語のドライバーが公開の生成入口と4操作を呼びます。既存の適合試験は再実行しません。
-共通処理は入力、結果の記録、比較、資源の管理を担当します。
+[共通契約](../../docs/spec/core-contract.md) と [DynamoDB 保存仕様](../../docs/spec/storage/dynamodb.md) の相互運用を実測する、一度きりの検証ツールです。
+`snapshots.json` に固定した指定コミットのソースを取得し、6言語の薄いドライバーをビルドします。
+Docker で DynamoDB Local を起動し、各言語の公開 API だけを通して、6言語の書き手と6言語の読み手の全組み合わせを確かめます。
+結果は `acceptance.json` に保存します。
+
+## 用意するもの
+
+Docker、Python 3.12以降（boto3）、Java、Gradle 9.8 の配布物、Go、Rust、Node.js 24以降、pnpm。
 
 ## 実行する
 
-Docker、Python 3.12以降、Java、Gradle 9.8、Go、Rust、Node.js 24以降、pnpmを用意します。
-取得する本体のソースと Java の開発中成果物は `snapshots.json` に固定しています。
-共通契約の版と各ライブラリの版は別です。正式リリースを仮定せず、使用した入力を `buildinputs.json` に残します。
+出力先は `tools/interop` の外に置いてください。
 
 ```sh
 python3 -m venv /tmp/eswa-interop-env
 /tmp/eswa-interop-env/bin/pip install boto3
-python3 tools/interop/build.py --output /tmp/eswa-interop-build --gradle /path/to/gradle-9.8/bin/gradle
+/tmp/eswa-interop-env/bin/python tools/interop/build.py --output /tmp/eswa-interop-build --gradle /path/to/gradle-9.8/bin/gradle
 /tmp/eswa-interop-env/bin/python tools/interop/run.py --build /tmp/eswa-interop-build --output /tmp/eswa-interop-result
 ```
 
-Gradle 9.8 の配布物の `bin/gradle` が通常の `gradle` コマンドで使える場合は `--gradle` を省略できます。シンボリックリンクは実行先を解決します。起動後に配布物を選ぶラッパーは扱わないため、`--gradle` に配布物の `bin/gradle` を直接指定してください。
-ビルドと測定結果の出力先は `tools/interop` の外に置いてください。出力先の実パスを解決し、このソースディレクトリ自身やその配下を指す場合は、ディレクトリの作成・取得・コンパイル・資源の開始前に拒否します。Javaのクラスパスに表せないため、解決後のパスに実行環境のクラスパス区切り文字（Unix・macOSでは `:`）が含まれる場合も、全ビルド・部分ビルド・測定で同じ段階に拒否します。シンボリックリンク経由でも同じ条件で判定します。空白・引用符・バックスラッシュを含むパスは引き続き利用できます。
-受入済み Java のファイルがある場合は `--java-artifact-directory` でそのディレクトリを指定できます。
-ソースアーカイブは、初回に指定コミットの HTTPS 取得で確認した SHA-256 を `snapshots.json` に固定しています。再利用するキャッシュも新規取得も、この期待値に一致してから内容を読みます。指定コミットを更新するときは、対応する `source_archives` のコミットと期待ハッシュも更新してください。両者のコミットが食い違う場合は取得前に拒否します。
-取得済みソースは指定コミットのアーカイブとファイル集合・内容・シンボリックリンクを照合し、追加されたソースも拒否します。この入口が生成する JavaScript の依存ディレクトリと `packages/library/dist` だけを照合対象から除きます。他言語のビルド出力は取得済みソースの外に置きます。
-取得と展開は専用の一時ディレクトリで検証してから確定するため、途中で失敗しても同じ出力先で全ビルドを再試行できます。取得済みソースの欠落だけなら既存アーカイブから復旧し、元の欠落と復旧結果を `source-recovery.jsonl` に記録します。元ディレクトリがあれば、その全体を出力先直下の `.source-cache-backup-<言語>-*` 内へ退避し、生成済み依存・生成物・リンクも保持します。退避先の実パスは同じ記録の `backup_path` に残し、復旧成功後も世代を自動削除しません。新ソースの配置に失敗した場合は元の位置へ戻します。部分ビルドは取得前に前回ソースを照合するため、未選択のJavaScriptソースが欠けている場合も元データを保持して拒否します。追加や改変が混在する場合は元のキャッシュを残して拒否します。読めないアーカイブや期待ハッシュと異なるアーカイブは再取得します。新規取得のハッシュが違う場合はキャッシュを確定せずに拒否します。
-取得キャッシュの親 `sources` は、取得・一時領域の作成・置換・欠落復旧より前に、出力先の内側にある通常のディレクトリかを確認します。リンクや通常ファイルの場合は拒否し、参照先のアーカイブや欠落ディレクトリを変更しません。測定前のソース照合でも同じ親を確認します。
-ビルドが読む言語別のリンクも指定コミットの取得先へ更新し、Java の公開 sources 成果物をそのソースと照合します。
-Java の実行用とソース用の2成果物も固定ハッシュで照合します。壊れた出力キャッシュを無効にし、明示指定されたディレクトリ、または固定された公式の開発中成果物から専用の一時領域へ取得します。2成果物のハッシュと指定ソースとの一致を確認してから確定するため、コピーや取得が中断しても同じ出力先で再試行できます。明示指定したディレクトリのファイルが欠けている、または不正な場合は拒否し、通信で代替しません。
-成功済みのビルドがあり、指定コミットと他のドライバー、その実行時の入力が変わっていなければ、`build.py --only rust` のように変更した対象だけ再ビルドできます。
-`--only go`・`--only rust`・`--only js` では、Java・Kotlin・Scalaのドライバー定義とクラスパス入力に、検証済みの前回記録を使います。編集された `jvm/classpath.txt` を新しい実行入力として採用しません。全ビルドと `--only jvm` では、今回生成した同ファイルの値を使います。
-ビルド開始時に前回の成功記録を無効にするため、取得やビルドに失敗した後は全ドライバーを再ビルドしてください。
-前回のコマンド履歴や入力記録のJSONを読めない場合も、成功記録を無効にして `build-failure.json` へ失敗を残します。不正なJSONを修復または取り除いてから、同じ出力先で全ビルドを再試行できます。
-測定はビルド失敗の記録、現在のソースや取得先との不一致、成果物のバイト数や指紋の不一致を資源取得前に拒否します。ソースを変えた場合も、測定の前に再ビルドが必要です。
-ビルドの既知メタデータ保存先がシンボリックリンクなら、取得と子コマンドの起動前に拒否します。対象は `build-commands.json`・`buildinputs.json`・`drivers.json`・`build-failure.json`・`source-inputs.json`・`js-runtime-inputs.json`・`source-recovery.jsonl` です。失敗記録は同じ親ディレクトリの一時ファイルから置換するため、保存先がリンクでも外部の参照先へ書き込みません。
-直接追記する `source-recovery.jsonl` は、複数の名前で同じファイル実体を参照するハードリンクも取得・復旧前と追記直前に拒否し、外部名と全内容を保持します。
-各ビルドコマンドの起動前には、その試行が保存する `build-<対象>-<試行回数>.log` と、標準出力を分ける場合の `.stdout` も確認します。出力先の内側にある通常ファイル以外、または複数の名前から同じファイル実体を参照するハードリンクが既にあれば拒否します。外部の名前と診断出力の名前、共有実体の内容を保持します。
-Java・Kotlin・Scala は、実クラスパスの各ディレクトリの参照先、存在状態、全ファイルの集合と内容を `buildinputs.json` に記録します。クラスと実行時リソースの追加・欠落・改変、ディレクトリの参照変更を測定前に拒否します。現在存在しないリソース用ディレクトリも記録し、後からの作成を検出します。ディレクトリ内部のシンボリックリンクや通常ファイル以外の入力は扱いません。
-全ビルドと `--only jvm` は、選択されたJava・Kotlin・Scalaのクラスとリソースの生成先だけを清掃して再生成します。Gradleのキャッシュ、他言語の生成物、その外の利用者ファイルは清掃しません。部分ビルドは、清掃前に前回入力の整合性を確認します。
-取得と清掃の前とGradle起動直前に、`jvm` の親生成先と `classes`・`resources`・`tmp`・`kotlin`・`generated`・`reports` が出力先の内側にある通常のディレクトリかを確認します。既知の生成先の内部も検査し、ファイルやディレクトリのシンボリックリンクを拒否します。検査で拒否したリンクと参照先は変更しません。
-同じ段階で、Gradleが保存する `jvm/classpath.txt`・`jvm/dependencies.txt` も確認します。既存の保存先がシンボリックリンク、通常ファイル以外、複数の名前で同じファイル実体を参照するハードリンクなら、取得・清掃・Gradle起動前に拒否します。
-GoとRustの生成パッケージも、選択された場合だけ既知の入力から更新します。Goの生成先は `main.go`・`go.mod`・`go.sum`・`driver`、Rustの生成先は `Cargo.toml`・`Cargo.lock`・`src/main.rs` と `target` ディレクトリだけを扱います。余剰のGoソースやCargoの `build.rs`・ライブラリ・追加バイナリ・例・試験・性能測定用の入力が残っていれば、取得とコンパイル前に拒否します。余剰入力を確認して生成先から取り除き、全ビルドを再試行してください。Rustを選択した場合は、既存の `target` 全体を出力先直下の `.rust-target-backup-*/target` へ退避し、空の生成先から依存を含めてビルドします。退避した元データ、`Cargo.lock`、未選択のRust生成物、他言語の生成物、生成パッケージ外の利用者ファイルは清掃しません。生成パッケージのルートや既知の入力がシンボリックリンクなら拒否し、その参照先は変更しません。
-既知の通常生成ファイルにハードリンクがあり、複数の名前が同じ実体を参照する場合も、取得とコンパイル前に拒否します。両方の名前、全内容と共有実体を保持し、ディレクトリのリンク数はこの拒否条件に使いません。
-Goのビルドと依存一覧取得は、子の環境だけに `GOWORK=off`、空の `GOFLAGS`、`GOENV=off` を設定します。`GOFLAGS` のファイル差し替えや、保存済みのGo環境設定を採用せず、取得済みの固定ソースを使います。親の環境と設定ファイルは変更しません。適用した設定は `buildinputs.json` の `go_build_environment` に記録します。GoのモジュールとRustの依存指定に書くパスは引用し、空白・引用符・バックスラッシュを保ちます。
-Goを選択した場合は、コンパイル前に同じ子環境で `go mod verify` を実行します。取得済みの依存キャッシュの改変を検出したら、キャッシュを保持してビルドを拒否し、実終了値を `build-commands.json` に記録します。まだ取得していない依存は、通常のビルド時に取得して検証します。
-Rustを選択した全ビルドと `--only rust` は、出力先直下に毎回新しい通常のディレクトリ `.cargo-home-*` を作り、Cargoのビルドと依存情報取得の子だけへ同じ `CARGO_HOME` を設定します。継承ホーム、共有のレジストリーの展開済みソース・取得済みアーカイブ、以前の専用ホームをコピーせず、通常の取得と検証で新規展開します。依存指定と既存の `Cargo.lock` は引き続き使います。親の環境、共有ホーム、認証情報、以前の専用ホームは保持し、世代を自動削除しません。専用ホームが通常のディレクトリで出力先内にあることを前後に確認し、依存情報が示すレジストリーのソースがそのホーム内にあること、ドライバーと固定ライブラリの参照先が生成元と一致することを照合します。実適用ホームは `cargo_build_environment`、参照先の確認結果は `cargo_metadata_inputs` に記録します。
-Cargoの呼出し場所である `tools/interop` と全親ディレクトリの `.cargo/config`・`.cargo/config.toml`、継承した `CARGO_HOME`（未指定なら利用者ホームの `.cargo`）の `config`・`config.toml` を取得前に検査します。専用ホームの作成後は、継承ホームと実際の子ホームの設定を各Cargo起動前と依存情報取得後にも確認します。この入口では外部のCargo設定を扱わないため、存在する場合は内容を読まずに拒否します。子の探索先と設定ファイルが存在しないことを `cargo_config_inputs`、継承側を `cargo_inherited_config_inputs` に記録します。`RUSTC`・`CARGO_BUILD_RUSTC` と、それぞれの `RUSTC_WRAPPER`・`RUSTC_WORKSPACE_WRAPPER` 相当の環境指定も、値を記録せずに拒否します。
-Cargoのビルドと依存情報取得では、子の `CARGO_TARGET_DIR`・`CARGO_BUILD_TARGET_DIR`・`CARGO_BUILD_BUILD_DIR` を、記録と起動に使う `rust-driver/target` に固定します。ビルドには同じ `--target-dir` も渡し、依存情報が返した実出力先と照合します。設定は `cargo_build_environment` に記録します。別の対象プラットフォームを選ぶ `CARGO_BUILD_TARGET` と、出力やコンパイル内容を変更できる `RUSTFLAGS`・`CARGO_ENCODED_RUSTFLAGS`・`CARGO_BUILD_RUSTFLAGS`・`CARGO_TARGET_<対象>_RUSTFLAGS`、対象別のリンカーを選ぶ `CARGO_TARGET_<対象>_LINKER` は、取得や子コマンドの起動前に変数名だけを示して拒否します。依存情報の構造化結果は標準出力を保存した `.stdout` ファイルだけから解析します。標準エラーの診断と標準出力は従来の `.log` にも残し、`CARGO_LOG` による診断があっても実終了値に従って判定します。
-Java・Kotlin・Scalaをビルドする場合は、実際に使うGradle配布物と利用者ホームを確定します。利用者ホームの `init.gradle`・`init.gradle.kts`、利用者ホームと配布物の `init.d` にある `.gradle`・`.gradle.kts` ファイルがあれば、内容を読まず、取得とクラス清掃の前に拒否します。実適用される利用者ホーム・`drivers/jvm`・配布物直下の `gradle.properties` も検査し、非空ファイルとシンボリックリンクを内容を読まずに拒否します。空の通常ファイルは利用でき、存在とバイト数を記録します。Gradleの起動直前にも再確認し、同じ利用者ホームを `--gradle-user-home` で指定します。適用先と初期化スクリプトの不存在、設定ファイルの状態を `gradle_init_inputs` に記録し、既存のキャッシュ、共有設定、認証情報は保持します。
-薄いJava・Kotlin・Scalaドライバーの入力指紋には、コンパイル対象になる隠しソースも含めます。Javaは `drivers/jvm` 直下の `.java` ファイル、Kotlin・Scalaは同ディレクトリ配下の `.kt`・`.scala` ファイルを記録します。隠し親ディレクトリのKotlin・Scalaソースも、測定前と未選択ドライバーの部分ビルド前に照合します。`drivers` 自身と全言語の通常配下・隠し配下のディレクトリがシンボリックリンクなら、取得・コンパイル・測定資源の開始前に拒否します。実在する通常ファイルへのリンクは内容を指紋に記録し、固定ライブラリを指す `sources` 内のソース別名リンクも引き続き利用します。無関係な隠しキャッシュは指紋に追加しません。
-JavaScript は、このドライバーが実際に読み込む本体と依存のコード、パッケージ情報、依存の解決先を `js-runtime-inputs.json` に記録します。測定前にコードを実行せず照合し、実行中に記録外のファイルを読み込もうとした場合も拒否します。未使用の依存ファイルは記録しません。
-JavaScriptを選択したビルドでは、取得ソースのルートと `packages/library`・`packages/examples`・`packages/tests` にある既存の `node_modules` を、出力先直下の `.js-dependencies-backup-*` 内へ退避します。その後、固定された依存指定から `pnpm install --frozen-lockfile` で再生成し、以前の依存コードの改変を新しい実行入力として採用しません。退避した全データと内部のリンク、リンク先、共有のパッケージキャッシュ、未選択のJavaScript依存は保持します。
-依存の配置先は、同じ生成・退避領域内の `sources/js/node_modules/.pnpm` の実パスを `--virtual-store-dir` で導入時に明示します。継承した外部の依存配置先へ書き込まず、親の環境と設定、共有のパッケージキャッシュは保持します。指定先は `buildinputs.json` の `pnpm_virtual_store_dir` に記録し、JavaScriptを選ばない部分ビルドでは前回の記録を保持します。
-固定ソースのpnpmは12.10.1です。このソースはpnpmfileのフックを必要としないため、導入とビルドに `--ignore-pnpmfile` を渡します。子の環境でも `PNPM_CONFIG_IGNORE_PNPMFILE=true` と同じ設定の表記違いを固定し、入れ子のpnpmへ引き継ぎます。外部のフックを実行せず、親の設定・環境・認証情報は変更しません。適用した引数と環境は `buildinputs.json` の `pnpm_hook_settings` に記録し、JavaScriptを選ばない部分ビルドでは前回の記録を保持します。
-pnpmのスクリプトを実行するシェルは、この環境で信頼する `/bin/sh` に固定します。導入とビルドに固定12.10.1が受理する `--config.scriptShell=/bin/sh` を渡し、共有設定より優先させます。子の `PNPM_CONFIG_SCRIPT_SHELL` と `pnpm_config_script_shell` も同じ値にして、導入時のスクリプトと入れ子のpnpmへ引き継ぎます。原指摘の `pnpm_config_scriptShell` は固定版で採用されない表記のため、実採用される2表記と区別します。適用した引数と環境は `pnpm_script_shell_settings` に分けて記録し、JavaScriptを選ばない部分ビルドでは前回の記録を保持します。親の設定・環境・共有ストアは変更しません。
-依存の導入には `--verify-store-integrity=true` を明示し、子の環境でも `PNPM_CONFIG_VERIFY_STORE_INTEGRITY=true` と同じ設定の表記違いを固定します。入れ子のpnpmにもtrueを引き継ぎ、継承設定のfalseによる共有ストアの変更済みファイル検査の省略を防ぎます。適用した引数と環境は `buildinputs.json` の `pnpm_store_settings` に分けて記録し、JavaScriptを選ばない部分ビルドでは前回の記録を保持します。親の設定、共有ストア、版、依存指定、退避したデータは保持します。この検査は、ストアの内容と検証用メタデータをともに変更できる相手に対する真正性を保証するものではありません。
-Gradleの既知生成先 `jvm/classes`・`resources`・`tmp`・`kotlin`・`generated`・`reports` 内の通常ファイルは、ハードリンクの参照数が2以上なら拒否します。取得前、取得後の清掃前、清掃後のGradle起動前に同じ検査を行い、残す作業ファイルを通じた他所有者への書込みを防ぎます。通常のディレクトリの参照数は拒否しません。再生成する場所は引き続きclassesとresourcesだけです。
-同じ3境界で、出力先の `gradle-cache` 内部もリンクを追わずに検査します。ファイルとディレクトリのシンボリックリンク、特殊な型、参照数が2以上の通常ファイルを拒否し、キャッシュの元データを保持します。通常ファイルとディレクトリだけを許可し、ディレクトリの参照数は制限しません。
-JavaScriptを選択したビルドでは、Nodeが直接書く `js-runtime-inputs.json` の通常ファイルの参照数が2以上なら、取得前と記録用Nodeの起動直前に拒否します。両方の名前と内容を残して失敗を記録します。未選択の入力記録と成果物、および原子的に置換する別のJSON保存先の扱いは維持します。
-ビルド、JavaScriptの入力記録・照合、ドライバー、所有資源の管理コマンドを起動するときは、子の環境から `NODE_OPTIONS`、`JAVA_TOOL_OPTIONS`、`JDK_JAVA_OPTIONS`、`_JAVA_OPTIONS`、`JAVA_OPTS`、`GRADLE_OPTS`、`LD_PRELOAD`、`LD_AUDIT`、`DYLD_INSERT_LIBRARIES` を除きます。検査より先に追加コードを読む経路を閉じるためです。親の環境は変えず、`PATH`、`JAVA_HOME`、通常の設定と明示ドライバー入力を引き継ぎます。
-検証には Python の `assert` を使います。`-O` と `PYTHONOPTIMIZE` による最適化実行は、取得と測定の入口で拒否します。
-測定結果の出力先には、存在しない新しいディレクトリを指定してください。
+Java の成果物を取得済みなら、`--java-artifact-directory` でそのディレクトリを渡せます。
+単体テストは同じ venv で `cd tools/interop && /tmp/eswa-interop-env/bin/python -m unittest test_run -v` を実行します。
 
-入口の回帰試験は、上記の仮想環境で次のように実行できます。
+## 出力
 
-```sh
-/tmp/eswa-interop-env/bin/python -m unittest discover -s tools/interop -p 'test_entrypoints.py' -v
-```
+- `acceptance.json`: 全検証の結果と終了状態
+- `<language>-calls.jsonl`: 各言語ドライバーへの呼び出しと応答
+- `sdk.jsonl`: 測定側が boto3 で直接行った要求と応答（表の作成、保存された項目の読み取りなど）
+- `queries.jsonl`: ドライバーが journal に送った Query の要求と応答、実項目のバイト数
+- `buildinputs.json`: 使った固定値と取得したソース
+- `build-commands.json`: ビルドコマンド、ログの場所、終了値、所要時間
+- `cleanup.json`: 後片付けの結果
 
-実行ごとに digest 固定の DynamoDB Local をループバックアドレスの空きポートで起動し、所有する journal・snapshot・head の3表と履歴索引を一度作ります。
-設定項目はライブラリの生成処理が作ります。全言語で同じ表と設定を使い、独立したソフトウェア開発キットの読み取りで照合します。
-終了時には、成功・失敗を問わずその実行が作った表とコンテナを削除します。
+## 固定する値
 
-## 原票を読む
-
-- `acceptance.json`：6書き手×6読み手の36組、順次追記、楽観ロック、時刻の期待と実測、保存属性、ページ読み取り、資源終了。
-- `<言語>-calls.jsonl`：公開操作へ渡した入力と、その実応答。長時間動くドライバーの終了値は `driver_exits` に記録します。
-- `sdk.jsonl`：独立したソフトウェア開発キットの要求・応答。バイナリは Base64、バイト数、SHA-256を保存します。
-- `queries.jsonl`：公開読み取りが送った実 Query、Local の原応答、有効な応答、実項目のバイト数、続きのキー。
-- `buildinputs.json`、`build-commands.json`：各ソースのコミット、アーカイブと成果物の SHA-256、実ビルドコマンドの終了値。
-- `source-inputs.json`、`js-runtime-inputs.json`：取得先の実参照先とファイル集合の指紋、JavaScript の実読込ファイル・パッケージ情報・依存の解決先。
-- `source-recovery.jsonl`：不完全な取得済みアーカイブやソースの欠落と、再取得・復旧の記録。
-- `ownership.json`、`resource-commands.json`、`cleanup.json`：所有資源、実コマンド、表の削除とコンテナの終了。
-
-36組には全言語が正確に表せるミリ秒の時刻を使います。さらに全6言語の書き手へミリ秒未満を含む時刻を渡し、公開操作で書きます。独立したソフトウェア開発キットで実保存時刻を読み、書き手の精度に基づく期待値と照合して `precision_writes` に保存します。その6件を全6言語の読み手で読む36組を `precision` に記録します。JavaScriptの書き込み時のミリ秒丸めと、他言語が保存したナノ秒をJavaScriptで読むときの丸めを区別します。公開操作とQueryの件数は実呼出し数を記録します。
-全6言語の重複追記の拒否では、独立したソフトウェア開発キットで取得した完全な集約ヘッドを前後で比較し、両実項目を `optimistic_lock` に残します。ジャーナルと最新スナップショットの公開読み取りも、引き続き不変を確認します。
-JavaScriptドライバーは、負の非整列時刻も小さい整数側のミリ秒へ変換します。本体の読み取りとこの入口の既存の精度期待に合わせる処理で、共通契約の文言から丸め方向を新たに定めるものではありません。
-順次追記では最後のヘッドが6、最新スナップショットが4になるため、両者を区別した読み取りも確認します。
-
-## Local のページ境界を区別する
-
-まず12件の約120 KiBのペイロードを公開操作で書き、補正なしの Local を独立して Query します。
-Local が実際に続きのキーを返せば、そのまま全言語の複数ページ読み取りを検証します。
-バイナリ属性の実総量が1 MiBを超えても原応答が一度に返る場合は、原票の `local_physical_boundary.status` を `not-observed` とし、物理境界の成功には数えません。
-
-この条件でだけ、受入済み Java の `DynamoDbEventQueryPagination` と同じ方式で実応答の項目サイズを測り、1 MiB以内の実接頭辞と実末項目のキーを返します。
-続きは、そのキーを使った Local への実 Query です。原応答と補正した応答を両方保存します。
-`Limit` や期待イベントからの応答生成は使いません。
-この検証は `accepted-real-prefix-boundary`、全体の結果は `passed-with-local-boundary-limitation` として通常の物理境界成功と区別します。
-根拠は [保存仕様の全ページ読み取り](../../docs/spec/storage/dynamodb.md#72-イベント) と、受入済みラッパーの試験原票にある実接頭辞・実末キー・実次 Query の方式です。
+`snapshots.json` は、ソースのコミット、アーカイブの SHA-256、Java の開発中スナップショットの jar、言語ごとの時刻精度を固定します。
+JavaScript の精度がミリ秒なのは、公開 API が `Date` を使うためです。
+コミットを更新するときは、対応するアーカイブの SHA-256 も一緒に更新してください。
