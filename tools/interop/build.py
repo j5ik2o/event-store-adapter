@@ -38,6 +38,13 @@ def pnpm_hook_environment():
     return environment
 
 
+def pnpm_store_environment():
+    environment = {name: "true" for name in os.environ if name.lower().startswith("pnpm_config_") and
+                   name[len("pnpm_config_"):].lower().replace("_", "").replace("-", "") == "verifystoreintegrity"}
+    environment["PNPM_CONFIG_VERIFY_STORE_INTEGRITY"] = "true"
+    return environment
+
+
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -148,9 +155,12 @@ def verify_jvm_output(output):
         for directory, directories, files in os.walk(tree, followlinks=False):
             for name in directories + files:
                 path = Path(directory) / name
-                mode = path.lstat().st_mode
+                info = path.lstat()
+                mode = info.st_mode
                 if not (stat.S_ISREG(mode) or stat.S_ISDIR(mode)):
                     raise RuntimeError(f"JVM output entry must be a regular file or directory: {path}")
+                if stat.S_ISREG(mode) and info.st_nlink > 1:
+                    raise RuntimeError(f"JVM output file must not have multiple hard links: {path}")
     for name in ("classpath.txt", "dependencies.txt"):
         path = root / name
         if path.is_symlink() or (path.exists() and not path.is_file()) or not path.resolve().is_relative_to(output):
@@ -545,6 +555,7 @@ def main():
         cargo_metadata_inputs = previous_inputs.get("cargo_metadata_inputs") if previous_inputs else None
         gradle_inputs = previous_inputs.get("gradle_init_inputs") if previous_inputs else None
         pnpm_inputs = previous_inputs.get("pnpm_hook_settings") if previous_inputs else None
+        pnpm_store_inputs = previous_inputs.get("pnpm_store_settings") if previous_inputs else None
         pnpm_virtual_store = previous_inputs.get("pnpm_virtual_store_dir") if previous_inputs else None
         if not __debug__:
             raise RuntimeError("build requires assertions; run without -O or PYTHONOPTIMIZE")
@@ -656,7 +667,11 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
                                                          cargo_home, rust, sources)
         if selected("js"):
             pnpm_environment = pnpm_hook_environment()
-            pnpm_inputs = {"ignore_pnpmfile": True, "arguments": ["--ignore-pnpmfile"], "environment": pnpm_environment}
+            pnpm_inputs = {"ignore_pnpmfile": True, "arguments": ["--ignore-pnpmfile"], "environment": dict(pnpm_environment)}
+            pnpm_store = pnpm_store_environment()
+            pnpm_store_inputs = {"verify_store_integrity": True, "arguments": ["--verify-store-integrity=true"],
+                                 "environment": pnpm_store}
+            pnpm_environment.update(pnpm_store)
             source_inventory(sources / "js", "js")
             # 温かいinstallが残す依存改変を採用しない。既知rootの全byteとaliasは退避して残す。
             roots = [name for name in JS_DEPENDENCY_DIRECTORIES if (sources / "js" / name).exists()]
@@ -668,7 +683,7 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
                     (sources / "js" / name).rename(destination)
             # 既知の生成・退避領域内に固定し、継承設定の外部依存配置先を使わない。
             pnpm_virtual_store = str((sources / "js/node_modules/.pnpm").resolve())
-            execute("js-install", ["pnpm", "--ignore-pnpmfile", "install", "--frozen-lockfile",
+            execute("js-install", ["pnpm", "--ignore-pnpmfile", "install", "--verify-store-integrity=true", "--frozen-lockfile",
                                    "--virtual-store-dir", pnpm_virtual_store],
                     cwd=sources / "js", environment=pnpm_environment)
             execute("js", ["pnpm", "--ignore-pnpmfile", "--filter", "event-store-adapter-js", "build"],
@@ -693,6 +708,7 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
                   "cargo_inherited_config_inputs": cargo_inherited_inputs, "cargo_metadata_inputs": cargo_metadata_inputs,
                   "gradle_init_inputs": gradle_inputs, "go_build_environment": go_environment,
                   "cargo_build_environment": cargo_environment, "pnpm_hook_settings": pnpm_inputs,
+                  "pnpm_store_settings": pnpm_store_inputs,
                   "pnpm_virtual_store_dir": pnpm_virtual_store, "drivers": drivers}
         files = artifacts + [go / "driver", go / "go.mod", go / "go.sum", rust / "Cargo.lock", rust / "target/debug/interop-driver"]
         files += [Path(inputs["js_runtime_inputs"])]
