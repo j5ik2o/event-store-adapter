@@ -130,6 +130,8 @@ def verify_generated_package(root, files, directories=()):
         for path in sorted(root.iterdir()):
             if not path.is_symlink() and ((path.name in files and path.is_file())
                                          or (path.name in directories and path.is_dir())):
+                if path.name in files and path.is_file() and path.stat().st_nlink > 1:
+                    raise RuntimeError(f"generated package file must not have multiple hard links: {path}")
                 continue
             raise RuntimeError(f"unexpected generated package input: {path}")
 
@@ -675,7 +677,8 @@ tokio = {{ version = "1.37.0", features = ["full"] }}
                                   sources / "js/packages/library", output / "js-runtime-inputs.json"], environment=pnpm_environment)
         if selected("go"):
             execute("go-inputs", ["go", "list", "-m", "-json", "all"], cwd=go, environment=go_environment)
-        classpath = (jvm / "classpath.txt").read_text()
+        classpath = ((jvm / "classpath.txt").read_text() if selected("jvm")
+                     else previous_inputs["jvm_classpath_inputs"]["classpath"])
         drivers = {language: {"argv": ["java", "-cp", classpath, main], "env": {}}
                    for language, main in [("java", "interop.JavaDriver"), ("kotlin", "interop.KotlinDriverKt"), ("scala", "interop.ScalaDriver")]}
         drivers["go"] = {"argv": [str(go / "driver")], "env": {}}

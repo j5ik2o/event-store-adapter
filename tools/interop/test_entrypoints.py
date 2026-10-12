@@ -3045,6 +3045,116 @@ console.log(JSON.stringify(observed));
         self.record(kind="pure-current-driver-transformation", observed=observed, expected=expected)
         self.assertEqual(observed, expected)
 
+    def test_generated_package_hardlinks_reject_before_acquisition_and_preserve_both_names(self):
+        targets = (("go-driver/main.go", "go"), ("go-driver/go.mod", "go"),
+                   ("go-driver/go.sum", "go"), ("rust-driver/src/main.rs", "rust"),
+                   ("rust-driver/Cargo.toml", "rust"))
+        for name, selected in targets:
+            for only in (None, selected):
+                with self.subTest(input=name, only=only):
+                    self.build()
+                    path = self.output.resolve() / name
+                    contents = path.read_bytes()
+                    external = self.root / ("external-package-" + name.replace("/", "-"))
+                    external.write_bytes(contents)
+                    path.unlink()
+                    os.link(external, path)
+                    before = external.stat()
+                    calls = (self.output / "tool-calls.jsonl").read_bytes()
+                    try:
+                        with mock.patch.object(build, "acquire", wraps=build.acquire) as acquire:
+                            attempt = self.attempt(only=only)
+                        states = {str(p): {"contents_hex": p.read_bytes().hex(), "device": p.stat().st_dev,
+                                  "inode": p.stat().st_ino, "links": p.stat().st_nlink} for p in (external, path)}
+                        self.record(input=name, only=only, attempt=attempt, acquire_calls=acquire.call_count,
+                                    compiler_calls_unchanged=(self.output / "tool-calls.jsonl").read_bytes() == calls,
+                                    before={"contents_hex": contents.hex(), "device": before.st_dev,
+                                            "inode": before.st_ino, "links": before.st_nlink}, after=states)
+                        self.assertFalse(attempt["accepted"], attempt)
+                        self.assertIn("generated package file must not have multiple hard links", attempt["error"])
+                        self.assertEqual(acquire.call_count, 0)
+                        self.assertEqual((self.output / "tool-calls.jsonl").read_bytes(), calls)
+                        for p in (external, path):
+                            self.assertEqual(p.read_bytes(), contents)
+                            self.assertEqual((p.stat().st_dev, p.stat().st_ino, p.stat().st_nlink),
+                                             (before.st_dev, before.st_ino, 2))
+                        self.assertEqual(attempt["metadata"], {"drivers.json": False, "buildinputs.json": False,
+                                                               "build-failure.json": True})
+                        self.assertEqual(attempt["runner"]["resource_calls"], 0)
+                        self.assertEqual(attempt["runner"]["driver_calls"], 0)
+                    finally:
+                        path.unlink()
+                        path.write_bytes(contents)
+
+    def test_non_jvm_partial_build_reuses_recorded_classpath_and_preserves_unselected_artifacts(self):
+        self.build()
+        empty = (self.root / "owned-empty-classpath").resolve()
+        empty.mkdir()
+        for only in ("go", "rust", "js"):
+            with self.subTest(only=only):
+                previous = json.loads((self.output / "buildinputs.json").read_text())
+                classpath = previous["jvm_classpath_inputs"]["classpath"]
+                definitions = {language: previous["drivers"][language] for language in ("java", "kotlin", "scala")}
+                selected_files = {"go": lambda path: path == self.output.resolve() / "go-driver/driver",
+                                  "rust": lambda path: path.is_relative_to(self.output.resolve() / "rust-driver"),
+                                  "js": lambda path: path == self.output.resolve() / "js-runtime-inputs.json" or
+                                                     path.is_relative_to(self.output.resolve() / "sources/js")}
+                unselected = [row for row in previous["artifacts"] if not selected_files[only](Path(row["path"]))]
+                text = self.output / "jvm/classpath.txt"
+                edited = classpath + os.pathsep + str(empty)
+                text.write_text(edited)
+                calls = len((self.output / "tool-calls.jsonl").read_text().splitlines())
+                self.build(only=only)
+                current = json.loads((self.output / "buildinputs.json").read_text())
+                new_calls = [json.loads(line) for line in
+                             (self.output / "tool-calls.jsonl").read_text().splitlines()[calls:]]
+                probe = self.probe_run()
+                self.record(only=only, edited_text=edited, previous_classpath_inputs=previous["jvm_classpath_inputs"],
+                            current_classpath_inputs=current["jvm_classpath_inputs"], previous_definitions=definitions,
+                            current_definitions={language: current["drivers"][language] for language in definitions},
+                            unselected_artifacts=unselected, current_artifacts=current["artifacts"],
+                            new_calls=new_calls, runner=probe)
+                self.assertEqual(current["jvm_classpath_inputs"], previous["jvm_classpath_inputs"])
+                self.assertEqual({language: current["drivers"][language] for language in definitions}, definitions)
+                self.assertEqual(text.read_text(), edited)
+                self.assertNotIn(str(empty), current["jvm_classpath_inputs"]["classpath"].split(os.pathsep))
+                self.assertFalse(any(Path(row["path"]).is_relative_to(empty) for row in current["artifacts"]))
+                self.assertEqual(list(empty.iterdir()), [])
+                self.assertTrue(all(row in current["artifacts"] for row in unselected))
+                for row in unselected:
+                    self.assertEqual(build.digest(Path(row["path"])), row["sha256"])
+                    self.assertEqual(Path(row["path"]).stat().st_size, row["bytes"])
+                self.assertFalse(any(row["tool"] == "gradle" for row in new_calls))
+                self.assertEqual(probe["resource_calls"], 1)
+                self.assertEqual(probe["driver_calls"], 0)
+
+    def test_selected_jvm_build_adopts_fresh_regular_generated_classpath(self):
+        self.build()
+        for only in (None, "jvm"):
+            with self.subTest(only=only):
+                previous = json.loads((self.output / "buildinputs.json").read_text())
+                artifact = Path(previous["jvm_classpath_inputs"]["classpath"].split(os.pathsep)[-1])
+                generated = os.pathsep.join([str(self.output.resolve() / "jvm/classes/main"), str(artifact)])
+                original_run = build.subprocess.run
+
+                def run_and_write_classpath(*args, **kwargs):
+                    result = original_run(*args, **kwargs)
+                    if Path(str(args[0][0])).resolve() == (self.bin / "gradle").resolve() and result.returncode == 0:
+                        (self.output / "jvm/classpath.txt").write_text(generated)
+                    return result
+
+                with mock.patch.object(build.subprocess, "run", side_effect=run_and_write_classpath):
+                    self.build(only=only)
+                current = json.loads((self.output / "buildinputs.json").read_text())
+                self.record(only=only, previous_classpath=previous["jvm_classpath_inputs"]["classpath"],
+                            generated_classpath=generated, current_classpath_inputs=current["jvm_classpath_inputs"],
+                            definitions={language: current["drivers"][language] for language in ("java", "kotlin", "scala")})
+                self.assertEqual((self.output / "jvm/classpath.txt").read_text(), generated)
+                self.assertEqual(current["jvm_classpath_inputs"], build.jvm_classpath_inputs(generated))
+                for language in ("java", "kotlin", "scala"):
+                    self.assertEqual(current["drivers"][language]["argv"][1:3], ["-cp", generated])
+                self.assertEqual(self.probe_run()["resource_calls"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
