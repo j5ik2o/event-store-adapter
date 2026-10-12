@@ -1,0 +1,46 @@
+{
+  "contract_revision": "v4",
+  "sources": {
+    "java": "3f44d189e22ad424237f191c35c0b278c12777b0",
+    "rs": "e52d205dbc592751bdcdbdff59ea72192eb9f0a7",
+    "js": "f6835a7f6d819d97c43a5e6581e3102260682271",
+    "go": "8fb5cb8220ea21d04bfbc6d7dd9275f9c85e9cd4",
+    "kotlin": "8922b4b3c41144ad4688ba810169e63d5d897b0d",
+    "scala": "d7e76f0d22e322cf15585bfc382c07b356216395"
+  },
+  "source_archives": {
+    "java": {
+      "source_sha": "3f44d189e22ad424237f191c35c0b278c12777b0",
+      "sha256": "b2ad4c5d73661c1f5ec1bfb92aa5080f8006e3700b5655277af75bb2812f3342"
+    },
+    "rs": {
+      "source_sha": "e52d205dbc592751bdcdbdff59ea72192eb9f0a7",
+      "sha256": "05531db8065490a4e15f0f94a8b1e2bb89ec11b5db16d52a6108829c5494c430"
+    },
+    "js": {
+      "source_sha": "f6835a7f6d819d97c43a5e6581e3102260682271",
+      "sha256": "d4ba0053221f64f9ffac4ad61306b062a6745a20fe63cb48b91cb65fbdc04b3b"
+    },
+    "go": {
+      "source_sha": "8fb5cb8220ea21d04bfbc6d7dd9275f9c85e9cd4",
+      "sha256": "1f2cfacb67f15c63dff2adac018e9899430801d9d366e92ca009deac24539573"
+    },
+    "kotlin": {
+      "source_sha": "8922b4b3c41144ad4688ba810169e63d5d897b0d",
+      "sha256": "c29ec576129c8ba4f42cfe27e19309f586f14bb548544066a556a7435d401e52"
+    },
+    "scala": {
+      "source_sha": "d7e76f0d22e322cf15585bfc382c07b356216395",
+      "sha256": "117f97fc2b646904411ea0eef6f9a0e2903f35eb0ec4b8cedc5fe788b2cbb8c9"
+    }
+  },
+  "java_currentSnapshot": {
+    "version": "2.0.0-SNAPSHOT",
+    "artifact": "event-store-adapter-java-2.0.0-20261010.110153-35",
+    "repository": "https://central.sonatype.com/repository/maven-snapshots/io/github/j5ik2o/event-store-adapter-java/2.0.0-SNAPSHOT/",
+    "jar_sha256": "353901cc55803fde1838c04fc2965be6943b9c2d32dd2f014f1fbed908b4c30f",
+    "sources_sha256": "4c4151f5062f3783356efdf6ebb0009b4f007b5bb2e792e4bba0a08e1aa702b6"
+  },
+  "precision_ns": {"java": 1, "rs": 1, "js": 1000000, "go": 1, "kotlin": 1, "scala": 1},
+  "dynamodb_local": "amazon/dynamodb-local@sha256:ff89bd48ff32cd8d9be5fee8873b65b8854dc408f1afe881be6eb00247bc0dab"
+}

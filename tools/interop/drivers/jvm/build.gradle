@@ -1,0 +1,37 @@
+plugins {
+    id 'java'
+    id 'scala'
+    id 'org.jetbrains.kotlin.jvm' version '2.4.21'
+}
+
+repositories { mavenCentral() }
+def sources = providers.gradleProperty('librarySources').get()
+def output = providers.gradleProperty('outputDir').get()
+layout.buildDirectory = file(output)
+
+dependencies {
+    implementation files(providers.gradleProperty('javaArtifact').get())
+    implementation 'software.amazon.awssdk:dynamodb:2.55.14'
+    implementation 'software.amazon.awssdk:url-connection-client:2.55.14'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.3'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.22.3'
+    implementation 'org.slf4j:slf4j-api:2.0.20'
+    implementation 'com.google.code.findbugs:jsr305:3.0.2'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0'
+    implementation 'org.scala-lang:scala-library:2.13.18'
+}
+
+sourceSets.main.java.srcDirs = ['.']
+sourceSets.main.java.include '*.java'
+sourceSets.main.scala.srcDirs = ['.', "${sources}/scala/src/main/scala"]
+sourceSets.main.scala.include '**/*.scala'
+kotlin.sourceSets.main.kotlin.srcDirs('.', "${sources}/kotlin/src/main/kotlin")
+kotlin.sourceSets.main.kotlin.include '**/*.kt'
+
+tasks.register('writeClasspath') {
+    dependsOn classes
+    doLast {
+        file("${output}/classpath.txt").text = sourceSets.main.runtimeClasspath.asPath
+        file("${output}/dependencies.txt").text = configurations.runtimeClasspath.files.sort().join('\n')
+    }
+}
