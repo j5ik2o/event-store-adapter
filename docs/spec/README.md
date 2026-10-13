@@ -56,7 +56,7 @@
 | P-44 | DynamoDB の設定項目の作成で `TransactionConflict` が返ったら、条件不成立と同じく強整合で読み直す。読み直しても設定項目がなければ、繰り返さずに保存先エラーを返す | DY-8 | なし（rs v3 に設定項目はない） | 合意（2026-10-06） |
 | P-45 | rs v3 からの移行で、新しいテーブルに書く前に、旧 journal を最後まで読んで連続性の検査を済ませてよい。その場合は書くときに読み直す | dynamodb.md 11 章 | なし | 合意（2026-10-06） |
 | P-46 | この仕様の版を「v4」と呼ぶ。各言語の文書は「共通契約 v4」（英語では common contract v4）と書いて本仕様へリンクする。各言語の配布版の番号（rs 4.x、js 5.x、java 2.x、go v2 など）とは別の番号である | 本文書 | なし | 合意（2026-10-13） |
-| P-47 | 共通契約、DynamoDB とメモリのストレージプロファイル、適合テストデータ 1.0.0 を v4 として確定する。Spanner・Bigtable・SQLite のストレージプロファイルは草案のまま残す。確定した部分を変えるときは、オーナーの合意を得て版を上げる | 本文書 | なし | 合意（2026-10-13） |
+| P-47 | 共通契約、DynamoDB とメモリのストレージプロファイル、適合テストデータ 1.0.0 を v4 として確定する。Spanner・Bigtable・SQLite のストレージプロファイルは草案のまま残す。メモリのプロファイルの MEM-D10（変更フィードの形）は、変更フィードを提供しないため保留のままで、確定の対象外である。確定した部分を変えるときは、オーナーの合意を得て、仕様の版（v5 など）か適合テストデータの版を上げる | 本文書 | なし | 合意（2026-10-13） |
 
 共通契約の未決事項は残っていない。DynamoDB のストレージプロファイルは、これらの合意から導き、新たに必要になった判断 D-1〜D-9 も合意済みである（[storage/dynamodb.md](storage/dynamodb.md) の 1 章）。
 
@@ -67,7 +67,7 @@
 | 層 | 文書 | 内容 |
 |:--|:--|:--|
 | 共通契約 | [core-contract.md](core-contract.md) | 保存先に依存しない意味論。型、4 つの操作、seq_nr の規約、エラー分類、スナップショット保持、変更フィード |
-| ストレージプロファイル | [DynamoDB](storage/dynamodb.md)（D-1〜D-9 合意済み）、[Bigtable](storage/bigtable.md)（BT-D1〜D5・BT-D6a・BT-D6b・BT-D7 合意済み、具体的な実現方法は草案）、[Spanner](storage/spanner.md)（SPN-D1a・SPN-D1b・SPN-D2〜D7 合意済み、具体的な実現方法は草案）、[SQLite](storage/sqlite.md)（1 章の主要判断はすべて合意済み、具体的な実現方法は草案）、[メモリ](storage/memory.md)（MEM-D1〜D9・MEM-D11・MEM-D12 合意済み、MEM-D10 は保留） | 保存先ごとの配置、確定、読み取り、保持、変更フィード |
+| ストレージプロファイル | [DynamoDB](storage/dynamodb.md)（D-1〜D-9 合意済み）、[Bigtable](storage/bigtable.md)（BT-D1〜D5・BT-D6a・BT-D6b・BT-D7 合意済み、具体的な実現方法は草案）、[Spanner](storage/spanner.md)（SPN-D1a・SPN-D1b・SPN-D2〜D7 合意済み、具体的な実現方法は草案）、[SQLite](storage/sqlite.md)（1 章の主要判断はすべて合意済み、具体的な実現方法は草案）、[メモリ](storage/memory.md)（MEM-D1〜D9・MEM-D11・MEM-D12 合意済み、MEM-D10 は保留）。DynamoDB とメモリは v4 で確定（P-47） | 保存先ごとの配置、確定、読み取り、保持、変更フィード |
 | ストレージプロファイル共通 | [storage/hash.md](storage/hash.md) | キーにハッシュを使うプロファイル（Spanner・Bigtable など）が使う FNV-1a 64 とその入出力表 |
 | 適合テストデータ | [conformance/](../../conformance/README.md)（v1.0.0、2026-10-05） | 言語に依存しない JSON で書いた入出力と期待結果。各実装は同じ内容を写して CI で版とハッシュを照合し、段階 2 で実行器を作って読み込む |
 
