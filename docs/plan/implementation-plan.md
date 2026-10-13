@@ -243,7 +243,7 @@ v1.0.0 を 2026-10-05 に [conformance/](../../conformance/README.md) に置い�
 
 次の点は、言語ごとの設計段階で決め、コーディネーターがレビューする。判断が要るものだけをオーナーに上げる。
 
-- kotlin・scala が、java の封筒の型をそのまま公開するか、言語の慣習に合う型を自前で持つか。
+- kotlin・scala が、java の封筒の型をそのまま公開するか、言語の慣習に合う型を自前で持つか（2026-10-13 に決定。下の「決めたこと（2026-10-13）」を参照）。
 - rs の移行ツールの形（ワークスペースの実行ファイルか、ライブラリの関数か）。
 - 変更フィードの扱い。head テーブルの Streams のレコードからヘッド遷移を組み立てる関数と、再同期（DY-15）の補助を、最初のメジャーに含めるか。
 - js の読み取りの失敗を `Result` で返すか、例外で返すか。
@@ -291,7 +291,7 @@ rs・js・go・java の設計文書（各リポジトリの `docs/design/next-ma
 次の 2 点は、決める必要がないことが分かった。
 
 - js の occurred_at がミリ秒であること: 共通契約の T-3 が「言語の標準時刻型がナノ秒を表せない場合は、その型の精度まで丸めてよい（js の `Date` はミリ秒）」と定めており、[ADR-0003](../adr/0003-fix-storage-value-representations.md) も同じ扱いである。js は保存をナノ秒の単位で行い、文書にミリ秒の限界を書いている。
-- payload のルートの JSON の null: java の `PayloadSerializer.deserialize` は `@Nullable` に直っており、適合ケース `core-json-root-values` は 6 言語で通っている（rs の DynamoDB は、CI で適合試験を実行していないので未確認）。
+- payload のルートの JSON の null: java の `PayloadSerializer.deserialize` は `@Nullable` に直っており、適合ケース `core-json-root-values` は、rs ではメモリで、ほかの 5 言語ではメモリと DynamoDB で通っている。rs の DynamoDB は、CI で適合試験を実行していないので未確認である。
 
 ## 11. リスクと対策
 

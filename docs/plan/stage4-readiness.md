@@ -26,11 +26,11 @@
 | scala | 一部 | 満たす | 満たす | 満たす | 一部 | 満たす |
 | go | 満たす | 満たす | 満たす | 満たす | 一部 | 満たす |
 
-5 の「一部」には、共通契約の版の呼び名（P-46 の「共通契約 v4」）がそろっていないことを含む。kotlin と go は、それ以外の不足がない。
+条件 5 の「一部」には、共通契約の版の呼び名（P-46 の「共通契約 v4」）がそろっていないことを含む。kotlin と go は、それ以外の不足がない。
 
 ### 適合テストデータの件数
 
-全言語で、写した適合テストデータのハッシュは v1.0.0 の値と一致し、CI で照合している。DynamoDB Local は digest で固定している。FNV-1a 64 の 4 件（hash.md の K-1）は、全言語で理由を付けて対象外にしている。
+全言語で、写した適合テストデータのハッシュは v1.0.0 の値と一致し、CI で照合している。DynamoDB Local は digest で固定している（rs は固定する処理がコードにあるが、CI の DynamoDB の枠では DynamoDB Local を起動していない）。FNV-1a 64 の 4 件（hash.md の K-1）は、全言語で理由を付けて対象外にしている。
 
 | 言語 | メモリ（成功・失敗・対象外・未検証） | DynamoDB（成功・失敗・対象外・未検証） | 規則番号ごとの報告 |
 |:--|:--|:--|:--|
@@ -50,7 +50,7 @@ rs の DynamoDB の未検証の 93 件は、CI が実行器を DynamoDB の機�
 | rs | 適合試験の DynamoDB の枠を CI で実行していない。実行器と移行の実行ファイルの試験も CI で動いていない | [rs#289](https://github.com/j5ik2o/event-store-adapter-rs/issues/289) |
 | rs | `AGENTS.md` が旧構成のまま。v3 の移行ガイドに旧版向けの注記がない。設計文書に移行モジュールがない | [rs#290](https://github.com/j5ik2o/event-store-adapter-rs/issues/290) |
 | js | 規則番号ごとの報告が CI から見えない。移行ガイドに作業指示の文が残っている。旧版向けの移行ガイドに注記がない。Issue #1017 が開いたまま | [js#1049](https://github.com/j5ik2o/event-store-adapter-js/issues/1049) |
-| java | 設計文書の Q7 が未解決のまま。設計文書が LocalStack を今の試験環境と書いている | [java#730](https://github.com/j5ik2o/event-store-adapter-java/issues/730) |
+| java | 設計文書の未解決の問い Q7（SDK の `ExecutionInterceptor` の順序と、要求の観測との対応付け）が、実装後も未解決のまま。設計時点の記述「現行の試験は LocalStack を使う」が残っている | [java#730](https://github.com/j5ik2o/event-store-adapter-java/issues/730) |
 | kotlin | 規則番号ごとの報告が CI から見えない | [kotlin#846](https://github.com/j5ik2o/event-store-adapter-kotlin/issues/846) |
 | scala | 規則番号ごとの報告が CI から見えない | [scala#871](https://github.com/j5ik2o/event-store-adapter-scala/issues/871) |
 | go | staticcheck を CI で実行していない（8 章で、現行メジャーの警告を新しいメジャーで解消するとした） | [go#431](https://github.com/j5ik2o/event-store-adapter-go/issues/431) |
@@ -62,11 +62,11 @@ rs の DynamoDB の未検証の 93 件は、CI が実行器を DynamoDB の機�
 - 順番は 4 章のとおり、java を先に出し、kotlin・scala は java への依存を `2.0.0-SNAPSHOT` から正式版に替えてから出す。
 - 版上げの workflow は、`level` を major にして起動する。js は `feat!:` の件名がないので、`auto` では minor になりうる。
 - rs は、CHANGELOG の `[Unreleased]` を版の見出しに替える。
-- java・kotlin・scala は、README などにある Snapshot の版の記述と、Snapshot 用のリポジトリの案内を直す。scala の README は、導入の版がまだ仮の記述である。
+- java・kotlin・scala は、README などにある Snapshot の版の記述と、Snapshot 用のリポジトリの案内を直す。kotlin・scala の README は、導入の版がまだ仮の記述である。
 - java の版上げと Maven Central への公開は、2.0.0 で初めて通る。
 
 ## 気づき（範囲外）
 
-- scala の CI は、2023 年から毎時の定期実行がある。CI の成功のたびに Snapshot を公開する。
-- go の公開の workflow は、版を上げるコミットを main に push する。10/05 のパッチ版の公開で動いた。
+- scala の CI には毎時の定期実行がある（2023-09-12 のコミット `eb6b383` で入った）。CI の成功のたびに Snapshot を公開する。
+- go の版上げの workflow は、版を上げるコミットを main に push する。2026-10-05 の v1.0.197 でも、この形で main に push できている（コミット `1054cf2`）。
 - go・java・kotlin・scala には CHANGELOG がない。リリースノートは版上げの workflow が作る。
