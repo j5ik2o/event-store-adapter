@@ -75,7 +75,22 @@ rs の DynamoDB の未検証の 93 件は、CI が実行器を DynamoDB の機�
 
 js・kotlin・scala がジョブの要約に書く規則番号ごとの表は、すべての状態（成功・失敗・対象外・未検証・表せない値）を列に出し、対象外と表せない値の理由を添える。FNV-1a 64 の 4 件（K-1）は、理由付きの対象外として表に出る。rs・go・java は、もとから規則番号ごとの結果を CI の成果物のレポートに残している。共通契約の版の呼び名は、6 言語とも「共通契約 v4」（英語は common contract v4）にそろえ、ハブの仕様へリンクした。この後、契約の名前を v5 に改め、各言語の版を 5.0.0 にそろえることにした（P-46・P-48）。
 
-これで、6 言語とも受け入れ条件 1〜6 を満たした。残るのは、下の「メジャーを出すときにやること」と、言語ごとのオーナーの承認である。
+これで、6 言語とも受け入れ条件 1〜6 を満たした。ただし、その後に契約の名前を v5 に改めたので（P-46）、各言語の文書が「共通契約 v5」に直るまで、条件 5 は満たしていない。直す作業は、5.0.0 を出す準備の PR（版上げの workflow に入力 `version` を足す作業と同じ PR）で行い、下の「公開の結果」のとおり 6 言語とも済んだ。
+
+## 公開の結果（2026-10-13）
+
+オーナーの承認を得て、6 言語の最初のメジャーを 5.0.0 で出した（P-48）。各言語で、版上げの workflow に入力 `version` を足す準備の PR をマージしてから、`version=5.0.0` で起動した。java を先に出し、Maven Central への反映を確かめてから、kotlin・scala の java への依存を 5.0.0 に替えて出した。
+
+| 言語 | 準備の PR | 公開先 | 確かめたこと |
+|:--|:--|:--|:--|
+| java | [java#735](https://github.com/j5ik2o/event-store-adapter-java/pull/735) | Maven Central | `event-store-adapter-java` 5.0.0 の pom を取得できる。main は `5.0.1-SNAPSHOT` |
+| rs | [rs#294](https://github.com/j5ik2o/event-store-adapter-rs/pull/294) | crates.io | 最新の版が 5.0.0 |
+| js | [js#1052](https://github.com/j5ik2o/event-store-adapter-js/pull/1052) | npm | `latest` が 5.0.0 |
+| go | [go#434](https://github.com/j5ik2o/event-store-adapter-go/pull/434) | Go のプロキシ | module のパスを `/v5` にした。`v5.0.0` の情報を取得できる |
+| kotlin | [kotlin#851](https://github.com/j5ik2o/event-store-adapter-kotlin/pull/851)、[kotlin#853](https://github.com/j5ik2o/event-store-adapter-kotlin/pull/853)（java 5.0.0 への依存） | Maven Central | `event-store-adapter-kotlin` 5.0.0 の pom を取得できる |
+| scala | [scala#874](https://github.com/j5ik2o/event-store-adapter-scala/pull/874)、[scala#875](https://github.com/j5ik2o/event-store-adapter-scala/pull/875)（java 5.0.0 への依存） | Maven Central | Scala 2.13 用と 3 用の 5.0.0 の pom を取得できる |
+
+6 言語とも GitHub に v5.0.0 のリリースがある。java の 2.0.0 は、版をそろえる決定の前に出した版で、中身は 5.0.0 と同じである。README と 2.0.0 の GitHub のリリースの説明で、5.0.0 を使うよう案内している。
 
 ## メジャーを出すときにやること
 
