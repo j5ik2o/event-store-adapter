@@ -57,6 +57,24 @@ rs の DynamoDB の未検証の 93 件は、CI が実行器を DynamoDB の機�
 
 共通契約の版の呼び名の統一は、各言語の上の対応に含めた。
 
+## 対応の結果（2026-10-13）
+
+上の不足は、takt（Orca から起動）で直し、コーディネーターが差分・CI・成果物を確かめてマージした。マージ後の main の `CI Success` は、6 言語とも成功している。
+
+| 言語 | PR | 結果 |
+|:--|:--|:--|
+| rs | [rs#292](https://github.com/j5ik2o/event-store-adapter-rs/pull/292) | 適合試験の DynamoDB の枠を、DynamoDB の機能付きで DynamoDB Local に対して実行し、両方の枠に `--require-all` を付けた。DynamoDB は 116 件のうち成功 102・失敗 0・対象外 14・未検証 0、メモリは成功 58・失敗 0・対象外 58・未検証 0。実行器と移行の実行ファイルの試験も CI で実行する |
+| rs | [rs#291](https://github.com/j5ik2o/event-store-adapter-rs/pull/291) | `AGENTS.md` を今の構成に書き直し、v3 の移行ガイドに旧版向けの注記、設計文書に移行の公開名を足した |
+| js | [js#1050](https://github.com/j5ik2o/event-store-adapter-js/pull/1050) | 適合試験のレポートを CI の成果物に残し、規則番号ごとの表をジョブの要約に書く。移行ガイドの作業指示の文を消し、旧版向けの移行ガイドに注記を足した。Issue #1017 の 5 件は、対応する適合ケースが通っていることを確かめて閉じた |
+| java | [java#732](https://github.com/j5ik2o/event-store-adapter-java/pull/732) | 設計文書の Q7（SDK の割り込み処理の順序と要求の観測の対応付け）を、実装と試験の根拠付きで解決済みにした。LocalStack の記述を DynamoDB Local に直した |
+| kotlin | [kotlin#847](https://github.com/j5ik2o/event-store-adapter-kotlin/pull/847) | 適合試験のレポートを JDK ごとに CI の成果物に残し、規則番号ごとの表をジョブの要約に書く |
+| scala | [scala#872](https://github.com/j5ik2o/event-store-adapter-scala/pull/872) | 適合試験のレポートを JDK と Scala の版ごとに CI の成果物に残し、規則番号ごとの表をジョブの要約に書く |
+| go | [go#432](https://github.com/j5ik2o/event-store-adapter-go/pull/432) | staticcheck を版を固定して CI に足し、警告 1 件を直した |
+
+js・kotlin・scala がジョブの要約に書く規則番号ごとの表は、すべての状態（成功・失敗・対象外・未検証・表せない値）を列に出し、対象外と表せない値の理由を添える。FNV-1a 64 の 4 件（K-1）は、理由付きの対象外として表に出る。rs・go・java は、もとから規則番号ごとの結果を CI の成果物のレポートに残している。共通契約の版の呼び名は、6 言語とも「共通契約 v4」（英語は common contract v4）にそろえ、ハブの仕様へリンクした。
+
+これで、6 言語とも受け入れ条件 1〜6 を満たした。残るのは、下の「メジャーを出すときにやること」と、言語ごとのオーナーの承認である。
+
 ## メジャーを出すときにやること
 
 - 順番は 4 章のとおり、java を先に出し、kotlin・scala は java への依存を `2.0.0-SNAPSHOT` から正式版に替えてから出す。
