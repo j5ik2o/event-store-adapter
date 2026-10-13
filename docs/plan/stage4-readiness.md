@@ -92,6 +92,29 @@ js・kotlin・scala がジョブの要約に書く規則番号ごとの表は、
 
 6 言語とも GitHub に v5.0.0 のリリースがある。java の 2.0.0 は、版をそろえる決定の前に出した版で、中身は 5.0.0 と同じである。README と 2.0.0 の GitHub のリリースの説明で、5.0.0 を使うよう案内している。
 
+## 適合テストデータの外の規則の確認と 5.0.1（2026-10-13）
+
+5.0.0 を出した後に、v5 の仕様が定める 71 の規則のうち、適合テストデータ 1.0.0 が扱っていない 25 の規則を、6 言語の v5.0.0 のコードと試験で確かめた（読み取りだけ）。kotlin・scala は java の実装に任せているので java と合わせて見た。
+
+| 言語 | 満たす（試験あり） | 満たす（コードのみ） | 一部 | 満たさない | 対象外 |
+|:--|--:|--:|--:|--:|--:|
+| rs | 10 | 4 | 3 | 0 | 8 |
+| js | 13 | 1 | 3 | 0 | 8 |
+| java（kotlin・scala を含む） | 13 | 3 | 1 | 0 | 8 |
+| go | 13 | 2 | 2 | 0 | 8 |
+
+対象外の 8 つは、最初のメジャーで提供しない変更フィードの規則（F-1〜F-5、DY-13、DY-15）と、仕様の側の義務（SP-1）である。見つけた不足を、オーナーの承認を得て 5.0.1 で直した。
+
+| 不足 | 直したこと | PR |
+|:--|:--|:--|
+| rs のメモリが、保持件数なしの TTL を設定エラーにしない（MEM-3・MEM-12 との食い違い） | TTL の指定はすべて設定エラー。理由に `MemoryTtlUnsupported` を足した | [rs#296](https://github.com/j5ik2o/event-store-adapter-rs/pull/296) |
+| js のメモリが、登録されていない保存先と想定外の設定を生成時に設定エラーにしない（MEM-1・MEM-3） | 生成時に設定エラー | [js#1054](https://github.com/j5ik2o/event-store-adapter-js/pull/1054) |
+| go のメモリが、不明な保持方式の値を受け付ける（MEM-3）。`-race` を実行していない | 設定エラーにした。CI の試験を `-race` 付きにした | [go#436](https://github.com/j5ik2o/event-store-adapter-go/pull/436) |
+| java のメモリが、null の保存先で `NullPointerException` を投げる | `ConfigurationException` にした。値の書き換え（JSON のペイロード）と非同期のストアの並行呼び出しの試験を足した | [java#737](https://github.com/j5ik2o/event-store-adapter-java/pull/737) |
+| 6 言語とも、単一リージョンの前提（DY-18）と単一プロセスの前提（MEM-1）を文書に書いていない | 6 言語で同じ文言を README とスキーマ文書に足した | 上の 4 つと [kotlin#854](https://github.com/j5ik2o/event-store-adapter-kotlin/pull/854)・[scala#876](https://github.com/j5ik2o/event-store-adapter-scala/pull/876) |
+
+6 言語とも 5.0.1 を出した（kotlin・scala は java 5.0.1 に依存）。DY-19（Scan を使わない）は 6 言語とも実装は満たしているが、直接確かめる試験がないので、適合テストデータの拡張（1.1.0）で扱う。
+
 ## メジャーを出すときにやること
 
 - 順番は 4 章のとおり、java を先に出し、kotlin・scala は java への依存を `2.0.0-SNAPSHOT` から正式版の java 5.0.0 に替えてから出す（P-48）。
