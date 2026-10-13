@@ -14,6 +14,7 @@
 
 - 標準は flash-default とする。takt-workflows のバンドルが入れるワークフローで、takt に組み込みの `default` とは別物である。計画、試験の先行作成、実装、複数の観点のレビュー、修正、最終判定まで行う（上限 51 段）。コードと試験を伴う作業（段階 2 の書き直しなど）に使う。
 - 文書、CI の設定、依存の更新、データの配布のような小さな作業には、軽いカスタムワークフロー light-change を使う。計画（Opus 5.5）→ 実装（Sonnet 5.5）→ 3 人の並行レビュー（AI 特有の問題は DeepSeek V4.1 Flash、監督は GLM 5.3 Flash、仕様との食い違いは Sonnet 5.5）→ 指摘があれば修正（Sonnet 5.5）の順で、3 人とも問題なしなら完了する。レビューと修正が 3 回続くと、Opus 5.5 が収束しているかを判断し、しなければ止める（上限 17 段）。テンプレートは `tools/takt/workflows/light-change.yaml` と `tools/takt/facets/instructions/spec-conformance-review.md`（2026-10-05 にユーザーと合意、2026-10-06 にレビュー役を 3 人にした）。
+- flash-default は試験を先に書く段があるので、CI の設定を主に変える作業では、CI の設定ファイルを読んで検査する試験まで作ることがある（2026-10-13 の rs#292 で、手製の YAML 解析の試験 365 行ができ、指揮役が外した）。受け入れのときに、指示書が求めていない試験が足されていないかを見る。
 - 組み込みのワークフロー（全体の規則が挙げる `simple-mini` を含む）をそのまま使わない。段の名前が `runtime.yaml` の割り当てに合わず、レビューまで既定の Opus 5.5 で動いてしまうからである。計画から要る大きめの作業も、flash-default か light-change で賄う。
 
 ## takt の起動と監督
@@ -41,7 +42,7 @@ takt はエージェントとして Orca に認識されないので、指示の
    - 起動の直後に `orca terminal read` で、`run-takt: TAKT_CONFIG_DIR:` がワークツリーの `.takt/home` を指していることを確かめる。`~/.takt/` は読ませず、書き換えもしない。
 4. `orca orchestration dispatch --task <課題> --to <端末>` で、課題を端末に結び付ける。注入（`--inject`）はしない。
 5. 監督: 実行中は `orca terminal read --terminal <端末>` と takt の実行記録（`.takt/runs/`）で、段の切り替わり・使ったモデル・エラーを見る。段の切り替わりは、実行記録の `logs/*.jsonl` の `step_start`・`step_complete`・`workflow_complete`・`workflow_abort` で分かる。終わりは、`orca terminal read` の出力に `takt-exit:` が出たことで判断する。範囲の外の作業や長引きを見つけたら、`orca terminal send --terminal <端末> --text $'\x03' --interrupt` で止め、範囲を絞って起動し直す。同じマシンで別の takt が動いていることがあるので、プロセスを直接止めるときは、ブランチ名などで自分の takt だと確かめてからにする。
-6. 受け入れ: 差分・成果物・CI を指示書の受け入れの条件と照らして確かめる。結果は `orca orchestration task-update --status completed|failed --result <要約>` で記録する。その後、端末（`orca terminal close`）とワークツリーを閉じる（下の「後片付け」）。
+6. 受け入れ: 差分・成果物・CI を指示書の受け入れの条件と照らして確かめる。結果は `orca orchestration task-update --id <課題> --status completed|failed --result <要約>` で記録する。その後、端末（`orca terminal close`）とワークツリーを閉じる（下の「後片付け」）。
 
 ### takt にできないこと
 
