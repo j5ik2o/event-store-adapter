@@ -79,8 +79,8 @@ js・kotlin・scala がジョブの要約に書く規則番号ごとの表は、
 
 ## メジャーを出すときにやること
 
-- 順番は 4 章のとおり、java を先に出し、kotlin・scala は java への依存を `2.0.0-SNAPSHOT` から正式版に替えてから出す。
-- 版上げの workflow は、`level` を major にして起動する。js は `feat!:` の件名がないので、`auto` では minor になりうる。
+- 順番は 4 章のとおり、java を先に出し、kotlin・scala は java への依存を `2.0.0-SNAPSHOT` から正式版の java 5.0.0 に替えてから出す（P-48）。
+- 版上げの workflow は、入力 `version` に 5.0.0 を指定して起動する（P-48。実装計画 3 章）。
 - rs は、CHANGELOG の `[Unreleased]` を版の見出しに替える。
 - java・kotlin・scala は、README などにある Snapshot の版の記述と、Snapshot 用のリポジトリの案内を直す。kotlin・scala の README は、導入の版がまだ仮の記述である。
 - java の版上げと Maven Central への公開は、2.0.0 で初めて通る。
