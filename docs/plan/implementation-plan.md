@@ -296,6 +296,12 @@ rs・js・go・java の設計文書（各リポジトリの `docs/design/next-ma
 - js の occurred_at がミリ秒であること: 共通契約の T-3 が「言語の標準時刻型がナノ秒を表せない場合は、その型の精度まで丸めてよい（js の `Date` はミリ秒）」と定めており、[ADR-0003](../adr/0003-fix-storage-value-representations.md) も同じ扱いである。js は保存をナノ秒の単位で行い、文書にミリ秒の限界を書いている。
 - payload のルートの JSON の null: java の `PayloadSerializer.deserialize` は `@Nullable` に直っており、適合ケース `core-json-root-values` は、rs ではメモリで、ほかの 5 言語ではメモリと DynamoDB で通っている。rs の DynamoDB は、CI で適合試験を実行していないので未確認である。
 
+### 決めたこと（2026-10-14）
+
+| 項目 | 決定 | 決めた人 |
+|:--|:--|:--|
+| 公開 API の形の照合 | 共通契約 v5 が公開 API に求める形を、言語に依存しない JSON（[api-surface/](../../api-surface/README.md)、0.1.0）で書き、各言語の CI で照合する。go で試作して効果を確かめたうえで、段階的に採用する（go → js・java → rs → kotlin・scala）。受け入れ条件（5 章）に入れるかは、6 言語がそろってから決める。IDL からコードを生成する既存の道具は、型の引数と言語ごとの作法を表せないので採らない | オーナー |
+
 ## 11. リスクと対策
 
 | リスク | 対策 |
