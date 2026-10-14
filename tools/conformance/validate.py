@@ -16,6 +16,7 @@ from reference_model import equal_json, replay
 
 DEFAULT_SPEC_ROOT = Path(__file__).resolve().parents[2] / "docs" / "spec"
 FORMATS = {"values", "scenarios", "layout", "coverage", "manifest"}
+DY19_APIS = {"GetItem", "BatchGetItem", "Query", "TransactWriteItems", "BatchWriteItem", "UpdateItem"}
 PHASES = {
     "persistEvent": {"serialize-event", "commit"},
     "persistEventAndSnapshot": {"serialize-event", "serialize-snapshot", "commit",
@@ -65,11 +66,37 @@ def check_value(case, where):
 def specification_rules(spec_root):
     core = (spec_root / "core-contract.md").read_text(encoding="utf-8")
     dynamo = (spec_root / "storage" / "dynamodb.md").read_text(encoding="utf-8")
+    memory = (spec_root / "storage" / "memory.md").read_text(encoding="utf-8")
     hash_spec = (spec_root / "storage" / "hash.md").read_text(encoding="utf-8")
-    active = set(re.findall(r"^- \*\*(?:必須|推奨|任意) ([A-Z]+-\d+)\*\*", core + "\n" + dynamo + "\n" + hash_spec, re.M))
-    active.update(re.findall(r"^\| (D-\d+) \|", dynamo, re.M))
-    mentioned = set(re.findall(r"\b(?:K|T|H|W|R|E|S|SP|DY|D)-\d+\b", core + "\n" + dynamo + "\n" + hash_spec))
-    return active, mentioned
+    texts = "\n".join([core, dynamo, memory, hash_spec])
+    # defined は 4 つの仕様の文書が定義の行で定める規則。判断番号 D-n は含めない。
+    defined = set(re.findall(r"^- \*\*(?:必須|推奨|任意) ([A-Z]+-\d+)\*\*", texts, re.M))
+    active = defined | set(re.findall(r"^\| (D-\d+) \|", dynamo, re.M))
+    mentioned = set(re.findall(r"\b(?:K|T|H|W|R|E|S|SP|DY|D|F|MEM)-\d+\b", texts))
+    return active, mentioned, defined
+
+
+def check_single_aggregate_scope(case, where):
+    """DY-19: 操作中の要求の API 名と aid を絞る観測が、全操作に付いていること。"""
+    if case["backends"] != ["dynamodb"]:
+        raise ValueError(f"{where}: DY-19 の観測は backends が dynamodb だけの場面に置く")
+    if "DY-19" not in case["rules"]:
+        raise ValueError(f"{where}: request_scope を使う場面の rules に DY-19 がない")
+    for index, step in enumerate(case["steps"], 1):
+        scope = step.get("observe", {}).get("request_scope")
+        if scope is None:
+            raise ValueError(f"{where}/{index}: DY-19 の場面の全操作に request_scope が必要")
+        if set(scope["apis"]) != DY19_APIS:
+            raise ValueError(f"{where}/{index}: DY-19 の request_scope.apis が 6 種類と一致しない")
+    own = {step["arguments"]["aggregate_id"]["type_name"] + "-" + step["arguments"]["aggregate_id"]["value"]
+           for step in case["steps"] if "aggregate_id" in step["arguments"]}
+    own |= {case["fixtures"]["events"][step["arguments"]["event"]]["aggregate_id"]["type_name"] + "-"
+            + case["fixtures"]["events"][step["arguments"]["event"]]["aggregate_id"]["value"]
+            for step in case["steps"] if "event" in step["arguments"]}
+    others = {item["values"]["aid"] for item in case.get("seed", {}).get("items", [])
+              if item["values"]["aid"] != "__config__"} - own
+    if not others:
+        raise ValueError(f"{where}: DY-19 の場面は操作の集約と異なる集約の記録を seed に置く")
 
 
 def rule_sort(rule):
@@ -183,6 +210,8 @@ def check_case(case, data_format, where, active):
         for event in events.values():
             epoch_nanoseconds(event["occurred_at"])
         if "initialization" in case:
+            if "request_scope" in case["initialization"].get("observe", {}):
+                raise ValueError(f"{where}: 生成には request_scope を置けない（DY-19 の対象外）")
             expectations.append(case["initialization"]["expect"])
             if "error" in case["initialization"]["expect"] and case["steps"]:
                 raise ValueError(f"{where}: 生成失敗後の操作は指定できない")
@@ -227,6 +256,13 @@ def check_case(case, data_format, where, active):
                     raise ValueError(f"{where}: 差し込みスナップショットが未定義")
         if case.get("requires") == ["ttl"] and case["store"]["retention_mode"] != "ttl":
             raise ValueError(f"{where}: TTL 能力条件と保持方式が不一致")
+        if any("request_scope" in step.get("observe", {}) for step in case["steps"]):
+            check_single_aggregate_scope(case, where)
+        if case["store"].get("change_feed") and case["backends"] != ["memory"]:
+            raise ValueError(f"{where}: change_feed を求める場面は backends が memory だけでなければならない")
+        if (case["store"]["retention_mode"] == "ttl" and "memory" in case["backends"]
+                and case["backends"] != ["memory"]):
+            raise ValueError(f"{where}: memory を含む ttl の要求は backends が memory だけでなければならない")
     elif data_format == "values":
         required_input = {"buildAid": "aggregate_id", "validateOccurredAt": "iso8601",
                           "validateSeqNr": "seq_nr", "fnv1a64": "utf8"}[case["operation"]]
@@ -248,7 +284,7 @@ def check_case(case, data_format, where, active):
             raise ValueError(f"{where}: 契約違反に規則番号がない")
 
 
-def coverage_text(documents, coverage):
+def coverage_text(documents, coverage, defined):
     rows = defaultdict(list)
     for relative, document in documents.items():
         if document["format"] in {"values", "scenarios", "layout"}:
@@ -259,7 +295,7 @@ def coverage_text(documents, coverage):
     lines = ["# 規則の網羅表", "", "`tools/conformance/validate.py --update-coverage` がデータから生成する表である。",
              "場面に規則を列挙したことは実装の適合を意味しない。実行器が規則ごとの結果を報告する。", "",
              "| 規則 | ケース | 対象外の理由 |", "|:--|:--|:--|"]
-    for rule in sorted(set(rows) | set(coverage["required_rules"]), key=rule_sort):
+    for rule in sorted(set(rows) | set(coverage["required_rules"]) | defined | set(exclusions), key=rule_sort):
         lines.append(f"| {rule} | {'、'.join(sorted(rows[rule])) or '—'} | {exclusions.get(rule, '—')} |")
     lines += ["", "## 対象を限定した理由", ""]
     for note in coverage["notes"]:
@@ -279,7 +315,7 @@ def validate(root, spec_root, update_coverage=False, check_manifest=True):
         registry = registry.with_resource(schema["$id"], Resource.from_contents(schema))
     if set(schemas) != FORMATS | {"common"}:
         raise ValueError("schema のファイル集合が不正")
-    active, mentioned = specification_rules(spec_root)
+    active, mentioned, defined = specification_rules(spec_root)
     documents, identifiers = {}, {}
     model_checked, model_skipped = 0, []
     for path in sorted(root.rglob("*.json")):
@@ -320,10 +356,10 @@ def validate(root, spec_root, update_coverage=False, check_manifest=True):
         if (item["status"] == "deleted") != (item["rule"] not in active):
             raise ValueError(f"対象外の規則の削除状態が仕様と不一致: {item['rule']}")
     assert_rules(set(coverage["required_rules"]) - exclusions, active, "coverage.json")
-    missing = set(coverage["required_rules"]) - covered - exclusions
+    missing = (set(coverage["required_rules"]) | defined) - covered - exclusions
     if missing or covered & exclusions:
         raise ValueError(f"網羅の不一致: 未網羅={sorted(missing)}, 対象外なのにケースあり={sorted(covered & exclusions)}")
-    text = coverage_text(documents, coverage)
+    text = coverage_text(documents, coverage, defined)
     coverage_path = root / "COVERAGE.md"
     if update_coverage:
         coverage_path.write_text(text, encoding="utf-8")
@@ -339,7 +375,8 @@ def validate(root, spec_root, update_coverage=False, check_manifest=True):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
-    parser.add_argument("--spec-root", type=Path, default=DEFAULT_SPEC_ROOT)
+    parser.add_argument("--spec-root", type=Path, default=DEFAULT_SPEC_ROOT,
+                        help="core-contract.md・storage/dynamodb.md・storage/memory.md・storage/hash.md があるディレクトリ")
     parser.add_argument("--update-coverage", action="store_true",
                         help="網羅表を再生成する（その後 manifest rebuild が必要）")
     args = parser.parse_args()
