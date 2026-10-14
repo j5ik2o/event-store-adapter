@@ -2,7 +2,7 @@
 
 共通契約 v5 が各言語の公開 API に求める「形」を、言語に依存しない JSON で書いたものです。各言語は、自分の公開 API がこの形を満たしているかを CI で照合します。
 
-**状態: 段階的に採用中（0.1.0）。** 2026-10-14 に go で照合を試作し、ずれを検出できることを確かめた（[ハブの PR #28](https://github.com/j5ik2o/event-store-adapter/pull/28)）。オーナーは段階的な採用を決めた。go の次に js・java、その後 rs、kotlin・scala（操作だけ）に広げる。まだ受け入れ条件ではない（[実装計画](../docs/plan/implementation-plan.md) の 5 章は変えていない）。受け入れ条件に入れるかは、6 言語がそろってから決める。
+**状態: 6 言語で照合を入れた（0.1.0、2026-10-14）。** 2026-10-14 に go で照合を試作し、ずれを検出できることを確かめた（[ハブの PR #28](https://github.com/j5ik2o/event-store-adapter/pull/28)）。オーナーは段階的な採用を決め、同じ日に 6 言語の CI に照合が入った（下の「各言語の照合の方式」）。まだ受け入れ条件ではない（[実装計画](../docs/plan/implementation-plan.md) の 5 章は変えていない）。受け入れ条件に入れるかは、オーナーが決める。
 
 ## 何を書くか、何を書かないか
 
@@ -48,6 +48,19 @@
 - エラーの 5 つの分類を、呼び出し側が型か値で区別できる。
 
 照合の試験は、形をわざとずらしたとき（要素を消す、名前を変える、型を変える、分類を消すなど）に、それを報告できることも試験で示します。
+
+## 各言語の照合の方式
+
+| 言語 | 公開 API の読み方 | 否定の試験で確かめたずれ | PR |
+|:--|:--|:--|:--|
+| go | `go/types`（ソースを読む importer） | 要素の欠落・名前の変更・型の変更、構築の関数の必須の引数の欠落、操作の戻り値、エラーの分類の欠落、型の引数の制約、対応表の抜け | [go #438](https://github.com/j5ik2o/event-store-adapter-go/pull/438) |
+| java | リフレクション（ビルダーは実際に呼んで必須の要素を確かめる） | 要素の欠落・名前の変更・型の変更、必須の要素の省略、ビルダーの引数の型、操作の戻り値、型の引数の制約、同期・非同期のストアの対応の抜け | [java #740](https://github.com/j5ik2o/event-store-adapter-java/pull/740) |
+| js | TypeScript のコンパイラ API（型を当てはめる試しのファイルを作る） | 要素の欠落・名前の変更・型の変更、省略できる要素の誤り、操作の戻り値、エラーの分類の欠落、型の引数の制約、型を公開しなくなったこと | [js #1058](https://github.com/j5ik2o/event-store-adapter-js/pull/1058) |
+| rs | 日付を固定した nightly の rustdoc の JSON（`rustdoc-types`） | 要素の欠落・名前の変更・型の変更、構築の関数の必須の引数の欠落、操作の戻り値（`async_trait` の書き換えの中まで。`Future` が `Send` を持つことも）、エラーの分類の欠落、型の引数の制約、対応表の抜け | [rs #298](https://github.com/j5ik2o/event-store-adapter-rs/pull/298) |
+| kotlin | `kotlin-reflect` | 操作の欠落と戻り値、`suspend` でない非同期の操作、なしを表せない戻り値、型の引数の制約、同期・`suspend` のストアや例外の基底の対応の抜け | [kotlin #857](https://github.com/j5ik2o/event-store-adapter-kotlin/pull/857) |
+| scala | Java のリフレクション（総称型の情報を含む） | 操作の戻り値（`Try`・`Future`・`Option` の包み方）、`SnapshotReadResult` の要素の欠落、型の引数の制約、ストア・要素・例外のクラスの対応の抜け | [scala #879](https://github.com/j5ik2o/event-store-adapter-scala/pull/879) |
+
+kotlin と scala は java の封筒と例外をそのまま使うので、封筒の要素と例外の分類の形は java の照合に任せ、クラスが解決できることだけを確かめる。kotlin は自分のストアの操作（`SnapshotReadResult` も java のもの）、scala は自分のストアと `SnapshotReadResult` を照合する。各言語で確かめられないこと（scala の `implicit` の印や `AnyRef` の上限など）は、各言語の `api-surface/README.md` に書いた。
 
 ## 版と SHA-256
 
