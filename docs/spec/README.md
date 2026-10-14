@@ -2,7 +2,7 @@
 
 各言語の event-store-adapter が従う仕様。ここに書かれた内容が正であり、どの言語の実装も参照実装ではない（[ADR-0001](../adr/0001-language-neutral-spec-based-on-envelope-model.md)）。用語は [CONTEXT.md](../../CONTEXT.md) に従う。
 
-共通契約、DynamoDB とメモリのストレージプロファイル、適合テストデータ 1.0.0 は、v5 として確定している（P-47）。Spanner・Bigtable・SQLite のストレージプロファイルは、具体的な実現方法が草案のままである。下の P-1〜P-48 は合意済みで（P-17〜P-40 は [PR #1](https://github.com/j5ik2o/event-store-adapter/pull/1) のレビューを受けて 2026-10-03 に、P-41 は適合テストデータを作る中で 2026-10-05 に、P-42〜P-45 は各言語の設計文書のレビューを受けて 2026-10-06 に、P-46〜P-48 は最初のメジャーの準備の中で 2026-10-13 に足した）、基になる ADR-0001〜0006 も `accepted` である。共通契約のほかの規則は、rs v3 の挙動を引き継いだもの（P-1 による）か、合意事項から導いたものである。新たに足した規則のうち R-7（P-14）・R-3（P-15）・S-3（P-16）も個別に合意済みである。仕様を変えるときは、リポジトリのオーナーの合意を得る。
+共通契約、DynamoDB とメモリのストレージプロファイル、キーに使うハッシュ（[storage/hash.md](storage/hash.md)）、適合テストデータ 1.0.0 は、v5 として確定している（P-47・P-49）。v5 の文書は、本リポジトリのタグ `contract-v5` で固定して指せる（P-50）。Spanner・Bigtable・SQLite のストレージプロファイルは、具体的な実現方法が草案のままである。下の P-1〜P-50 は合意済みで（P-17〜P-40 は [PR #1](https://github.com/j5ik2o/event-store-adapter/pull/1) のレビューを受けて 2026-10-03 に、P-41 は適合テストデータを作る中で 2026-10-05 に、P-42〜P-45 は各言語の設計文書のレビューを受けて 2026-10-06 に、P-46〜P-48 は最初のメジャーの準備の中で 2026-10-13 に、P-49・P-50 は v5 の定義をはっきりさせる中で 2026-10-14 に足した）、基になる ADR-0001〜0006 も `accepted` である。共通契約のほかの規則は、rs v3 の挙動を引き継いだもの（P-1 による）か、合意事項から導いたものである。新たに足した規則のうち R-7（P-14）・R-3（P-15）・S-3（P-16）も個別に合意済みである。仕様を変えるときは、リポジトリのオーナーの合意を得る。
 
 ## 合意状況
 
@@ -58,6 +58,8 @@
 | P-46 | この仕様の版を「v5」と呼ぶ。各言語の文書は「共通契約 v5」（英語では common contract v5）と書いて本仕様へリンクする。同日にいったん「v4」と決めたが、各言語の版をそろえるため（P-48）v5 に改めた | 本文書 | なし | 合意（2026-10-13） |
 | P-47 | 共通契約、DynamoDB とメモリのストレージプロファイル、適合テストデータ 1.0.0 を v5 として確定する。Spanner・Bigtable・SQLite のストレージプロファイルは草案のまま残す。メモリのプロファイルの MEM-D10（変更フィードの形）は、変更フィードを提供しないため保留のままで、確定の対象外である。確定した部分を変えるときは、オーナーの合意を得て、仕様の版（v6 など、今の v5 より新しい版）か適合テストデータの版を上げる | 本文書 | なし | 合意（2026-10-13） |
 | P-48 | 各言語のメジャーの番号を、共通契約の版の番号にそろえる。最初のメジャーは全言語で 5.0.0 とする（js は 4.0.0・4.0.1 を旧来の契約で使っているので、そろえられる最小の番号が 5）。契約が変わらないのに、ある言語だけ非互換な変更が要るときの扱いは、そのときに改めて決める。java の 2.0.0 は、この決定の前に出した版で、中身は 5.0.0 と同じである | 本文書 | なし | 合意（2026-10-13） |
+| P-49 | キーに使うハッシュ（[storage/hash.md](storage/hash.md) の K-1・K-2）を v5 として確定する。確定した適合テストデータ 1.0.0 が K-1 を参照し、値の表 4 件を収録しているので、規範の側も確定させて食い違いをなくす。最初のメジャーの保存先はハッシュを使わないので、K-1・K-2 とも対象外で、適合テストデータの 4 件は対象外と報告する（[実装計画](../plan/implementation-plan.md) 5 章）。Spanner・Bigtable などを出すときは、このハッシュを変えずに使う | hash.md | なし | 合意（2026-10-14） |
+| P-50 | v5 として確定した文書を、本リポジトリのタグ `contract-v5` で固定し、どの時点の文書が v5 かを指せるようにする。タグは付け直さない | 本文書 | なし | 合意（2026-10-14） |
 
 共通契約の未決事項は残っていない。DynamoDB のストレージプロファイルは、これらの合意から導き、新たに必要になった判断 D-1〜D-9 も合意済みである（[storage/dynamodb.md](storage/dynamodb.md) の 1 章）。
 
@@ -69,7 +71,7 @@
 |:--|:--|:--|
 | 共通契約 | [core-contract.md](core-contract.md) | 保存先に依存しない意味論。型、4 つの操作、seq_nr の規約、エラー分類、スナップショット保持、変更フィード |
 | ストレージプロファイル | [DynamoDB](storage/dynamodb.md)（D-1〜D-9 合意済み）、[Bigtable](storage/bigtable.md)（BT-D1〜D5・BT-D6a・BT-D6b・BT-D7 合意済み、具体的な実現方法は草案）、[Spanner](storage/spanner.md)（SPN-D1a・SPN-D1b・SPN-D2〜D7 合意済み、具体的な実現方法は草案）、[SQLite](storage/sqlite.md)（1 章の主要判断はすべて合意済み、具体的な実現方法は草案）、[メモリ](storage/memory.md)（MEM-D1〜D9・MEM-D11・MEM-D12 合意済み、MEM-D10 は保留）。DynamoDB とメモリは v5 で確定（P-47） | 保存先ごとの配置、確定、読み取り、保持、変更フィード |
-| ストレージプロファイル共通 | [storage/hash.md](storage/hash.md) | キーにハッシュを使うプロファイル（Spanner・Bigtable など）が使う FNV-1a 64 とその入出力表 |
+| ストレージプロファイル共通 | [storage/hash.md](storage/hash.md)（v5 で確定、P-49） | キーにハッシュを使うプロファイル（Spanner・Bigtable など）が使う FNV-1a 64 とその入出力表 |
 | 適合テストデータ | [conformance/](../../conformance/README.md)（v1.0.0、2026-10-05） | 言語に依存しない JSON で書いた入出力と期待結果。各実装は同じ内容を写して CI で版とハッシュを照合し、段階 2 で実行器を作って読み込む |
 
 Spanner・Bigtable・SQLite の草案は 2026-10-04 に作成し、各プロファイルの 1 章にある主要判断をすべて合意した。
@@ -111,13 +113,25 @@ SQLite は同じホストのローカルファイル、WAL と synchronous=FULL�
 
 ## 適合対象の実装
 
-2026-10-05 時点で、この仕様に適合している実装はない。各実装を適合させる計画は [実装計画](../plan/implementation-plan.md) にある（計画の判断 IP-D1〜IP-D8 は 2026-10-05 に合意）。
+2026-10-13 に、次の 6 言語が最初のメジャー 5.0.0 を出した（P-48）。その後、適合テストデータの外の規則を確かめて見つけた不足（設定の検査の漏れ、文書に書くべき前提の欠落）を、同じ日の 5.0.1 で直した。v5 に適合した版は 5.0.1 以降である。保存先は DynamoDB とメモリである。受け入れ条件（[実装計画](../plan/implementation-plan.md) 5 章）と不足の確かめ方と結果は、[段階 4 の準備状況](../plan/stage4-readiness.md) にある。ハッシュを使う保存先はまだないので、適合テストデータの FNV-1a 64 の 4 件は、6 言語とも対象外と報告している。
 
-| 実装 | 現行の契約 | 主な乖離 |
+| 実装 | v5 に適合した版 |
+|:--|:--|
+| [event-store-adapter-rs](https://github.com/j5ik2o/event-store-adapter-rs) | 5.0.1 以降 |
+| [event-store-adapter-js](https://github.com/j5ik2o/event-store-adapter-js) | 5.0.1 以降 |
+| [event-store-adapter-java](https://github.com/j5ik2o/event-store-adapter-java) | 5.0.1 以降。2.0.0 は P-48 の前に出した版で、中身は 5.0.0 と同じ |
+| [event-store-adapter-kotlin](https://github.com/j5ik2o/event-store-adapter-kotlin) / [scala](https://github.com/j5ik2o/event-store-adapter-scala) | 5.0.1 以降（java 5.0.1 を包む） |
+| [event-store-adapter-go](https://github.com/j5ik2o/event-store-adapter-go) | 5.0.1 以降（module のパスは `/v5`） |
+| php / swift / dotnet | 未調査 |
+
+### v5 より前の版との差（2026-10-05 時点）
+
+各実装を適合させる計画は [実装計画](../plan/implementation-plan.md) にある（計画の判断 IP-D1〜IP-D8 は 2026-10-05 に合意）。書き直す前の各実装と、この仕様との主な乖離は次のとおりだった。
+
+| 実装 | 当時の契約 | 主な乖離 |
 |:--|:--|:--|
 | [event-store-adapter-rs](https://github.com/j5ik2o/event-store-adapter-rs) v3.0.5 | 封筒モデル | 集約ヘッドが未分離、ハッシュが `DefaultHasher`、ジャーナル読み取りのページ送りなし、保持で新しい履歴を消す |
 | [event-store-adapter-js](https://github.com/j5ik2o/event-store-adapter-js) v4.0.0 | 旧来の契約 | 封筒モデル未導入、occurred_at がミリ秒、ページ送りなし |
 | [event-store-adapter-java](https://github.com/j5ik2o/event-store-adapter-java) v1.2.90 | 旧来の契約 | 封筒モデル未導入、ハッシュが `Math.abs(hashCode)`、ページ送りなし |
 | [event-store-adapter-kotlin](https://github.com/j5ik2o/event-store-adapter-kotlin) v1.0.510 / [scala](https://github.com/j5ik2o/event-store-adapter-scala) v1.0.340 | 旧来の契約（java のラッパー） | java に同じ |
 | [event-store-adapter-go](https://github.com/j5ik2o/event-store-adapter-go) v1.0.196 | 旧来の契約 | 封筒モデル未導入、ページ送りなし |
-| php / swift / dotnet | 未調査 | 未調査 |
