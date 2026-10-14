@@ -71,7 +71,8 @@ kotlin と scala は java の封筒と例外をそのまま使うので、封筒
 1. ハブで `surface.json` を変え、`version` を上げる。契約の版が変わるなら `contract` も改める。`status` が `experimental` のままなら `stable` にする。SHA-256 を計算し、下の「版と SHA-256」の表に行を足す。照合の方式が変わる言語があれば、上の「各言語の照合の方式」の表も直す。
 2. 各言語では、1 つの PR で次をそろえる。
    - `api-surface/surface.json` を、ハブのものと同じ内容で替える。
-   - `.github/workflows/ci.yml` の SHA-256 の固定値を替える。java・kotlin・scala は `api-surface/README.md` にも同じ値を書いているので、そこも替える。
+   - `.github/workflows/ci.yml` の SHA-256 の固定値を替える。java・rs・kotlin・scala は、手順の名前（`Verify API surface 0.1.0`）の版も替える。
+   - 各言語の `api-surface/README.md` に書いた版と SHA-256 を替える（6 言語とも版を書いており、java・kotlin・scala は SHA-256 の全体、rs は略した形も書いている）。替え忘れは、各言語のリポジトリで `git grep -n -e '<前の版>' -e '<前の SHA-256 の先頭の 8 文字>' -- api-surface .github` を実行して見つける。
    - 対応表 `api-surface/<言語>.json` の `surface_version` を新しい版にする（go の対応表にはこの要素がない）。java・scala・rs は、照合の試験が写しの版との一致を確かめる。
    - 足した要素や変えた要素を、対応表と照合の試験に足す。否定の試験にも、その要素をずらした場合を足す。
    - 形が変わるなら、ライブラリの公開 API の変更も同じ PR に入れる。照合は `CI Success` に含まれるので、写しだけを替えると CI が落ちる。
