@@ -82,6 +82,8 @@ def check_single_aggregate_scope(case, where):
         raise ValueError(f"{where}: DY-19 の観測は backends が dynamodb だけの場面に置く")
     if "DY-19" not in case["rules"]:
         raise ValueError(f"{where}: request_scope を使う場面の rules に DY-19 がない")
+    if not case["steps"]:
+        raise ValueError(f"{where}: DY-19 の場面は操作を持つ")
     for index, step in enumerate(case["steps"], 1):
         scope = step.get("observe", {}).get("request_scope")
         if scope is None:
@@ -256,8 +258,13 @@ def check_case(case, data_format, where, active):
                     raise ValueError(f"{where}: 差し込みスナップショットが未定義")
         if case.get("requires") == ["ttl"] and case["store"]["retention_mode"] != "ttl":
             raise ValueError(f"{where}: TTL 能力条件と保持方式が不一致")
-        if any("request_scope" in step.get("observe", {}) for step in case["steps"]):
+        if "DY-19" in case["rules"] or any("request_scope" in step.get("observe", {}) for step in case["steps"]):
             check_single_aggregate_scope(case, where)
+        if case["backends"] == ["memory"] and (case["store"]["retention_mode"] == "ttl"
+                                               or case["store"].get("change_feed")):
+            category = case.get("initialization", {}).get("expect", {}).get("error", {}).get("category")
+            if category != "configuration":
+                raise ValueError(f"{where}: メモリが提供しない設定を求める場面は、生成の configuration エラーを期待する")
         if case["store"].get("change_feed") and case["backends"] != ["memory"]:
             raise ValueError(f"{where}: change_feed を求める場面は backends が memory だけでなければならない")
         if (case["store"]["retention_mode"] == "ttl" and "memory" in case["backends"]

@@ -182,6 +182,24 @@ class ConformanceToolsTests(unittest.TestCase):
         with self.rejected("DY-19"):
             self.check()
 
+    def test_dy19_case_requires_request_scope_on_every_step(self):
+        def drop_all_scopes(case):
+            for step in case["steps"]:
+                step["observe"].pop("request_scope")
+        self.case_mutation("dynamodb/single-aggregate-requests.json", "dynamodb-single-aggregate-delete", drop_all_scopes)
+        with self.rejected("request_scope が必要"):
+            self.check()
+
+    def test_unsupported_memory_setting_requires_configuration_error(self):
+        self.case_mutation("memory/configuration.json", "memory-change-feed-unsupported", lambda c: c.pop("initialization"))
+        with self.rejected("configuration エラーを期待する"):
+            self.check()
+        shutil.copyfile(manifest.DEFAULT_ROOT / "memory/configuration.json", self.root / "memory/configuration.json")
+        self.case_mutation("memory/configuration.json", "memory-ttl-unsupported", lambda c:
+                           c["initialization"]["expect"]["error"].update(category="storage"))
+        with self.rejected("configuration エラーを期待する"):
+            self.check()
+
     def test_generated_coverage_must_match_case_data(self):
         self.mutate("values/aid.json", lambda doc: doc["cases"][0].update(id="renamed-aid-case"))
         with self.rejected("COVERAGE.md"):
