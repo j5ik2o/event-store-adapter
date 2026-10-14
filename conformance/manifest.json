@@ -40,7 +40,7 @@
     },
     {
       "path": "dynamodb/single-aggregate-requests.json",
-      "sha256": "ce87089f66a380c33e862728bc78325bdeda19662da7a8fa372cfe30b58e6e5f"
+      "sha256": "09532b6f268a50cc3ce75e441c207091c12222aa1cb4495b23880bc4b7609e19"
     },
     {
       "path": "dynamodb/write-errors.json",

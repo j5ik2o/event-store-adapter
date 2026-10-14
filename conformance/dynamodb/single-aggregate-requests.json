@@ -360,7 +360,44 @@
             }
           }
         ]
-      }
+      },
+      "faults": [
+        {
+          "operation": 2,
+          "phase": "retention-query",
+          "kind": "sdk-response",
+          "details": {
+            "history_pages": [
+              [
+                2
+              ]
+            ]
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
+        },
+        {
+          "operation": 3,
+          "phase": "retention-query",
+          "kind": "sdk-response",
+          "details": {
+            "history_pages": [
+              [
+                3,
+                2
+              ]
+            ]
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
+        }
+      ]
     },
     {
       "id": "dynamodb-single-aggregate-ttl",
@@ -730,7 +767,44 @@
       },
       "clock": {
         "epoch_seconds": 4102444800
-      }
+      },
+      "faults": [
+        {
+          "operation": 2,
+          "phase": "retention-query",
+          "kind": "sdk-response",
+          "details": {
+            "history_pages": [
+              [
+                2
+              ]
+            ]
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
+        },
+        {
+          "operation": 3,
+          "phase": "retention-query",
+          "kind": "sdk-response",
+          "details": {
+            "history_pages": [
+              [
+                3,
+                2
+              ]
+            ]
+          },
+          "repeat": {
+            "mode": "count",
+            "count": 1
+          },
+          "injection": "replace-response"
+        }
+      ]
     }
   ]
 }
