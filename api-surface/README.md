@@ -60,7 +60,7 @@
 | kotlin | `kotlin-reflect` | 操作の欠落と戻り値、`suspend` でない非同期の操作、なしを表せない戻り値、型の引数の制約、同期・`suspend` のストアや例外の基底の対応の抜け | [kotlin #857](https://github.com/j5ik2o/event-store-adapter-kotlin/pull/857) |
 | scala | Java のリフレクション（総称型の情報を含む） | 操作の戻り値（`Try`・`Future`・`Option` の包み方）、`SnapshotReadResult` の要素の欠落、型の引数の制約、ストア・要素・例外のクラスの対応の抜け | [scala #879](https://github.com/j5ik2o/event-store-adapter-scala/pull/879) |
 
-kotlin と scala は java の封筒と例外をそのまま使うので、封筒の要素と例外の分類の形は java の照合に任せ、自分の型（ストアと `SnapshotReadResult`）だけを照合する。各言語で確かめられないこと（scala の `implicit` の印や `AnyRef` の上限など）は、各言語の `api-surface/README.md` に書いた。
+kotlin と scala は java の封筒と例外をそのまま使うので、封筒の要素と例外の分類の形は java の照合に任せ、クラスが解決できることだけを確かめる。kotlin は自分のストアの操作（`SnapshotReadResult` も java のもの）、scala は自分のストアと `SnapshotReadResult` を照合する。各言語で確かめられないこと（scala の `implicit` の印や `AnyRef` の上限など）は、各言語の `api-surface/README.md` に書いた。
 
 ## 版と SHA-256
 
