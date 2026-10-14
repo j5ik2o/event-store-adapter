@@ -115,7 +115,7 @@ js・kotlin・scala がジョブの要約に書く規則番号ごとの表は、
 | java のメモリが、null の保存先で `NullPointerException` を投げる | `ConfigurationException` にした。値の書き換え（JSON のペイロード）と非同期のストアの並行呼び出しの試験を足した | [java#737](https://github.com/j5ik2o/event-store-adapter-java/pull/737) |
 | 6 言語とも、単一リージョンの前提（DY-18）と単一プロセスの前提（MEM-1）を文書に書いていない | 6 言語で同じ文言を README とスキーマ文書に足した | 上の 4 つと [kotlin#854](https://github.com/j5ik2o/event-store-adapter-kotlin/pull/854)・[scala#876](https://github.com/j5ik2o/event-store-adapter-scala/pull/876) |
 
-6 言語とも 5.0.1 を出した（kotlin・scala は java 5.0.1 に依存）。DY-19（Scan を使わず、1 つの集約に絞った要求だけを使う）は 6 言語とも実装は満たしているが、直接確かめる試験がないので、適合テストデータの拡張（1.1.0）で扱う。
+6 言語とも 5.0.1 を出した（kotlin・scala は java 5.0.1 に依存）。DY-19（Scan を使わず、1 つの集約に絞った要求だけを使う）は 6 言語とも実装は満たしているが、直接確かめる試験がないので、適合テストデータの拡張（1.1.0）で扱う。1.1.0 は 2026-10-14 にハブに置いた（実装計画 6 章）。
 
 ## メジャーを出すときにやること
 
