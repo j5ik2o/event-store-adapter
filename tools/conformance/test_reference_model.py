@@ -25,6 +25,15 @@ class ReferenceModelTests(unittest.TestCase):
                     self.assertEqual(len(report.skipped), 1)
                     self.assertIn('SDK要求', report.skipped[0][1])
 
+    def test_memory_unsupported_capability_is_configuration_error(self):
+        for identifier in ['memory-ttl-unsupported', 'memory-change-feed-unsupported']:
+            with self.subTest(case=identifier):
+                scenario = case('memory/configuration.json', identifier)
+                self.assertEqual(replay(copy.deepcopy(scenario)).checked, 1)
+                scenario['initialization']['expect']['error']['category'] = 'storage'
+                with self.assertRaisesRegex(ValueError, '参照モデルと期待が不一致'):
+                    replay(scenario)
+
     def test_gap_is_contract_violation_even_if_expected_optimistic_lock(self):
         scenario = case('scenarios/core/write-read.json', 'core-gap-event')
         scenario['steps'][1]['expect']['error']['category'] = 'optimistic-lock'

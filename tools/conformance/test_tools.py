@@ -42,7 +42,7 @@ class ConformanceToolsTests(unittest.TestCase):
         self.assertGreater(documents, 0)
         self.assertGreater(counts["scenarios"], 0)
         self.assertGreater(covered, 0)
-        self.assertEqual(excluded, 2)
+        self.assertEqual(excluded, 24)
         self.assertGreater(checked, 0)
 
     def test_manifest_cli_uses_only_standard_library_and_detects_change(self):
@@ -144,8 +144,60 @@ class ConformanceToolsTests(unittest.TestCase):
             self.check()
 
     def test_coverage_requires_each_requested_rule(self):
-        self.mutate("coverage.json", lambda doc: doc["required_rules"].append("T-6"))
+        self.mutate("coverage.json", lambda doc: doc["required_rules"].append("D-8"))
         with self.rejected("未網羅"):
+            self.check()
+
+    def test_coverage_rejects_defined_rule_without_case_or_reason(self):
+        # T-6 は仕様が定義する規則で、ケースがなく対象外の理由だけを持つ。理由を除くと未網羅になる。
+        self.mutate("coverage.json", lambda doc: doc.update(
+            exclusions=[x for x in doc["exclusions"] if x["rule"] != "T-6"]))
+        with self.rejected("未網羅"):
+            self.check()
+
+    def test_every_defined_rule_has_case_or_reason(self):
+        _, _, defined = validate.specification_rules(validate.DEFAULT_SPEC_ROOT)
+        self.assertEqual(len(defined), 73)
+        rows = {}
+        for line in (manifest.DEFAULT_ROOT / "COVERAGE.md").read_text(encoding="utf-8").splitlines():
+            cells = [cell.strip() for cell in line.strip("|").split(" | ")]
+            if len(cells) == 3 and cells[0] in defined:
+                rows[cells[0]] = cells
+        self.assertEqual(set(rows), defined)
+        for rule, (_, cases, reason) in rows.items():
+            with self.subTest(rule=rule):
+                self.assertTrue(cases != "—" or reason != "—")
+
+    def test_schema_rejects_unknown_request_scope_attribute(self):
+        self.case_mutation("dynamodb/single-aggregate-requests.json", "dynamodb-single-aggregate-delete", lambda c:
+                           c["steps"][0]["observe"]["request_scope"].update(unknown=True))
+        with self.rejected("Schema 不一致"):
+            self.check()
+
+    def test_request_scope_requires_all_dy19_apis(self):
+        def drop_query(case):
+            scope = case["steps"][0]["observe"]["request_scope"]
+            scope["apis"] = [api for api in scope["apis"] if api != "Query"]
+        self.case_mutation("dynamodb/single-aggregate-requests.json", "dynamodb-single-aggregate-delete", drop_query)
+        with self.rejected("DY-19"):
+            self.check()
+
+    def test_dy19_case_requires_request_scope_on_every_step(self):
+        def drop_all_scopes(case):
+            for step in case["steps"]:
+                step["observe"].pop("request_scope")
+        self.case_mutation("dynamodb/single-aggregate-requests.json", "dynamodb-single-aggregate-delete", drop_all_scopes)
+        with self.rejected("request_scope が必要"):
+            self.check()
+
+    def test_unsupported_memory_setting_requires_configuration_error(self):
+        self.case_mutation("memory/configuration.json", "memory-change-feed-unsupported", lambda c: c.pop("initialization"))
+        with self.rejected("configuration エラーを期待する"):
+            self.check()
+        shutil.copyfile(manifest.DEFAULT_ROOT / "memory/configuration.json", self.root / "memory/configuration.json")
+        self.case_mutation("memory/configuration.json", "memory-ttl-unsupported", lambda c:
+                           c["initialization"]["expect"]["error"].update(category="storage"))
+        with self.rejected("configuration エラーを期待する"):
             self.check()
 
     def test_generated_coverage_must_match_case_data(self):

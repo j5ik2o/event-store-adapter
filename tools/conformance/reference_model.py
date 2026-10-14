@@ -91,6 +91,9 @@ class Model:
     def initialize(self):
         if self.store['retention_count'] == 0:
             return error('configuration')
+        # メモリの保存先は期限切れ方式と変更フィードを提供しない（MEM-3・MEM-12・MEM-13）。
+        if self.case['backends'] == ['memory'] and (self.store['retention_mode'] == 'ttl' or self.store.get('change_feed', False)):
+            return error('configuration')
         faults = [f for f in self.case.get('faults', []) if f['operation'] == 0]
         for fault in faults:
             if fault['kind'] == 'sdk-error':
