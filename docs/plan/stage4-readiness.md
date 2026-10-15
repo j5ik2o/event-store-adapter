@@ -121,7 +121,7 @@ js・kotlin・scala がジョブの要約に書く規則番号ごとの表は、
 
 - 順番は 4 章のとおり、java を先に出し、kotlin・scala は java への依存を `2.0.0-SNAPSHOT` から正式版の java 5.0.0 に替えてから出す（P-48）。
 - 版上げの workflow は、入力 `version` に 5.0.0 を指定して起動する（P-48。実装計画 3 章）。
-- rs は、CHANGELOG の `[Unreleased]` を版の見出しに替える。
+- rs は、CHANGELOG の `[Unreleased]` を版の見出しに替える（5.0.0 のときの手順。2026-10-15 から CHANGELOG は更新せず、変更の記録はリリースノートだけにした。運用方針 1 章の「リリースノート」）。
 - java・kotlin・scala は、README などにある Snapshot の版の記述と、Snapshot 用のリポジトリの案内を直す。kotlin・scala の README は、導入の版がまだ仮の記述である。
 - java の版上げと Maven Central への公開は、2.0.0 で初めて通る。
 
@@ -129,4 +129,4 @@ js・kotlin・scala がジョブの要約に書く規則番号ごとの表は、
 
 - scala の CI には毎時の定期実行がある（2023-09-12 のコミット `eb6b383` で入った）。CI の成功のたびに Snapshot を公開する。
 - go の版上げの workflow は、版を上げるコミットを main に push する。2026-10-05 の v1.0.197 でも、この形で main に push できている（コミット `1054cf2`）。
-- go・java・kotlin・scala には CHANGELOG がない。リリースノートは版上げの workflow が作る。
+- js・go・java・kotlin・scala には CHANGELOG がない。リリースノートは版上げの workflow が作る。rs も 5.0.2 から CHANGELOG を更新しない（運用方針 1 章の「リリースノート」）。
