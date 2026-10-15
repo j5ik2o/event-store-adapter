@@ -115,6 +115,17 @@ class BodyScriptTest(unittest.TestCase):
         self.assertNotIn("Signed-off-by", text)
         self.assertNotIn("Refs", text)
 
+    def test_2e_each_breaking_footer_becomes_an_item(self):
+        a = h40("a")
+        text = out(
+            commit(a, "feat: x", "* feat!: a\n\nBREAKING CHANGE: 理由A\n\n* feat!: b\n\nBREAKING-CHANGE: 理由B\n続き")
+        )
+        breaking = text.split("### Features")[0]
+        self.assertIn(f"* 理由A {link(a)}", breaking)
+        self.assertIn(f"* 理由B 続き {link(a)}", breaking)
+        self.assertLess(breaking.index("理由A"), breaking.index("理由B"))
+        self.assertEqual(1, text.split("### Features")[1].count(link(a)))
+
     def test_3_non_conventional_subjects(self):
         a, b, c = h40("a"), h40("b"), h40("c")
         self.assertEqual("", out(commit(a, "version up to v5.0.2")))
