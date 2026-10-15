@@ -69,11 +69,11 @@ event-store-adapter グループの各リポジトリが従う、CI・ブラン�
 
 2026-10-15 に置いた。オーナーが方式と範囲を決めた。2026-10-14 に rs の脆弱性の監査（`CI Success` の外のジョブ）が main で落ちたとき、どこにも知らせが出ず、たまたま気づくまで残ったからである。
 
-- main への push と定期実行の CI が、失敗・時間切れ（`timed_out`）・起動の失敗（`startup_failure`）で終わったら、そのリポジトリに issue を自動で作る。ラベル `ci-failure-on-main` の付いた issue が開いていれば、新しく作らずにコメントを足す。より新しい main の CI が成功したら、その issue を閉じる。
+- main への push と定期実行の CI が、失敗・時間切れ（`timed_out`）・起動の失敗（`startup_failure`）で終わったら、そのリポジトリに issue を自動で作る。ラベル `ci-failure-on-main` の付いた issue が開いていれば、新しく作らずにコメントを足す。より新しい main の CI が成功したら、その issue を閉じる。同時に動く数は制限しないので、2 つの失敗がほぼ同時に終わると issue が 2 つできることがある（制限すると、待っている知らせが後の知らせに置き換えられて消えるため）。
 - 範囲は main の CI の失敗すべてとする。`CI Success` の外のジョブ（rs の `audit`）の失敗も、`CI Success` 自体の失敗も含む。
 - 知らせるだけで、マージを止める仕組みではない。`CI Success` の依存やブランチ保護には入れない。外部への通知や Secret は使わず、GitHub の issue とその通知だけを使う。
 - 各リポジトリは、本リポジトリの `tools/ci-failure-notice/main-ci-failure.yml` を `.github/workflows/main-ci-failure.yml` に写す。変えてよいのは、CI のワークフローの名前を書いた 1 か所だけである（rs は `ci`、ほかは `CI`）。正本を変えたら、コーディネーターが 6 リポジトリに配り直す。
-- 写した後は、[tools/ci-failure-notice/README.md](../../tools/ci-failure-notice/README.md) の手順で、過去の失敗した実行の ID を手動の実行に渡し、issue ができることを確かめる。
+- 写した後は、[tools/ci-failure-notice/README.md](../../tools/ci-failure-notice/README.md) の手順で、過去の失敗した CI の実行の ID を手動の実行に渡し、issue ができることを確かめる。手動の実行は、渡された ID が CI のワークフローのものかを確かめないので、CI 以外のワークフローの実行の ID を渡さない。
 
 ## 2. ブランチ保護（main）
 
