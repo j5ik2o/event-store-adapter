@@ -176,6 +176,8 @@ LocalStack 2.1.0、トークンなしで動く LocalStack の最新の正式版 
 
 全言語のメジャーがそろったら、ある言語が書いたテーブルを別の言語で読み書きする試験を、本リポジトリで一度行う。テーブルを共有できないことが、仕様を作った動機の一つだからである（[ADR-0001](../adr/0001-language-neutral-spec-based-on-envelope-model.md)）。
 
+2026-10-15 に、公開した版（rs 5.0.2、js・java・kotlin・scala・go 5.0.1。java は Maven Central の jar）で、この試験を DynamoDB Local に対して行った（[#50](https://github.com/j5ik2o/event-store-adapter/pull/50)、`tools/interop/`）。書き手 6 × 読み手 6 の 36 組の読み書き、6 言語が順に同じ集約へ追記して全言語で読むこと、二重書き込みの楽観ロック、時刻の精度（js はミリ秒、ほかはナノ秒）、ページ送り、journal・snapshot・head の属性の名前と型が、すべて通った。それまでの実行（[#19](https://github.com/j5ik2o/event-store-adapter/pull/19)、2026-10-12）は、公開前のコミットに対するものだった。
+
 本番の実サービスでは確かめない。保存先の試験は、ローカルのエミュレーション環境で行う。DynamoDB は 4.1 で決めた DynamoDB Local での試験で受け入れを判断し、それで十分とする。2026-10-13 にオーナーが「実サービスの DynamoDB での確認は最初のメジャーの前には行わない」と決め、2026-10-15 に、保存先を問わず本番では確かめないと改めた（10 章）。段階 5 の Spanner・Bigtable もそれぞれのエミュレーターで、SQLite はローカルのファイルで試験する。Spanner・Bigtable のプロファイルには、実サービスでの検証が残っているという記述があるが、この決まりで置き換わる。プロファイルの文は、草案の規則を確定するとき（[#44](https://github.com/j5ik2o/event-store-adapter/issues/44)・[#45](https://github.com/j5ik2o/event-store-adapter/issues/45)）に直す。
 
 ## 6. 適合テストデータ（IP-D6・IP-D7）
@@ -198,7 +200,15 @@ v1.1.0 を 2026-10-14 に置いた（オーナーが範囲を決めた）。1.0.
 
 値の表 30 件、操作の場面 89 件（共通契約 42 件、DynamoDB 45 件、メモリ 2 件）、配置 1 件で、58 の規則を扱う。2026-10-15 に 6 言語へ配り、新しい 4 件は 6 言語で成功か理由付きの表現不能になった（[運用方針](../operations/repository-policy.md) の適合状況）。
 
-各リポジトリには `conformance/`（`.gitattributes` で改行の変換を止める）と `tools/conformance/manifest.py` を写し、CI で `manifest.py verify` と、`conformance/manifest.json` の SHA-256（v1.0.0 は `61c26614dbbfba88eebce72cc1d2b0220218839e74dcfb64c19268f7ee2302ce`、v1.1.0 は `0e4dfe44dec0a912ed9d6b28f0634af9fd0dc840895734790e87cf96772e1d50`）の照合を行う。データを配り直すときは、この値も更新する。
+v1.2.0 を 2026-10-15 に置いた（[#51](https://github.com/j5ik2o/event-store-adapter/pull/51)。オーナーが範囲を MEM-2・MEM-6 に絞った）。1.0.0・1.1.0 のケースは変えずに、次を足した。
+
+- MEM-2 の場面 2 件（`memory/stores.json`）。場面の途中で 2 つ目のストアを生成する操作 `createStore` を使い、新しく生成したストアは空で独立していること、明示的に共有したストアは記録と楽観ロックを共有することを確かめる。
+- MEM-6 の場面 2 件（`memory/payload-isolation.json`）。書き込んだペイロードを書き換える `mutateWrittenPayload` と、取得した結果を書き換える `mutateReadPayload` の後に読み直しても、書き込んだときの値が返ることを確かめる。書き換えを言語の型や API で表せない実装は、この 2 件に限り、理由を付けて「表現不能」と報告してよい。
+- 検証の道具は、書き込んだペイロードにない位置を書き換えるケース、同じ値への書き換え（空振り）、先に書かずに新しいストアを読むだけのケースを、データの誤りとして拒否する。
+
+値の表 30 件、操作の場面 93 件（共通契約 42 件、DynamoDB 45 件、メモリ 6 件）、配置 1 件で、60 の規則を扱う。
+
+各リポジトリには `conformance/`（`.gitattributes` で改行の変換を止める）と `tools/conformance/manifest.py` を写し、CI で `manifest.py verify` と、`conformance/manifest.json` の SHA-256（v1.0.0 は `61c26614dbbfba88eebce72cc1d2b0220218839e74dcfb64c19268f7ee2302ce`、v1.1.0 は `0e4dfe44dec0a912ed9d6b28f0634af9fd0dc840895734790e87cf96772e1d50`、v1.2.0 は `432241f3a9e45fc169b3fcdead480b505832af1eed9f4f48357210daccce84eb`）の照合を行う。データを配り直すときは、この値も更新する。
 
 ## 7. 旧データの移行（IP-D8、2026-10-05 合意）
 
