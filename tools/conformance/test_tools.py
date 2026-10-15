@@ -42,7 +42,7 @@ class ConformanceToolsTests(unittest.TestCase):
         self.assertGreater(documents, 0)
         self.assertGreater(counts["scenarios"], 0)
         self.assertGreater(covered, 0)
-        self.assertEqual(excluded, 24)
+        self.assertEqual(excluded, 22)
         self.assertGreater(checked, 0)
 
     def test_manifest_cli_uses_only_standard_library_and_detects_change(self):
@@ -281,6 +281,53 @@ class ConformanceToolsTests(unittest.TestCase):
             scenario["expect"]["error"]["message"]["must_contain"] = ["T-13", "42"]
         self.mutate("values/occurred-at.json", incorrect)
         with self.rejected("関係する番号のメッセージ期待"):
+            self.check()
+
+    def test_operation_may_target_a_created_store_by_name(self):
+        self.case_mutation("memory/stores.json", "memory-store-shared", lambda c:
+                           self.assertEqual(c["steps"][2]["store"], "second"))
+        self.check()
+
+    def test_store_name_must_be_unique_reserved_and_created_before_use(self):
+        relative = "memory/stores.json"
+        original = manifest.read_json(self.root / relative)
+        changes = {
+            "reserved-name": lambda c: c["steps"][1]["arguments"].update(name="primary"),
+            "duplicate-name": lambda c: c["steps"].insert(2, copy.deepcopy(c["steps"][1])),
+            "use-before-creation": lambda c: c["steps"][2].update(store="third"),
+        }
+        for label, change in changes.items():
+            with self.subTest(change=label):
+                (self.root / relative).write_text(json.dumps(original), encoding="utf-8")
+                self.case_mutation(relative, "memory-store-shared", change)
+                with self.assertRaises(ValueError):
+                    self.check()
+
+    def test_payload_mutation_with_a_different_value_is_accepted(self):
+        self.case_mutation("memory/payload-isolation.json", "memory-payload-written-mutation", lambda c:
+                           c["steps"][1]["arguments"].update(pointer="/items/0/qty", value=7))
+        self.check()
+
+    def test_payload_mutation_pointer_must_exist_in_written_payload(self):
+        relative = "memory/payload-isolation.json"
+        original = manifest.read_json(self.root / relative)
+        for pointer in ["/items/0/missing", "/items/1/qty", "/items/-", "/items/01/qty", "/note/x"]:
+            with self.subTest(pointer=pointer):
+                (self.root / relative).write_text(json.dumps(original), encoding="utf-8")
+                self.case_mutation(relative, "memory-payload-written-mutation", lambda c:
+                                   c["steps"][1]["arguments"].update(pointer=pointer))
+                with self.rejected("JSON Pointer"):
+                    self.check()
+
+    def test_payload_mutation_to_the_current_value_is_rejected_as_vacuous(self):
+        self.case_mutation("memory/payload-isolation.json", "memory-payload-written-mutation", lambda c:
+                           c["steps"][1]["arguments"].update(pointer="/note", value="original"))
+        with self.assertRaises(ValueError):
+            self.check()
+
+    def test_independent_store_case_requires_write_before_reading_new_store(self):
+        self.case_mutation("memory/stores.json", "memory-store-new-independent", lambda c: c["steps"].pop(0))
+        with self.rejected("独立の場面は"):
             self.check()
 
     def test_hash_table_rejects_incorrect_output(self):

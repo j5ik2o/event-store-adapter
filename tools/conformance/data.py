@@ -35,6 +35,24 @@ def materialize(case):
     return result
 
 
+def resolve_pointer(document, pointer):
+    """RFC 6901 のポインタが指す位置を (親, キーまたは添字) で返す。存在しない位置は ValueError。"""
+    if not pointer.startswith('/'):
+        raise ValueError(f"JSON Pointer がペイロードにない位置を指す: {pointer!r}（根のポインタは使えない）")
+    tokens = [token.replace('~1', '/').replace('~0', '~') for token in pointer[1:].split('/')]
+    container, key = None, None
+    node = document
+    for token in tokens:
+        if isinstance(node, dict) and token in node:
+            container, key = node, token
+        elif isinstance(node, list) and re.fullmatch(r'0|[1-9][0-9]*', token) and int(token) < len(node):
+            container, key = node, int(token)
+        else:
+            raise ValueError(f"JSON Pointer がペイロードにない位置を指す: {pointer!r}")
+        node = container[key]
+    return container, key
+
+
 def fnv1a64(value):
     result = 0xcbf29ce484222325
     for byte in value.encode('utf-8'):

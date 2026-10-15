@@ -105,6 +105,23 @@ class ReferenceModelTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '参照モデルと期待が不一致'):
             replay(scenario)
 
+    def test_shared_store_duplicate_seq_is_optimistic_lock(self):
+        scenario = case('memory/stores.json', 'memory-store-shared')
+        scenario['steps'][4]['expect'] = {'result': 'success'}
+        with self.assertRaisesRegex(ValueError, '参照モデルと期待が不一致'):
+            replay(scenario)
+
+    def test_payload_mutation_does_not_change_reread_value(self):
+        for identifier in ['memory-payload-written-mutation', 'memory-payload-read-mutation']:
+            with self.subTest(case=identifier):
+                scenario = case('memory/payload-isolation.json', identifier)
+                mutated = copy.deepcopy(scenario['fixtures']['events']['e1'])
+                mutated['payload']['items'][0]['qty'] = 99
+                scenario['fixtures']['events']['e1-mutated'] = mutated
+                scenario['steps'][-1]['expect']['events'] = ['e1-mutated']
+                with self.assertRaisesRegex(ValueError, '参照モデルと期待が不一致'):
+                    replay(scenario)
+
     def test_string_generation_preserves_byte_length_and_source(self):
         scenario = case('dynamodb/write-errors.json', 'dynamodb-item-size-event')
         expanded = materialize(scenario)

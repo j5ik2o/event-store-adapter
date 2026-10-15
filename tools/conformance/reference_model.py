@@ -2,9 +2,10 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+import copy
 import json
 
-from data import epoch_nanoseconds
+from data import epoch_nanoseconds, resolve_pointer
 
 
 @dataclass
@@ -55,14 +56,17 @@ class Model:
         self.store = case['store']
         self.events = case['fixtures']['events']
         self.snapshots = case['fixtures']['snapshots']
-        self.aggregates = {}
+        # 1つ目のストアは予約名 primary。共有したストアは同じ辞書を指し、新規のストアは空の辞書を持つ。
+        self.stores = {'primary': {}}
+        self.written = {}
+        self.read_results = {}
         self.clock = case.get('clock', {}).get('epoch_seconds')
         self.notifications = []
         self.targets = []
         self.seed(case.get('seed', {}).get('items', []))
 
-    def state(self, identifier):
-        return self.aggregates.setdefault(identifier, Aggregate())
+    def state(self, identifier, store='primary'):
+        return self.stores[store].setdefault(identifier, Aggregate())
 
     def seed(self, items):
         for item in items:
@@ -165,7 +169,7 @@ class Model:
         snap = 0 if snapshot is None else identifier + length(snapshot.get('manifest', '')) + binary(snapshot['aggregate'])
         return max(head, snap) > 409600
 
-    def write(self, args, faults):
+    def write(self, args, faults, store='primary', index=None):
         event = self.events[args['event']]
         snapshot = self.snapshots[args['snapshot']] if 'snapshot' in args else None
         failure = self.validate_write(event, snapshot)
@@ -183,7 +187,7 @@ class Model:
                 failure = self.fault_error(fault, event)
                 if failure:
                     return failure
-        state = self.state(aid(event['aggregate_id']))
+        state = self.state(aid(event['aggregate_id']), store)
         seq, head = event['seq_nr'], state.head
         if (seq == 1 and head is not None) or seq in state.journal or (head is not None and seq <= head):
             return error('optimistic-lock')
@@ -191,9 +195,11 @@ class Model:
             return error('contract-violation', 'W-8')
         # 原子的に確定し、保持はその後に行う。
         state.head = seq
-        state.journal[seq] = envelope(event)
+        state.journal[seq] = copy.deepcopy(envelope(event))
+        if index is not None:
+            self.written[index] = copy.deepcopy(event['payload'])
         if snapshot is not None:
-            state.snapshot = envelope(snapshot)
+            state.snapshot = copy.deepcopy(envelope(snapshot))
             if self.store['retention_count'] is not None:
                 state.history[seq] = None
                 self.retain(state, seq, faults)
@@ -227,12 +233,41 @@ class Model:
                     raise ValueError('参照モデル: TTLの時計が未指定')
                 state.history[seq] = self.clock + self.store['ttl_grace_seconds']
 
-    def execute(self, step, faults):
+    def create_store(self, args):
+        if args['name'] in self.stores:
+            raise ValueError(f"参照モデル: ストア名が重複: {args['name']}")
+        if args['storage'] == 'shared':
+            self.stores[args['name']] = self.stores[args['shared_with']]
+        else:
+            self.stores[args['name']] = {}
+        return {'result': 'success'}
+
+    def mutate_payload(self, payload, args):
+        container, key = resolve_pointer(payload, args['pointer'])
+        container[key] = copy.deepcopy(args['value'])
+        return {'result': 'success'}
+
+    def mutate_read_payload(self, args):
+        wanted = self.events[args['event']]
+        returned = self.read_results[args['operation']]
+        for event in returned:
+            if event['aggregate_id'] == wanted['aggregate_id'] and event['seq_nr'] == wanted['seq_nr']:
+                return self.mutate_payload(event['payload'], args)
+        raise ValueError(f"参照モデル: 操作{args['operation']}の取得結果に{args['event']}がない")
+
+    def execute(self, step, faults, index):
         self.notifications, self.targets = [], []
         self.clock = step.get('clock_epoch_seconds', self.clock)
+        store = step.get('store', 'primary')
+        if step['op'] == 'createStore':
+            return self.create_store(step['arguments'])
+        if step['op'] == 'mutateWrittenPayload':
+            return self.mutate_payload(self.written[step['arguments']['operation']], step['arguments'])
+        if step['op'] == 'mutateReadPayload':
+            return self.mutate_read_payload(step['arguments'])
         if step['op'].startswith('persist'):
-            return self.write(step['arguments'], faults)
-        state = self.state(aid(step['arguments']['aggregate_id']))
+            return self.write(step['arguments'], faults, store, index)
+        state = self.state(aid(step['arguments']['aggregate_id']), store)
         old_head = state.head
         for fault in faults:
             if fault['kind'] == 'read-interleave':
@@ -247,7 +282,9 @@ class Model:
             head = old_head if any(f['kind'] == 'read-interleave' for f in faults) else state.head
             return {'result': 'none'} if head is None else {'result': 'snapshot', 'head_seq_nr': head, 'snapshot': state.snapshot}
         start = step['arguments']['seq_nr']
-        return {'result': 'events', 'events': [event for seq, event in sorted(state.journal.items()) if seq >= start]}
+        events = [copy.deepcopy(event) for seq, event in sorted(state.journal.items()) if seq >= start]
+        self.read_results[index] = copy.deepcopy(events)
+        return {'result': 'events', 'events': events}
 
     def expected(self, expectation):
         if 'error' in expectation:
@@ -277,7 +314,7 @@ class Model:
         if 'history' in observation:
             args = step['arguments']
             identifier = self.events[args['event']]['aggregate_id'] if 'event' in args else args['aggregate_id']
-            history = self.state(aid(identifier)).history
+            history = self.state(aid(identifier), step.get('store', 'primary')).history
             expected = observation['history']
             active = {seq for seq, ttl in history.items() if ttl is None}
             marked = {seq: ttl for seq, ttl in history.items() if ttl is not None}
@@ -312,7 +349,7 @@ def replay(case):
         if unknown_state:
             report.skipped.append((where, unknown_state))
             continue
-        model.compare(model.execute(step, faults), step['expect'], where)
+        model.compare(model.execute(step, faults, index), step['expect'], where)
         model.observe(step, where)
         report.checked += 1
     # 項目の物理型・SDK要求・メッセージは状態機械から観測できない。
