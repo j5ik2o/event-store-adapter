@@ -14,6 +14,8 @@ SUBJECT_RE = re.compile(
 )
 BREAKING_RE = re.compile(r"^(?:BREAKING CHANGE|BREAKING-CHANGE):[ \t]*(?P<text>.*)$")
 PR_RE = re.compile(r" \(#(?P<pr>\d+)\)$")
+# Conventional Commits の footer の始まり（"Co-authored-by: x"、"Refs #12" など）。
+FOOTER_RE = re.compile(r"^(?:BREAKING CHANGE|[A-Za-z][A-Za-z0-9-]*)(?:: | #)")
 
 SECTIONS = [
     ("feat", "Features"),
@@ -53,7 +55,7 @@ def body_breaking_text(body):
             continue
         pieces = [m.group("text").strip()]
         for follow in lines[i + 1:]:
-            if not follow.strip():
+            if not follow.strip() or FOOTER_RE.match(follow):
                 break
             pieces.append(follow.strip())
         return " ".join(p for p in pieces if p)

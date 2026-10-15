@@ -102,6 +102,19 @@ class BodyScriptTest(unittest.TestCase):
         self.assertIn(f"* 一行目 二行目 {link(a)}", text)
         self.assertNotIn("別の段落", text)
 
+    def test_2d_breaking_text_stops_at_the_next_footer(self):
+        a, b = h40("a"), h40("b")
+        text = out(
+            commit(a, "feat: x", "BREAKING CHANGE: 理由A\n続き\nCo-authored-by: T <t@example.com>")
+            + commit(b, "fix: y", "BREAKING-CHANGE: 理由B\nRefs #12\nSigned-off-by: T <t@example.com>")
+        )
+        breaking = text.split("### Features")[0]
+        self.assertIn(f"* 理由A 続き {link(a)}", breaking)
+        self.assertIn(f"* 理由B {link(b)}", breaking)
+        self.assertNotIn("Co-authored-by", text)
+        self.assertNotIn("Signed-off-by", text)
+        self.assertNotIn("Refs", text)
+
     def test_3_non_conventional_subjects(self):
         a, b, c = h40("a"), h40("b"), h40("c")
         self.assertEqual("", out(commit(a, "version up to v5.0.2")))
