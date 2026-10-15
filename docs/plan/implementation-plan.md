@@ -206,7 +206,7 @@ v1.2.0 を 2026-10-15 に置いた（[#51](https://github.com/j5ik2o/event-store
 - MEM-6 の場面 2 件（`memory/payload-isolation.json`）。書き込んだペイロードを書き換える `mutateWrittenPayload` と、取得した結果を書き換える `mutateReadPayload` の後に読み直しても、書き込んだときの値が返ることを確かめる。書き換えを言語の型や API で表せない実装は、この 2 件に限り、理由を付けて「表現不能」と報告してよい。
 - 検証の道具は、書き込んだペイロードにない位置を書き換えるケース、同じ値への書き換え（空振り）、先に書かずに新しいストアを読むだけのケースを、データの誤りとして拒否する。
 
-値の表 30 件、操作の場面 93 件（共通契約 42 件、DynamoDB 45 件、メモリ 6 件）、配置 1 件で、60 の規則を扱う。
+値の表 30 件、操作の場面 93 件（共通契約 42 件、DynamoDB 45 件、メモリ 6 件）、配置 1 件で、60 の規則を扱う。2026-10-15 に 6 言語へ配り、新しい 4 件は 6 言語ともメモリで成功した（[運用方針](../operations/repository-policy.md) の適合状況）。MEM-6 の書き換えは 6 言語とも表せたので、「表現不能」と報告した言語はない。
 
 各リポジトリには `conformance/`（`.gitattributes` で改行の変換を止める）と `tools/conformance/manifest.py` を写し、CI で `manifest.py verify` と、`conformance/manifest.json` の SHA-256（v1.0.0 は `61c26614dbbfba88eebce72cc1d2b0220218839e74dcfb64c19268f7ee2302ce`、v1.1.0 は `0e4dfe44dec0a912ed9d6b28f0634af9fd0dc840895734790e87cf96772e1d50`、v1.2.0 は `432241f3a9e45fc169b3fcdead480b505832af1eed9f4f48357210daccce84eb`）の照合を行う。データを配り直すときは、この値も更新する。
 
