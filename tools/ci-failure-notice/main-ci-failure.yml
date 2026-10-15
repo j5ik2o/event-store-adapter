@@ -21,10 +21,6 @@ permissions:
   issues: write
   actions: read
 
-concurrency:
-  group: main-ci-failure-${{ github.repository }}
-  cancel-in-progress: false
-
 env:
   LABEL: ci-failure-on-main
 
@@ -54,6 +50,7 @@ jobs:
             echo "conclusion=$conclusion"
             echo "url=$(jq -r '.html_url' run.json)"
             echo "sha=$(jq -r '.head_sha' run.json)"
+            echo "run_number=$(jq -r '.run_number' run.json)"
           } >> "$GITHUB_OUTPUT"
           if [ "$branch" = "main" ] && { [ "$event" = "push" ] || [ "$event" = "schedule" ]; }; then
             echo "target=true" >> "$GITHUB_OUTPUT"
@@ -71,6 +68,7 @@ jobs:
           RUN_URL: ${{ steps.run.outputs.url }}
           SHA: ${{ steps.run.outputs.sha }}
           EVENT: ${{ steps.run.outputs.event }}
+          RUN_NUMBER: ${{ steps.run.outputs.run_number }}
         run: |
           set -euo pipefail
           if [ "$EVENT" = "schedule" ]; then trigger="定期実行 (schedule)"; else trigger="push"; fi
@@ -85,6 +83,8 @@ jobs:
             echo "- きっかけ: $trigger"
             echo "- 失敗したジョブ:"
             echo "$failed_jobs"
+            echo
+            echo "<!-- ci-run-number: $RUN_NUMBER -->"
           } > body.md
 
           if ! gh api "repos/$REPO/labels/$LABEL" > /dev/null 2>&1; then
@@ -107,11 +107,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           RUN_URL: ${{ steps.run.outputs.url }}
+          RUN_NUMBER: ${{ steps.run.outputs.run_number }}
         run: |
           set -euo pipefail
           numbers=$(gh issue list --repo "$REPO" --label "$LABEL" --state open \
             --limit 100 --json number --jq '.[].number')
           for number in $numbers; do
-            gh issue close "$number" --repo "$REPO" \
-              --comment "main の CI が成功した: $RUN_URL"
+            # CI の実行は重なりうるので、記録した最後の失敗より新しい成功でだけ閉じる
+            last_failure=$(gh issue view "$number" --repo "$REPO" --json body,comments \
+              --jq '[.body, .comments[].body | scan("ci-run-number: ([0-9]+)") | .[0] | tonumber] | max // 0')
+            if [ "$RUN_NUMBER" -gt "$last_failure" ]; then
+              gh issue close "$number" --repo "$REPO" \
+                --comment "main の CI が成功した: $RUN_URL"
+            else
+              echo "issue #$number の最後の失敗（実行番号 $last_failure）より古い成功（$RUN_NUMBER）なので閉じない"
+            fi
           done
