@@ -44,7 +44,7 @@ event-store-adapter グループの各リポジトリが従う、CI・ブラン�
 - 変更の記録は、版上げの workflow が作る GitHub Release のリリースノートだけとする。`CHANGELOG.md` は置かない。rs の `CHANGELOG.md` は 5.0.1 までの記録として残し、更新しない（rs #305）。
 - リリースノートは、前のタグから新しいタグまでのコミットの件名を、Conventional Commits の型（`feat`・`fix` など）ごとにまとめて、自動で作る。手で書き足したり直したりしない。
 - 3 章のとおりマージは squash だけなので、1 つの PR が main の 1 つのコミットになり、その件名がリリースノートの 1 行になる。コーディネーターは squash でマージするときに、件名を Conventional Commits の形（`fix(deps): ...` など）にし、利用者が読んで分かる言葉で書く。
-- 破壊的な変更は、件名の型の直後の `!` か、本文の `BREAKING CHANGE:` で始まる行で示す。前項の版上げの判定も、これで major にする。
+- 破壊的な変更は、件名の型の直後の `!` か、本文の `BREAKING CHANGE:`・`BREAKING-CHANGE:` で始まる行で示す。前項の版上げの判定も、これで major にする。
 - 利用者が自分の設定を変える必要があるときの手順は、リリースノートに書き足さず、README などの文書に書く（rs 5.0.2 の DynamoDB の SDK の機能の指定は rs #305）。
 
 ### 適合テストデータの照合
@@ -143,7 +143,7 @@ takt を使うリポジトリは、次の配置にそろえる。テンプレー
 
 2026-10-15 に、適合テストデータ 1.1.0 を 6 リポジトリに配った（rs #301、js #1060・#1062、java #742、kotlin #859、scala #881、go #442）。6 リポジトリとも、写しと SHA-256 の照合が 1.1.0 で通る。DY-19 の 2 件は DynamoDB Local で、メモリの期限切れ方式を求める 1 件はメモリで、6 言語とも成功した。変更フィードを求める 1 件は、js では想定外の設定として設定エラーになり成功した。ほかの 5 言語は公開設定に変更フィードの項目がないので、理由付きの表現不能と報告している。
 
-2026-10-15 に足した 1 章の「リリースノート」には、rs #305 のマージで 6 リポジトリとも `CHANGELOG.md` を更新しない形になる。リリースノートの作り方は 2 通りある。rs・js・java・kotlin・go は、リポジトリの中の同じ Python のスクリプト（`.github/create-release-note-header.py`・`.github/create-release-note-body.py`）で作る。scala は版上げで使う `mathieudutour/github-tag-action` が作る（同じスクリプトも置いてあるが使っていない）。Python のスクリプトは件名だけを読み、型の直後の `!` を見分けないので、破壊的な変更の節を作らない（rs 5.0.0 の `feat!:` の #287 も、機能の節に入った）。本文の `BREAKING CHANGE:` も読まない。スコープと PR へのリンクも出さない。scala の方式は、どれも出す。
+2026-10-15 に足した 1 章の「リリースノート」には、rs #305 のマージで 6 リポジトリとも `CHANGELOG.md` を更新しない形になる。リリースノートの作り方は 2 通りある。rs・js・java・kotlin・go は、リポジトリの中の同じ Python のスクリプト（`.github/create-release-note-header.py`・`.github/create-release-note-body.py`）で作る。scala は版上げで使う `mathieudutour/github-tag-action` が作る（同じスクリプトも置いてあるが使っていない）。Python のスクリプトは件名だけを読み、型の直後の `!` を見分けないので、破壊的な変更の節を作らない（rs 5.0.0 の `feat!:` の #287 も、機能の節に入った）。本文の `BREAKING CHANGE:`・`BREAKING-CHANGE:` も読まない。スコープと PR へのリンクも出さない。scala の方式は、どれも出す。
 
 | 残っている項目 | 対象 | 担当 |
 |:--|:--|:--|
