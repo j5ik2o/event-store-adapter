@@ -35,6 +35,6 @@ Java の成果物を取得済みなら、`--java-artifact-directory` でその�
 
 ## 固定する値
 
-`snapshots.json` は、ソースのコミット、アーカイブの SHA-256、Java の開発中スナップショットの jar、言語ごとの時刻精度を固定します。
+`snapshots.json` は、ソースのコミット、アーカイブの SHA-256、Maven Central に公開した Java の jar と sources jar、言語ごとの時刻精度を固定します。
 JavaScript の精度がミリ秒なのは、公開 API が `Date` を使うためです。
 コミットを更新するときは、対応するアーカイブの SHA-256 も一緒に更新してください。

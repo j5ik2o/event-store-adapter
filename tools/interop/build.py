@@ -61,7 +61,7 @@ def acquire(output):
 
 
 def java_artifacts(output, supplied):
-    snapshot = PINS["java_currentSnapshot"]
+    snapshot = PINS["java_artifact"]
     source_root = output / "sources/java/src/main/java"
     source_files = {str(p.relative_to(source_root)) for p in source_root.rglob("*.java")}
     artifacts = []
@@ -73,7 +73,7 @@ def java_artifacts(output, supplied):
             else:
                 download(snapshot["repository"] + path.name, path)
         if digest(path) != snapshot[key]:
-            raise RuntimeError(f"Java currentSnapshot digest mismatch: {path}")
+            raise RuntimeError(f"Java artifact digest mismatch: {path}")
         artifacts.append(path)
     # 公開 sources jar が固定した java のコミットと同じ内容であることが、jar とコミットの対応の根拠になる。
     with zipfile.ZipFile(artifacts[1]) as package:
@@ -122,10 +122,10 @@ def main():
         go.mkdir(exist_ok=True)
         shutil.copyfile(HERE / "drivers/go/main.go", go / "main.go")
         # 置換先の実ソースを使うので、公開版番号は仮定しない。
-        module = "github.com/j5ik2o/event-store-adapter-go/v2"
+        module = "github.com/j5ik2o/event-store-adapter-go/v5"
         original = (sources / "go/go.mod").read_text()
         (go / "go.mod").write_text(original.replace(f"module {module}", "module interop-driver", 1)
-            + f"\nrequire {module} v2.0.0-00010101000000-000000000000\nreplace {module} => {json.dumps(str(sources / 'go'), ensure_ascii=False)}\n")
+            + f"\nrequire {module} v5.0.0-00010101000000-000000000000\nreplace {module} => {json.dumps(str(sources / 'go'), ensure_ascii=False)}\n")
         shutil.copyfile(sources / "go/go.sum", go / "go.sum")
         execute("go", ["go", "build", "-mod=mod", "-o", go / "driver", "."], cwd=go, environment={"GOWORK": "off"})
 
