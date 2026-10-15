@@ -86,6 +86,14 @@ class BodyScriptTest(unittest.TestCase):
         self.assertIn(f"* add x {link(a)}", text.split("### Features")[1])
         self.assertIn(f"* y {link(b)}", text.split("### Bug Fixes")[1])
 
+    def test_2c_empty_breaking_footer_falls_back_to_description(self):
+        a = h40("a")
+        text = out(commit(a, "feat: add x", "BREAKING CHANGE:"))
+        breaking = text.split("### Features")[0]
+        self.assertIn("### ⚠ BREAKING CHANGES", breaking)
+        self.assertIn(f"* add x {link(a)}", breaking)
+        self.assertNotIn(f"*  {link(a)}", breaking)
+
     def test_2b_breaking_footer_continuation_lines_until_blank_line(self):
         a = h40("a")
         text = out(

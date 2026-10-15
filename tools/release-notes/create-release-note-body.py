@@ -93,10 +93,11 @@ def render(records, base):
         scope = m.group("scope") if m else None
 
         if is_breaking:
-            if body_text is not None:
+            mark_text = subject_mark.group("text").strip() if subject_mark else ""
+            if body_text:
                 text = body_text
-            elif subject_mark is not None:
-                text = subject_mark.group("text").strip()
+            elif mark_text:
+                text = mark_text
             elif m is not None:
                 text = m.group("desc")
             else:
