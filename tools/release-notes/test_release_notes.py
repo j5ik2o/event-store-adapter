@@ -126,6 +126,14 @@ class BodyScriptTest(unittest.TestCase):
         self.assertLess(breaking.index("理由A"), breaking.index("理由B"))
         self.assertEqual(1, text.split("### Features")[1].count(link(a)))
 
+    def test_2f_next_breaking_marker_ends_the_previous_text(self):
+        a = h40("a")
+        text = out(commit(a, "feat: x", "BREAKING CHANGE: 理由A\nBREAKING-CHANGE:\ttab\nBREAKING-CHANGE:"))
+        breaking = text.split("### Features")[0]
+        self.assertIn(f"* 理由A {link(a)}", breaking)
+        self.assertIn(f"* tab {link(a)}", breaking)
+        self.assertNotIn("理由A BREAKING", text)
+
     def test_3_non_conventional_subjects(self):
         a, b, c = h40("a"), h40("b"), h40("c")
         self.assertEqual("", out(commit(a, "version up to v5.0.2")))

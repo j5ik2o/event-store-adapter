@@ -58,7 +58,12 @@ def body_breaking_texts(body):
         if m is None:
             continue
         pieces = [m.group("text").strip()]
-        while i < len(lines) and lines[i].strip() and not FOOTER_RE.match(lines[i]):
+        while (
+            i < len(lines)
+            and lines[i].strip()
+            and not FOOTER_RE.match(lines[i])
+            and not BREAKING_RE.match(lines[i])
+        ):
             pieces.append(lines[i].strip())
             i += 1
         texts.append(" ".join(p for p in pieces if p))
