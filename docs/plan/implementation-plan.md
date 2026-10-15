@@ -176,7 +176,7 @@ LocalStack 2.1.0、トークンなしで動く LocalStack の最新の正式版 
 
 全言語のメジャーがそろったら、ある言語が書いたテーブルを別の言語で読み書きする試験を、本リポジトリで一度行う。テーブルを共有できないことが、仕様を作った動機の一つだからである（[ADR-0001](../adr/0001-language-neutral-spec-based-on-envelope-model.md)）。
 
-実サービスの DynamoDB での確認には、オーナーが管理する AWS の環境が要る。最初のメジャーの前には行わない（2026-10-13 にオーナーが決定）。受け入れの判断は、4.1 で決めた DynamoDB Local での結果で行う。
+本番の実サービスでは確かめない。保存先の試験は、ローカルのエミュレーション環境で行う。DynamoDB は 4.1 で決めた DynamoDB Local での試験で受け入れを判断し、それで十分とする。2026-10-13 にオーナーが「実サービスの DynamoDB での確認は最初のメジャーの前には行わない」と決め、2026-10-15 に、保存先を問わず本番では確かめないと改めた（10 章）。段階 5 の Spanner・Bigtable もそれぞれのエミュレーターで、SQLite はローカルのファイルで試験する。
 
 ## 6. 適合テストデータ（IP-D6・IP-D7）
 
@@ -297,7 +297,7 @@ rs・js・go・java の設計文書（各リポジトリの `docs/design/next-ma
 | scala の Snapshot の版 | sbt-dynver が最後のタグから導く版（`1.0.341-9-<コミット>-SNAPSHOT` の形）のままにする。正式版は、版上げの workflow を入力 `version` に 5.0.0 を指定して起動して `v5.0.0` のタグを打ち、sbt-dynver がそのタグから 5.0.0 を導く（P-48）。4.2 の「次のメジャーの Snapshot 版を作る方法」は、この形で足りるので新しい仕組みは作らない | コーディネーター |
 | 共通契約の版の名前 | 仕様の版を「v5」と呼ぶ（[仕様の合意状況](../spec/README.md) の P-46。同日にいったん「v4」と決めた後に改めた） | オーナー |
 | 各言語の版 | 各言語のメジャーの番号を契約の版にそろえ、最初のメジャーは全言語で 5.0.0 とする（P-48） | オーナー |
-| 実サービスの DynamoDB での確認 | 最初のメジャーの前には行わない（5 章） | オーナー |
+| 実サービスの DynamoDB での確認 | 最初のメジャーの前には行わない（5 章）。2026-10-15 に、保存先を問わず本番では確かめないと改めた | オーナー |
 
 次の 2 点は、決める必要がないことが分かった。
 
@@ -310,6 +310,21 @@ rs・js・go・java の設計文書（各リポジトリの `docs/design/next-ma
 |:--|:--|:--|
 | 公開 API の形の照合 | 共通契約 v5 が公開 API に求める形を、言語に依存しない JSON（[api-surface/](../../api-surface/README.md)、0.1.0）で書き、各言語の CI で照合する。go で試作して効果を確かめたうえで、段階的に採用する（go → js・java → rs → kotlin・scala）。受け入れ条件（5 章）に入れるかは、6 言語がそろってから決める。IDL からコードを生成する既存の道具は、型の引数と言語ごとの作法を表せないので採らない | オーナー |
 | 照合を受け入れ条件に入れるか | 6 言語がそろったので、入れる。5 章の 4 番を「設計段階のレビューと、CI での照合で確認している」に改めた。照合は 6 言語とも main の必須の検査（`CI Success`）に含まれているので、文書を実態に合わせただけである。形の版を上げる手順は [api-surface/](../../api-surface/README.md) に書いた | オーナー |
+
+### 決めたこと（2026-10-15）
+
+次のマイルストーンを決める中で、次の点を決めた。作業は課題ごとに issue にした。
+
+| 項目 | 決定 | 決めた人 |
+|:--|:--|:--|
+| 本番の実サービスでの確認 | 行わない。保存先の試験は、ローカルのエミュレーション環境で行う。DynamoDB は DynamoDB Local での試験で十分とする（仕様が前提にする 6 項目を再現できることは 4.1 で確かめている）。段階 5 の Spanner・Bigtable はそれぞれのエミュレーターで、SQLite はローカルのファイルで試験する。2026-10-13 の「実サービスの DynamoDB での確認は最初のメジャーの前には行わない」を、期限も保存先も限らない決定に改めた | オーナー |
+| 段階 5 の保存先の範囲 | 各言語が前に持っていた保存先（rs の SQLite・Bigtable、js の Spanner）を戻すだけにする。全言語にはそろえず、必要になった保存先から後で広げる。プロファイルの合意は全言語に共通なので、広げるときにプロファイルを作り直す必要はない。課題は [#44](https://github.com/j5ik2o/event-store-adapter/issues/44)〜[#47](https://github.com/j5ik2o/event-store-adapter/issues/47)、[rs#309](https://github.com/j5ik2o/event-store-adapter-rs/issues/309)・[rs#310](https://github.com/j5ik2o/event-store-adapter-rs/issues/310)、[js#1067](https://github.com/j5ik2o/event-store-adapter-js/issues/1067) | オーナー |
+| 適合テストデータ 1.2.0 の範囲 | メモリの MEM-2・MEM-6 だけにする。段階 5 で要るデータは、段階 5 と一緒に足す（[#41](https://github.com/j5ik2o/event-store-adapter/issues/41)） | オーナー |
+| 必須でない検査の失敗 | main で `CI Success` の外の検査が落ちたときに気づく仕組みを作る（[#43](https://github.com/j5ik2o/event-store-adapter/issues/43)） | オーナー |
+| たまに落ちる試験 | java と go の、DynamoDB を使う既存の試験を、マイルストーンとは別の小さな作業として直す（[java#747](https://github.com/j5ik2o/event-store-adapter-java/issues/747)、[go#446](https://github.com/j5ik2o/event-store-adapter-go/issues/446)） | オーナー |
+| 修正版の公開の承認 | 前もってまとめて承認しない。今までどおり、出す前に毎回オーナーに聞く | オーナー |
+
+5 章の、言語をまたいでテーブルを読み書きする試験は、公開前のコミットでしか行っていないので、公開した版でやり直す（[#42](https://github.com/j5ik2o/event-store-adapter/issues/42)）。
 
 ## 11. リスクと対策
 
