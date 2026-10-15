@@ -43,6 +43,8 @@ event-store-adapter グループの各リポジトリが従う、CI・ブラン�
 
 - 変更の記録は、版上げの workflow が作る GitHub Release のリリースノートだけとする。`CHANGELOG.md` は置かない。rs の `CHANGELOG.md` は 5.0.1 までの記録として残し、更新しない（rs #305）。
 - リリースノートは、前のタグから新しいタグまでのコミットの件名を、Conventional Commits の型（`feat`・`fix` など）ごとにまとめて、自動で作る。手で書き足したり直したりしない。
+- 作り方は 6 リポジトリで同じにする。本リポジトリの `tools/release-notes/` に正本（見出しを作る `create-release-note-header.py`、本文を作る `create-release-note-body.py`、試験の `test_release_notes.py`）を置く。各リポジトリは、2 つのスクリプトを `.github/` に、試験を版上げの試験と同じディレクトリに、同じ内容で写す。内容は変えない。版上げの workflow は、前のタグからのコミットの件名と本文を `--no-merges --format='%H%x1f%s%x1f%b%x1e'` で本文のスクリプトに渡す。呼び方は [tools/release-notes/README.md](../../tools/release-notes/README.md) にある。
+- 試験は、各リポジトリの版上げの試験と一緒に、`CI Success` の依存に含まれるジョブで走らせる。本リポジトリの正本を変えたら、コーディネーターが 6 リポジトリに配り直す。
 - 3 章のとおりマージは squash だけなので、1 つの PR が main の 1 つのコミットになり、その件名がリリースノートの 1 行になる。コーディネーターは squash でマージするときに、件名を Conventional Commits の形（`fix(deps): ...` など）にし、利用者が読んで分かる言葉で書く。
 - 破壊的な変更は、件名の型の直後の `!` か、本文の `BREAKING CHANGE:`・`BREAKING-CHANGE:` で始まる行で示す。前項の版上げの判定も、これで major にする。
 - 利用者が自分の設定を変える必要があるときの手順は、リリースノートに書き足さず、README などの文書に書く（rs 5.0.2 の DynamoDB の SDK の機能の指定は rs #305）。
@@ -143,11 +145,10 @@ takt を使うリポジトリは、次の配置にそろえる。テンプレー
 
 2026-10-15 に、適合テストデータ 1.1.0 を 6 リポジトリに配った（rs #301、js #1060・#1062、java #742、kotlin #859、scala #881、go #442）。6 リポジトリとも、写しと SHA-256 の照合が 1.1.0 で通る。DY-19 の 2 件は DynamoDB Local で、メモリの期限切れ方式を求める 1 件はメモリで、6 言語とも成功した。変更フィードを求める 1 件は、js では想定外の設定として設定エラーになり成功した。ほかの 5 言語は公開設定に変更フィードの項目がないので、理由付きの表現不能と報告している。
 
-2026-10-15 に足した 1 章の「リリースノート」には、rs #305 のマージで 6 リポジトリとも `CHANGELOG.md` を更新しない形になる。リリースノートの作り方は 2 通りある。rs・js・java・kotlin・go は、リポジトリの中の同じ Python のスクリプト（`.github/create-release-note-header.py`・`.github/create-release-note-body.py`）で作る。scala は版上げで使う `mathieudutour/github-tag-action` が作る（同じスクリプトも置いてあるが使っていない）。Python のスクリプトは件名だけを読み、型の直後の `!` を見分けないので、破壊的な変更の節を作らない（rs 5.0.0 の `feat!:` の #287 も、機能の節に入った）。本文の `BREAKING CHANGE:`・`BREAKING-CHANGE:` も読まない。スコープと PR へのリンクも出さない。scala の方式は、どれも出す。
+2026-10-15 に足した 1 章の「リリースノート」には、6 リポジトリとも適合している。rs は `CHANGELOG.md` を 5.0.1 までで止めた（rs #305）。それまでは、rs・js・java・kotlin・go が件名だけを読む Python のスクリプトで、scala が版上げに使う `mathieudutour/github-tag-action` で、リリースノートを作っていた。Python のスクリプトは型の直後の `!` を見分けず、破壊的な変更の節を作らなかった（rs 5.0.0 の `feat!:` の #287 は機能の節に入った）。本リポジトリの正本（#38・#39）を、rs #307・#308、js #1065・#1066、java #745・#746、kotlin #862・#864、scala #883・#885、go #444・#445 で写した。scala はタグを作るのは今のアクションのままで、リリースノートだけを正本のスクリプトで作る。新しいスクリプトは、破壊的な変更の節、スコープ、PR とコミットへのリンクを出す。
 
 | 残っている項目 | 対象 | 担当 |
 |:--|:--|:--|
-| リリースノートの作り方の統一（1 章） | 全リポジトリ | コーディネーター。破壊的な変更の節・スコープ・PR へのリンクを出せるようにし、6 リポジトリで同じ作り方にする。方式はオーナーと決める |
 | crates.io の API トークン `CARGO_TOKEN`（7 章） | rs ほか | rs は OIDC に移り、GitHub の Secret `CARGO_TOKEN` はオーナーが削除した（2026-10-03）。crates.io 側の同じ名前のトークンは、グループ外の prop-check-rs・oni-comb-rs・fraktor-rs などの公開の workflow も同じ名前の Secret で使っているとみられる。取り消すと、それらの公開が失敗するので、同日オーナーの判断で残すことにした。それらのリポジトリを OIDC に移したあとで取り消す。オーナー |
 | Renovate の PR の棚卸し（5 章） | 全リポジトリ | コーディネーター。初回は 2026-10-03 に実施（Java 11 と両立しないメジャー更新は理由付きでブロック）。同日の 2 回目で、lint で止まっていた js の biome・jest の minor 更新を #978 で通した。js の mise.toml の sbt は、使っておらず conda-forge に 2.0.10 がなく `mise install` が失敗したので、#984 で外した。同日の 3 回目で、js の pnpm 12 を #982 で取り込み、TypeScript 7 は ts-jest と ts-node が直接対応するまで #987 でブロックした。`@google-cloud/spanner` v9 は、公開 API が利用者の `Database` を受け取るため、オーナーの判断で peerDependencies（`^8.7.1 \|\| ^9.0.0`）に移した（#986） |
 
