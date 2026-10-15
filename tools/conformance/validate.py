@@ -2,6 +2,7 @@
 """JSON Schema、規則番号、参照、ID、網羅表、manifest を検査する。"""
 
 import argparse
+import copy
 from collections import defaultdict
 from pathlib import Path
 import re
@@ -10,7 +11,7 @@ import sys
 from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 
-from data import epoch_nanoseconds, fnv1a64, materialize
+from data import epoch_nanoseconds, fnv1a64, materialize, resolve_pointer
 from manifest import DEFAULT_ROOT, read_json, verify
 from reference_model import equal_json, replay
 
@@ -24,7 +25,13 @@ PHASES = {
     "getLatestSnapshotById": {"read-snapshot", "deserialize-snapshot"},
     "getEventsByIdSinceSeqNr": {"read-events", "deserialize-event"},
     "initialize": {"configuration-read", "configuration-create"},
+    "createStore": set(),
+    "mutateWrittenPayload": set(),
+    "mutateReadPayload": set(),
 }
+STORE_OPERATIONS = {"createStore"}
+MUTATION_OPERATIONS = {"mutateWrittenPayload", "mutateReadPayload"}
+READ_OPERATIONS = {"getLatestSnapshotById", "getEventsByIdSinceSeqNr"}
 
 
 def check_value(case, where):
@@ -99,6 +106,83 @@ def check_single_aggregate_scope(case, where):
               if item["values"]["aid"] != "__config__"} - own
     if not others:
         raise ValueError(f"{where}: DY-19 の場面は操作の集約と異なる集約の記録を seed に置く")
+
+
+def written_aid(case, step):
+    return aid_text(case["fixtures"]["events"][step["arguments"]["event"]]["aggregate_id"])
+
+
+def aid_text(identifier):
+    return identifier["type_name"] + "-" + identifier["value"]
+
+
+def check_stores(case, where):
+    """MEM-2: 2つ目のストアの生成と参照名、独立の場面が空振りの成功にならないこと。"""
+    steps = case["steps"]
+    uses = any(step["op"] in STORE_OPERATIONS or "store" in step for step in steps)
+    if not uses:
+        return
+    if case["backends"] != ["memory"]:
+        raise ValueError(f"{where}: 2つ目のストアを使う場面は backends が memory だけでなければならない")
+    if "MEM-2" not in case["rules"]:
+        raise ValueError(f"{where}: 2つ目のストアを使う場面の rules に MEM-2 がない")
+    created = {"primary"}
+    for index, step in enumerate(steps, 1):
+        if "store" in step and step["store"] not in created:
+            raise ValueError(f"{where}/{index}: 生成前のストアを参照している: {step['store']}")
+        if step["op"] != "createStore":
+            continue
+        args = step["arguments"]
+        if step["expect"] != {"result": "success"}:
+            raise ValueError(f"{where}/{index}: ストアの生成は成功を期待する")
+        if args["name"] in created:
+            raise ValueError(f"{where}/{index}: ストア名が予約名 primary または既出の名前: {args['name']}")
+        if args["storage"] == "shared" and args["shared_with"] not in created:
+            raise ValueError(f"{where}/{index}: 共有元のストアが生成前: {args['shared_with']}")
+        created.add(args["name"])
+        if args["storage"] == "new":
+            check_independent_store(case, index, where)
+
+
+def check_independent_store(case, index, where):
+    """独立の場面は、先に別のストアへ書き、新しいストアで同じ集約を読むこと。"""
+    steps = case["steps"]
+    name = steps[index - 1]["arguments"]["name"]
+    written = {written_aid(case, step) for step in steps[:index - 1]
+               if step["op"].startswith("persist") and step["expect"].get("result") == "success"}
+    read = {aid_text(step["arguments"]["aggregate_id"]) for step in steps[index:]
+            if step["op"] in READ_OPERATIONS and step.get("store") == name}
+    if not written or not written & read:
+        raise ValueError(f"{where}/{index}: 独立の場面は、生成より前に別のストアへ書き、"
+                         f"新しいストア {name} で同じ集約を読む必要がある")
+
+
+def check_payload_mutations(case, where):
+    """MEM-6: 書き換えの位置が、書き込んだペイロードに実在し、値を実際に変えること。"""
+    steps = case["steps"]
+    events = case["fixtures"]["events"]
+    for index, step in enumerate(steps, 1):
+        if step["op"] not in MUTATION_OPERATIONS:
+            continue
+        if case["backends"] != ["memory"]:
+            raise ValueError(f"{where}: ペイロードを書き換える場面は backends が memory だけでなければならない")
+        if "MEM-6" not in case["rules"]:
+            raise ValueError(f"{where}: ペイロードを書き換える場面の rules に MEM-6 がない")
+        args = step["arguments"]
+        if not 1 <= args["operation"] < index:
+            raise ValueError(f"{where}/{index}: 書き換えの対象の操作番号が、それより前の操作ではない")
+        target = steps[args["operation"] - 1]
+        if step["op"] == "mutateWrittenPayload":
+            if not target["op"].startswith("persist") or target["expect"].get("result") != "success":
+                raise ValueError(f"{where}/{index}: 書き込み後の書き換えの対象が、成功した書き込みではない")
+            name = target["arguments"]["event"]
+        else:
+            if target["op"] != "getEventsByIdSinceSeqNr" or args["event"] not in target["expect"].get("events", []):
+                raise ValueError(f"{where}/{index}: 取得結果の書き換えの対象に、そのイベントを返す読み取りがない")
+            name = args["event"]
+        container, key = resolve_pointer(copy.deepcopy(events[name]["payload"]), args["pointer"])
+        if equal_json(container[key], args["value"]):
+            raise ValueError(f"{where}/{index}: 書き換え後の値が現在の値と同じで、空振りになる: {args['pointer']}")
 
 
 def rule_sort(rule):
@@ -233,9 +317,13 @@ def check_case(case, data_format, where, active):
             result = expected.get("result")
             allowed = {"persistEvent": {"success"}, "persistEventAndSnapshot": {"success"},
                        "getLatestSnapshotById": {"none", "snapshot"},
-                       "getEventsByIdSinceSeqNr": {"events"}}
+                       "getEventsByIdSinceSeqNr": {"events"},
+                       "createStore": {"success"}, "mutateWrittenPayload": {"success"},
+                       "mutateReadPayload": {"success"}}
             if result is not None and result not in allowed[step["op"]]:
                 raise ValueError(f"{where}/{index}: 操作と返り値の種類が一致しない")
+        check_stores(case, where)
+        check_payload_mutations(case, where)
         for fault in case.get("faults", []):
             operation = fault["operation"]
             if operation == 0:
