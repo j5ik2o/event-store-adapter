@@ -34,6 +34,8 @@ WAL のリセット時の既知の不具合は [3.51.3](https://www.sqlite.org/r
 
 - **必須 SQ-1**: SQLite 3.51.3 以上を使い、全接続で `locking_mode=NORMAL`・`journal_mode=WAL`・`synchronous=FULL` を設定・確認する。shared cache は使わず、`read_uncommitted=OFF` にする。busy の待ち時間を設定で与える。待ち時間の既定値を持つか、いくつにするかは各言語の実装に任せる。ファイルは同じホストのローカルファイルシステムに置く。ネットワークファイルシステム、ATTACH で複数ファイルへ分けた配置、メモリだけの配置は範囲外とする（SP-1）（2026-10-16 合意、P-53）。
 
+SQ-1 の待ち時間は、SQLite がデータベースファイルごとに 1 つだけ持つ書き込みのロックを、別の接続のトランザクションが手放すまで待つ時間である。ロックはファイル全体に 1 つなので、別の集約への追記とも順番待ちになる。追記は BEGIN IMMEDIATE から COMMIT までの短い間だけこのロックを持ち、利用者がイベントを読み直して次のイベントを作る間は持たない。利用者から見た並行制御は seq_nr による楽観ロックの照合（W-8）であり、この待ち時間とは別のものである。待ち時間を超えた場合は、楽観ロックではなく保存先エラーにする（SQ-7）。
+
 WAL の読み手と書き手の並行動作、同じホストという前提は [WAL](https://www.sqlite.org/wal.html)、コミット時の同期は [PRAGMA synchronous](https://www.sqlite.org/pragma.html#pragma_synchronous) に基づく。ファイルの保存先が同期要求を守ることも前提にする。
 
 複数接続・複数プロセスからの利用を保つため、WAL を有効にする前に locking_mode を NORMAL にする。EXCLUSIVE では接続がファイルのロックを保持し続けるためである（[PRAGMA locking_mode](https://www.sqlite.org/pragma.html#pragma_locking_mode)）。
