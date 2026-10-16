@@ -80,7 +80,7 @@
 | ストレージプロファイル共通 | [storage/hash.md](storage/hash.md)（v5 で確定、P-49） | キーにハッシュを使うプロファイル（Spanner・Bigtable など）が使う FNV-1a 64 とその入出力表 |
 | 適合テストデータ | [conformance/](../../conformance/README.md)（v1.2.0、2026-10-15。v1.1.0 は 2026-10-14、v1.0.0 は 2026-10-05） | 言語に依存しない JSON で書いた入出力と期待結果。各実装は同じ内容を写して CI で版とハッシュを照合し、段階 2 で実行器を作って読み込む |
 
-Spanner・Bigtable・SQLite の草案は 2026-10-04 に作成し、各プロファイルの 1 章にある主要判断をすべて合意した。SQLite と Bigtable は 2026-10-16 に、草案の規則も確定した（SQLite は P-53・P-54、Bigtable は P-55・P-56）。
+Spanner・Bigtable・SQLite の草案は 2026-10-04 に作成し、各プロファイルの 1 章にある主要判断をすべて同日に合意した。その後、最初の版では変更フィードを提供しないという判断（SQLite の SQ-D8、Bigtable の BT-D8）を 1 章に足し、2026-10-16 に合意した。SQLite と Bigtable は 2026-10-16 に、草案の規則も確定した（SQLite は P-53・P-54、Bigtable は P-55・P-56）。
 
 Bigtable の判断は、外部での初期化、ジャーナル行への履歴配置、クラスタ固定、即時削除、最初の版では変更フィードを提供しないこと（BT-D8。提供するときは head の Change Streams、BT-D5）、封筒の固定バイナリ形式、ストア単位のサイズ上限、ヘッド更新前の必須の書き出しである。履歴配置は [ADR-0007](../adr/0007-store-bigtable-snapshot-history-with-events.md)、封筒の保存形式は [ADR-0008](../adr/0008-fix-bigtable-envelope-binary-format.md) に記録した。
 
