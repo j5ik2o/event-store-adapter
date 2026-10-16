@@ -111,6 +111,82 @@ class ReferenceModelTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '参照モデルと期待が不一致'):
             replay(scenario)
 
+    def test_lock_held_append_is_storage_error_not_optimistic_lock(self):
+        scenario = case('sqlite/write-lock.json', 'sqlite-write-lock-busy')
+        self.assertGreater(replay(copy.deepcopy(scenario)).checked, 0)
+        held = next(i for i, s in enumerate(scenario['steps']) if s['op'] == 'holdWriteLock')
+        blocked = scenario['steps'][held + 1]
+        self.assertEqual(blocked['expect']['error']['category'], 'storage')
+        blocked['expect']['error']['category'] = 'optimistic-lock'
+        with self.assertRaisesRegex(ValueError, '参照モデルと期待が不一致'):
+            replay(scenario)
+
+    def test_lock_held_append_cannot_be_expected_to_succeed(self):
+        scenario = case('sqlite/write-lock.json', 'sqlite-write-lock-busy')
+        held = next(i for i, s in enumerate(scenario['steps']) if s['op'] == 'holdWriteLock')
+        scenario['steps'][held + 1]['expect'] = {'result': 'success'}
+        with self.assertRaisesRegex(ValueError, '参照モデルと期待が不一致'):
+            replay(scenario)
+
+    def test_stage5_shared_store_stale_append_is_optimistic_lock(self):
+        scenario = case('scenarios/stores/shared.json', 'stage5-store-shared')
+        self.assertGreater(replay(copy.deepcopy(scenario)).checked, 0)
+        stale = [s for s in scenario['steps']
+                 if s['op'] == 'persistEvent' and s.get('store') == 'second'
+                 and s['expect'].get('error', {}).get('category') == 'optimistic-lock']
+        self.assertGreaterEqual(len(stale), 1)
+        for step in stale:
+            step['expect'] = {'result': 'success'}
+        with self.assertRaisesRegex(ValueError, '参照モデルと期待が不一致'):
+            replay(scenario)
+
+    def test_seeded_configuration_mismatch_is_configuration_error(self):
+        mismatches = [c for c in read_json(DEFAULT_ROOT / 'sqlite/configuration.json')['cases']
+                      if 'configuration' in c.get('seed', {})
+                      and 'error' in c['initialization']['expect']]
+        self.assertGreaterEqual(len(mismatches), 3)
+        for scenario in mismatches:
+            with self.subTest(case=scenario['id']):
+                self.assertEqual(scenario['initialization']['expect']['error']['category'], 'configuration')
+                self.assertEqual(replay(copy.deepcopy(scenario)).checked, 1)
+                scenario['initialization']['expect'] = {'result': 'success'}
+                with self.assertRaisesRegex(ValueError, '参照モデルと期待が不一致'):
+                    replay(scenario)
+
+    def test_seeded_configuration_match_cannot_be_expected_to_fail(self):
+        matches = [c for c in read_json(DEFAULT_ROOT / 'sqlite/configuration.json')['cases']
+                   if 'configuration' in c.get('seed', {})
+                   and c['initialization']['expect'].get('result') == 'success']
+        self.assertGreaterEqual(len(matches), 1)
+        for scenario in matches:
+            with self.subTest(case=scenario['id']):
+                scenario['initialization']['expect'] = {
+                    'error': {'category': 'configuration', 'message': {'must_contain': [], 'must_not_contain': []}}}
+                with self.assertRaisesRegex(ValueError, '参照モデルと期待が不一致'):
+                    replay(scenario)
+
+    def test_sqlite_unsupported_capability_is_configuration_error(self):
+        unsupported = [c for c in read_json(DEFAULT_ROOT / 'sqlite/configuration.json')['cases']
+                       if 'seed' not in c and 'error' in c['initialization']['expect']]
+        self.assertEqual(len(unsupported), 2)
+        for scenario in unsupported:
+            with self.subTest(case=scenario['id']):
+                self.assertEqual(replay(copy.deepcopy(scenario)).checked, 1)
+                scenario['initialization']['expect']['error']['category'] = 'storage'
+                with self.assertRaisesRegex(ValueError, '参照モデルと期待が不一致'):
+                    replay(scenario)
+
+    def test_memory_shared_configuration_keeps_one_history(self):
+        scenario = case('memory/stores.json', 'memory-store-shared-configuration')
+        self.assertGreater(replay(copy.deepcopy(scenario)).checked, 0)
+        observed = [s for s in scenario['steps'] if 'history' in s.get('observe', {})]
+        self.assertGreaterEqual(len(observed), 1)
+        last = observed[-1]['observe']['history']
+        self.assertEqual(len(last['active']), 1)
+        last['active'] = [last['active'][0] - 1, last['active'][0]]
+        with self.assertRaisesRegex(ValueError, '履歴'):
+            replay(scenario)
+
     def test_payload_mutation_does_not_change_reread_value(self):
         for identifier in ['memory-payload-written-mutation', 'memory-payload-read-mutation']:
             with self.subTest(case=identifier):

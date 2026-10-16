@@ -42,7 +42,7 @@ class ConformanceToolsTests(unittest.TestCase):
         self.assertGreater(documents, 0)
         self.assertGreater(counts["scenarios"], 0)
         self.assertGreater(covered, 0)
-        self.assertEqual(excluded, 22)
+        self.assertEqual(excluded, 36)
         self.assertGreater(checked, 0)
 
     def test_manifest_cli_uses_only_standard_library_and_detects_change(self):
@@ -157,7 +157,7 @@ class ConformanceToolsTests(unittest.TestCase):
 
     def test_every_defined_rule_has_case_or_reason(self):
         _, _, defined = validate.specification_rules(validate.DEFAULT_SPEC_ROOT)
-        self.assertEqual(len(defined), 73)
+        self.assertEqual(len(defined), 92)
         rows = {}
         for line in (manifest.DEFAULT_ROOT / "COVERAGE.md").read_text(encoding="utf-8").splitlines():
             cells = [cell.strip() for cell in line.strip("|").split(" | ")]
@@ -199,6 +199,138 @@ class ConformanceToolsTests(unittest.TestCase):
                            c["initialization"]["expect"]["error"].update(category="storage"))
         with self.rejected("configuration エラーを期待する"):
             self.check()
+
+    def test_sq_rule_without_case_or_reason_is_rejected(self):
+        # SQ-14 は操作の場面で表せず、対象外の理由だけを持つ。理由を除くと未網羅になる。
+        self.mutate("coverage.json", lambda doc: doc.update(
+            exclusions=[x for x in doc["exclusions"] if x["rule"] != "SQ-14"]))
+        with self.rejected("未網羅"):
+            self.check()
+
+    def test_sq_rules_are_collected_from_definition_lines_only(self):
+        _, _, defined = validate.specification_rules(validate.DEFAULT_SPEC_ROOT)
+        self.assertEqual({r for r in defined if r.startswith("SQ-")},
+                         {f"SQ-{n}" for n in range(1, 21) if n != 13})
+        self.assertNotIn("SQ-D1a", defined)
+        coverage = (manifest.DEFAULT_ROOT / "COVERAGE.md").read_text(encoding="utf-8")
+        self.assertIn("| SQ-12 |", coverage)
+        self.assertNotIn("| SQ-13 |", coverage)
+        self.assertNotIn("SQ-D1a", coverage)
+
+    def test_write_lock_requires_sqlite_only_backends(self):
+        relative, identifier = "sqlite/write-lock.json", "sqlite-write-lock-busy"
+        self.check()
+        original = manifest.read_json(self.root / relative)
+        for backends in (["sqlite", "memory"], ["memory"], ["sqlite", "spanner", "bigtable"]):
+            with self.subTest(backends=backends):
+                (self.root / relative).write_text(json.dumps(original), encoding="utf-8")
+                self.case_mutation(relative, identifier, lambda c: c.update(backends=backends))
+                with self.assertRaises(ValueError):
+                    self.check()
+
+    def test_write_lock_release_without_hold_is_rejected(self):
+        self.case_mutation("sqlite/write-lock.json", "sqlite-write-lock-busy", lambda c:
+                           c.update(steps=[s for s in c["steps"] if s["op"] != "holdWriteLock"]))
+        with self.rejected("持っていないロック"):
+            self.check()
+
+    def test_write_lock_cannot_be_held_twice(self):
+        def hold_twice(case):
+            index = next(i for i, s in enumerate(case["steps"]) if s["op"] == "holdWriteLock")
+            case["steps"].insert(index + 1, copy.deepcopy(case["steps"][index]))
+        self.case_mutation("sqlite/write-lock.json", "sqlite-write-lock-busy", hold_twice)
+        with self.assertRaises(ValueError):
+            self.check()
+
+    def test_write_lock_requires_wait_time_and_sq7(self):
+        relative, identifier = "sqlite/write-lock.json", "sqlite-write-lock-busy"
+        original = manifest.read_json(self.root / relative)
+        changes = {
+            "no-wait-time": lambda c: c["store"].pop("lock_wait_milliseconds"),
+            "no-sq7": lambda c: c.update(rules=[r for r in c["rules"] if r != "SQ-7"]),
+        }
+        for label, change in changes.items():
+            with self.subTest(change=label):
+                (self.root / relative).write_text(json.dumps(original), encoding="utf-8")
+                self.case_mutation(relative, identifier, change)
+                with self.assertRaises(ValueError):
+                    self.check()
+
+    def test_new_store_is_rejected_on_stage5_backends(self):
+        relative, identifier = "scenarios/stores/shared.json", "stage5-store-shared"
+        self.check()
+        def use_new(case):
+            step = next(s for s in case["steps"] if s["op"] == "createStore")
+            step["arguments"]["storage"] = "new"
+            step["arguments"].pop("shared_with", None)
+        self.case_mutation(relative, identifier, use_new)
+        with self.rejected("storage = new"):
+            self.check()
+
+    def test_stage5_shared_store_rejects_reserved_name_and_provider_specific_rules(self):
+        relative, identifier = "scenarios/stores/shared.json", "stage5-store-shared"
+        original = manifest.read_json(self.root / relative)
+        changes = {
+            "reserved-name": lambda c: next(s for s in c["steps"] if s["op"] == "createStore")["arguments"].update(name="primary"),
+            "memory-rule": lambda c: c["rules"].append("MEM-2"),
+            "memory-backend": lambda c: c.update(backends=["memory", "sqlite"]),
+        }
+        for label, change in changes.items():
+            with self.subTest(change=label):
+                (self.root / relative).write_text(json.dumps(original), encoding="utf-8")
+                self.case_mutation(relative, identifier, change)
+                with self.assertRaises(ValueError):
+                    self.check()
+
+    def test_memory_store_case_still_requires_memory_backend_and_mem2(self):
+        relative = "memory/stores.json"
+        original = manifest.read_json(self.root / relative)
+        changes = {
+            "no-mem2": lambda c: c.update(rules=[r for r in c["rules"] if r != "MEM-2"]),
+            "sqlite-backend": lambda c: c.update(backends=["sqlite"]),
+        }
+        for label, change in changes.items():
+            with self.subTest(change=label):
+                (self.root / relative).write_text(json.dumps(original), encoding="utf-8")
+                self.case_mutation(relative, "memory-store-shared", change)
+                with self.assertRaises(ValueError):
+                    self.check()
+
+    def test_new_store_remains_available_on_memory_backend(self):
+        self.case_mutation("memory/stores.json", "memory-store-new-independent", lambda c:
+                           self.assertTrue(any(s["op"] == "createStore" and s["arguments"]["storage"] == "new"
+                                               for s in c["steps"])))
+        self.check()
+
+    def test_sqlite_unsupported_setting_requires_configuration_error(self):
+        relative = "sqlite/configuration.json"
+        original = manifest.read_json(self.root / relative)
+        unsupported = [c["id"] for c in original["cases"]
+                       if "seed" not in c and "error" in c["initialization"]["expect"]]
+        self.assertEqual(len(unsupported), 2)
+        for identifier in unsupported:
+            with self.subTest(case=identifier):
+                (self.root / relative).write_text(json.dumps(original), encoding="utf-8")
+                self.case_mutation(relative, identifier, lambda c:
+                                   c["initialization"]["expect"]["error"].update(category="storage"))
+                with self.rejected("configuration エラーを期待する"):
+                    self.check()
+
+    def test_seeded_configuration_requires_initialization_and_known_keys(self):
+        relative = "sqlite/configuration.json"
+        original = manifest.read_json(self.root / relative)
+        seeded = next(c["id"] for c in original["cases"] if "configuration" in c.get("seed", {}))
+        changes = {
+            "no-initialization": lambda c: c.pop("initialization"),
+            "unknown-key": lambda c: c["seed"]["configuration"].update(table_name="x"),
+            "raw-items-mixed": lambda c: c["seed"].update(items=[]),
+        }
+        for label, change in changes.items():
+            with self.subTest(change=label):
+                (self.root / relative).write_text(json.dumps(original), encoding="utf-8")
+                self.case_mutation(relative, seeded, change)
+                with self.assertRaises(ValueError):
+                    self.check()
 
     def test_generated_coverage_must_match_case_data(self):
         self.mutate("values/aid.json", lambda doc: doc["cases"][0].update(id="renamed-aid-case"))

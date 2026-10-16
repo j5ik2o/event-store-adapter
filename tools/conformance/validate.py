@@ -26,10 +26,21 @@ PHASES = {
     "getEventsByIdSinceSeqNr": {"read-events", "deserialize-event"},
     "initialize": {"configuration-read", "configuration-create"},
     "createStore": set(),
+    "holdWriteLock": set(),
+    "releaseWriteLock": set(),
     "mutateWrittenPayload": set(),
     "mutateReadPayload": set(),
 }
 STORE_OPERATIONS = {"createStore"}
+LOCK_OPERATIONS = {"holdWriteLock", "releaseWriteLock"}
+# 段階 5 の保存先。2つ目のストアの共有と、保存先に記録した設定の種まきを使える。
+STAGE5_BACKENDS = {"sqlite", "spanner", "bigtable"}
+# 論理的な設定の種まき（seed.configuration）の項目名。保存先のプロファイルの config の項目名と一致させる。
+CONFIGURATION_FIELDS = {
+    "sqlite": {"store_id", "layout_version", "keep_snapshot_count", "retention_mode", "change_feed_enabled"},
+}
+# 保存先に固有の規則番号。段階 5 の保存先の共有の場面は共通契約の番号だけを使う。
+PROFILE_RULE_PREFIXES = ("MEM-", "DY-", "D-", "SQ-")
 MUTATION_OPERATIONS = {"mutateWrittenPayload", "mutateReadPayload"}
 READ_OPERATIONS = {"getLatestSnapshotById", "getEventsByIdSinceSeqNr"}
 
@@ -75,11 +86,12 @@ def specification_rules(spec_root):
     dynamo = (spec_root / "storage" / "dynamodb.md").read_text(encoding="utf-8")
     memory = (spec_root / "storage" / "memory.md").read_text(encoding="utf-8")
     hash_spec = (spec_root / "storage" / "hash.md").read_text(encoding="utf-8")
-    texts = "\n".join([core, dynamo, memory, hash_spec])
-    # defined は 4 つの仕様の文書が定義の行で定める規則。判断番号 D-n は含めない。
+    sqlite = (spec_root / "storage" / "sqlite.md").read_text(encoding="utf-8")
+    texts = "\n".join([core, dynamo, memory, hash_spec, sqlite])
+    # defined は 5 つの仕様の文書が定義の行で定める規則。判断番号 D-n・MEM-D・SQ-D と草案の規則は含めない。
     defined = set(re.findall(r"^- \*\*(?:必須|推奨|任意) ([A-Z]+-\d+)\*\*", texts, re.M))
     active = defined | set(re.findall(r"^\| (D-\d+) \|", dynamo, re.M))
-    mentioned = set(re.findall(r"\b(?:K|T|H|W|R|E|S|SP|DY|D|F|MEM)-\d+\b", texts))
+    mentioned = set(re.findall(r"\b(?:K|T|H|W|R|E|S|SP|DY|D|F|MEM|SQ)-\d+\b", texts))
     return active, mentioned, defined
 
 
@@ -122,10 +134,17 @@ def check_stores(case, where):
     uses = any(step["op"] in STORE_OPERATIONS or "store" in step for step in steps)
     if not uses:
         return
-    if case["backends"] != ["memory"]:
-        raise ValueError(f"{where}: 2つ目のストアを使う場面は backends が memory だけでなければならない")
-    if "MEM-2" not in case["rules"]:
-        raise ValueError(f"{where}: 2つ目のストアを使う場面の rules に MEM-2 がない")
+    backends = case["backends"]
+    if backends == ["memory"]:
+        if "MEM-2" not in case["rules"]:
+            raise ValueError(f"{where}: 2つ目のストアを使う場面の rules に MEM-2 がない")
+    elif set(backends) <= STAGE5_BACKENDS:
+        specific = [rule for rule in case["rules"] if rule.startswith(PROFILE_RULE_PREFIXES)]
+        if specific:
+            raise ValueError(f"{where}: 段階 5 の保存先で2つ目のストアを使う場面の rules は共通契約の番号だけにする: {specific}")
+    else:
+        raise ValueError(f"{where}: 2つ目のストアを使う場面は backends が memory だけ、"
+                         "または sqlite・spanner・bigtable のいずれかだけでなければならない")
     created = {"primary"}
     for index, step in enumerate(steps, 1):
         if "store" in step and step["store"] not in created:
@@ -135,6 +154,8 @@ def check_stores(case, where):
         args = step["arguments"]
         if step["expect"] != {"result": "success"}:
             raise ValueError(f"{where}/{index}: ストアの生成は成功を期待する")
+        if args["storage"] == "new" and backends != ["memory"]:
+            raise ValueError(f"{where}/{index}: storage = new の createStore はメモリの場面だけで使える")
         if args["name"] in created:
             raise ValueError(f"{where}/{index}: ストア名が予約名 primary または既出の名前: {args['name']}")
         if args["storage"] == "shared" and args["shared_with"] not in created:
@@ -142,6 +163,43 @@ def check_stores(case, where):
         created.add(args["name"])
         if args["storage"] == "new":
             check_independent_store(case, index, where)
+
+
+def check_write_lock(case, where):
+    """SQ-7: 書き込みのロックを持ち続ける操作が、sqlite だけの場面で、取得と解放が対応して使われること。"""
+    steps = case["steps"]
+    if not any(step["op"] in LOCK_OPERATIONS for step in steps):
+        return
+    if case["backends"] != ["sqlite"]:
+        raise ValueError(f"{where}: 書き込みのロックを持ち続ける操作は backends が sqlite だけの場面で使う")
+    if "SQ-7" not in case["rules"]:
+        raise ValueError(f"{where}: 書き込みのロックを持ち続ける場面の rules に SQ-7 がない")
+    if "lock_wait_milliseconds" not in case["store"]:
+        raise ValueError(f"{where}: 書き込みのロックを持ち続ける場面は store.lock_wait_milliseconds を指定する")
+    held = False
+    for index, step in enumerate(steps, 1):
+        if step["op"] == "holdWriteLock":
+            if held:
+                raise ValueError(f"{where}/{index}: すでに持っているロックをもう一度持とうとしている")
+            held = True
+        elif step["op"] == "releaseWriteLock":
+            if not held:
+                raise ValueError(f"{where}/{index}: 持っていないロックを放そうとしている")
+            held = False
+
+
+def check_seeded_configuration(case, where):
+    """論理的な設定の種まきが、1つの保存先の項目名だけで書かれ、生成の結果を観測すること。"""
+    configuration = case.get("seed", {}).get("configuration")
+    if configuration is None:
+        return
+    backends = case["backends"]
+    if len(backends) != 1 or backends[0] not in CONFIGURATION_FIELDS:
+        raise ValueError(f"{where}: 設定の種まきは項目名の表がある1つの保存先の場面だけで使える")
+    if set(configuration) != CONFIGURATION_FIELDS[backends[0]]:
+        raise ValueError(f"{where}: 設定の種まきの項目名が {backends[0]} のプロファイルの config と一致しない")
+    if "initialization" not in case:
+        raise ValueError(f"{where}: 設定の種まきを使う場面は生成の結果（initialization）を観測する")
 
 
 def check_independent_store(case, index, where):
@@ -319,10 +377,13 @@ def check_case(case, data_format, where, active):
                        "getLatestSnapshotById": {"none", "snapshot"},
                        "getEventsByIdSinceSeqNr": {"events"},
                        "createStore": {"success"}, "mutateWrittenPayload": {"success"},
+                       "holdWriteLock": {"success"}, "releaseWriteLock": {"success"},
                        "mutateReadPayload": {"success"}}
             if result is not None and result not in allowed[step["op"]]:
                 raise ValueError(f"{where}/{index}: 操作と返り値の種類が一致しない")
         check_stores(case, where)
+        check_write_lock(case, where)
+        check_seeded_configuration(case, where)
         check_payload_mutations(case, where)
         for fault in case.get("faults", []):
             operation = fault["operation"]
@@ -348,13 +409,16 @@ def check_case(case, data_format, where, active):
             raise ValueError(f"{where}: TTL 能力条件と保持方式が不一致")
         if "DY-19" in case["rules"] or any("request_scope" in step.get("observe", {}) for step in case["steps"]):
             check_single_aggregate_scope(case, where)
-        if case["backends"] == ["memory"] and (case["store"]["retention_mode"] == "ttl"
-                                               or case["store"].get("change_feed")):
+        # 期限切れ方式と変更フィードを提供しない保存先（メモリ: MEM-3・MEM-12、SQLite: SQ-11・SQ-20）
+        if case["backends"] in (["memory"], ["sqlite"]) and (case["store"]["retention_mode"] == "ttl"
+                                                             or case["store"].get("change_feed")):
             category = case.get("initialization", {}).get("expect", {}).get("error", {}).get("category")
             if category != "configuration":
-                raise ValueError(f"{where}: メモリが提供しない設定を求める場面は、生成の configuration エラーを期待する")
-        if case["store"].get("change_feed") and case["backends"] != ["memory"]:
-            raise ValueError(f"{where}: change_feed を求める場面は backends が memory だけでなければならない")
+                raise ValueError(f"{where}: {case['backends'][0]}が提供しない設定を求める場面は、生成の configuration エラーを期待する")
+        if case["store"].get("change_feed") and case["backends"] not in (["memory"], ["sqlite"]):
+            raise ValueError(f"{where}: change_feed を求める場面は backends が memory だけ、または sqlite だけでなければならない")
+        if "lock_wait_milliseconds" in case["store"] and case["backends"] != ["sqlite"]:
+            raise ValueError(f"{where}: lock_wait_milliseconds は backends が sqlite だけの場面に置く")
         if (case["store"]["retention_mode"] == "ttl" and "memory" in case["backends"]
                 and case["backends"] != ["memory"]):
             raise ValueError(f"{where}: memory を含む ttl の要求は backends が memory だけでなければならない")
@@ -471,7 +535,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     parser.add_argument("--spec-root", type=Path, default=DEFAULT_SPEC_ROOT,
-                        help="core-contract.md・storage/dynamodb.md・storage/memory.md・storage/hash.md があるディレクトリ")
+                        help="core-contract.md・storage/dynamodb.md・storage/memory.md・storage/hash.md・storage/sqlite.md があるディレクトリ")
     parser.add_argument("--update-coverage", action="store_true",
                         help="網羅表を再生成する（その後 manifest rebuild が必要）")
     args = parser.parse_args()
