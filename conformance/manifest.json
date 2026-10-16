@@ -8,15 +8,15 @@
     },
     {
       "path": "COVERAGE.md",
-      "sha256": "25202810956b76bb09417193481e22d4bf65ab22456e0a7c5d48bd8e83994a09"
+      "sha256": "17ba8c75e6208b7e2de045ee1079a3d119de88de4d611e966ed61b8a8efe6fb0"
     },
     {
       "path": "README.md",
-      "sha256": "a1cac2aa92df7434b3abb7b6f69fd8d3fb24ada7004e02c184593786012c94bf"
+      "sha256": "e62bb51c2114ccb60009080aaf3152c69880e774263a43d87dff57ec1ca68fc8"
     },
     {
       "path": "coverage.json",
-      "sha256": "b208e4a2947be6b48c47f83cbaf4e700db9d64733161a9e4d53cdf917a1e8497"
+      "sha256": "2ba03e5be33418614019e12e923fe883c913281e5b369029340b2f5135193edf"
     },
     {
       "path": "dynamodb/configuration.json",
@@ -68,7 +68,7 @@
     },
     {
       "path": "scenarios/stores/shared.json",
-      "sha256": "cec0c761db7b31c318f54ff678045fb9c978f8b9afb6bce76697748b28275a38"
+      "sha256": "ce8ccdd228986e9d4df14162a3ac52d93d20166ab8f68151cc3ae2d0b9d9e1e4"
     },
     {
       "path": "schema/common.schema.json",

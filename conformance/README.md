@@ -1,6 +1,6 @@
 # 適合テストデータ v1
 
-共通契約・DynamoDB プロファイル・メモリプロファイル・SQLite プロファイルの期待値を、言語に依存しない UTF-8 の JSON で配るデータである。データの版は `1.3.0` である。[共通契約](../docs/spec/core-contract.md)・[DynamoDB プロファイル](../docs/spec/storage/dynamodb.md)・[メモリプロファイル](../docs/spec/storage/memory.md)・[SQLite プロファイル](../docs/spec/storage/sqlite.md)が規範であり、このデータは規則を追加しない。[ハッシュ仕様](../docs/spec/storage/hash.md)が収録を求める FNV-1a 64 の4件も含める。値30件、操作場面102件（共通42件・DynamoDB固有45件・メモリ固有7件・SQLite固有7件・段階 5 の保存先に共通の共有1件）、配置1件の計133件で、65規則を対象とする。5つの仕様の文書が定義する92規則は、すべてがケースか `coverage.json` の対象外の理由を持つ。共通の場面は `memory`・`dynamodb`・`sqlite`・`spanner`・`bigtable` の5つの保存先を対象とする。Spanner と Bigtable に固有の事例と、Bigtable の封筒の値の表は、この版にはまだ含めない。今回の検証はデータと道具だけを対象とし、言語実装や保存先には実行しない。
+共通契約・DynamoDB プロファイル・メモリプロファイル・SQLite プロファイルの期待値を、言語に依存しない UTF-8 の JSON で配るデータである。データの版は `1.3.0` である。[共通契約](../docs/spec/core-contract.md)・[DynamoDB プロファイル](../docs/spec/storage/dynamodb.md)・[メモリプロファイル](../docs/spec/storage/memory.md)・[SQLite プロファイル](../docs/spec/storage/sqlite.md)が規範であり、このデータは規則を追加しない。[ハッシュ仕様](../docs/spec/storage/hash.md)が収録を求める FNV-1a 64 の4件も含める。値30件、操作場面102件（共通42件・DynamoDB固有45件・メモリ固有7件・SQLite固有7件・SQLite・Spanner・Bigtable に共通の共有1件）、配置1件の計133件で、65規則を対象とする。5つの仕様の文書が定義する92規則は、すべてがケースか `coverage.json` の対象外の理由を持つ。共通の場面は `memory`・`dynamodb`・`sqlite`・`spanner`・`bigtable` の5つの保存先を対象とする。Spanner と Bigtable に固有の事例と、Bigtable の封筒の値の表は、この版にはまだ含めない。今回の検証はデータと道具だけを対象とし、言語実装や保存先には実行しない。
 
 ## ファイルと形式
 
@@ -12,7 +12,7 @@
 | `memory/configuration.json` | メモリの設定エラーの操作列（生成の結果だけを期待する） | `schema/scenarios.schema.json` |
 | `memory/stores.json` | メモリの2つ目のストアの生成（独立・共有）の操作列（MEM-2） | `schema/scenarios.schema.json` |
 | `memory/payload-isolation.json` | メモリのペイロードの書き換えの操作列（MEM-6） | `schema/scenarios.schema.json` |
-| `scenarios/stores/shared.json` | 段階 5 の保存先（sqlite・spanner・bigtable）で共有した2つ目のストアの操作列 | `schema/scenarios.schema.json` |
+| `scenarios/stores/shared.json` | SQLite・Spanner・Bigtable で共有した2つ目のストアの操作列 | `schema/scenarios.schema.json` |
 | `sqlite/configuration.json` | SQLite の設定エラーの操作列（提供しない能力と、保存先に記録した設定との食い違い） | `schema/scenarios.schema.json` |
 | `sqlite/write-lock.json` | SQLite の書き込みのロックを別の接続が持ち続ける操作列（SQ-7） | `schema/scenarios.schema.json` |
 | `dynamodb/layout.json` | 3 テーブル・GSI と項目の属性の期待値 | `schema/layout.schema.json` |
@@ -72,12 +72,12 @@ Schema は draft 2020-12 である。共通定義は `schema/common.schema.json`
 
 `sqlite/configuration.json` の `sqlite-ttl-unsupported`（SQ-11）と `sqlite-change-feed-unsupported`（SQ-20）も、SQLite の保存先が提供しない期限切れ方式と変更フィードを求める設定が、生成時に `configuration` の分類で失敗することを期待する。「表現不能」の扱いは上と同じである。この扱いはこの2ケースだけに適用し、`seed.configuration` を使う食い違いの場面（記録した保持件数・配置の版・`change_feed_enabled` が設定と異なる場合）には広げない。食い違いの場面は、要求を表せるので、生成が `configuration` の分類で失敗しなければ失敗である。一致する場面は生成が成功する。
 
-### 2つ目のストアとペイロードの書き換え（メモリ）、共有したストア（段階 5 の保存先）
+### 2つ目のストアとペイロードの書き換え（メモリ）、共有したストア（SQLite・Spanner・Bigtable）
 
-`memory/stores.json`（MEM-2）と `memory/payload-isolation.json`（MEM-6）の場面は、次の操作を使う。どちらも `backends` は `["memory"]` だけで、`rules` に MEM-2 または MEM-6 を持つ。`scenarios/stores/shared.json` の場面は、`createStore` の `storage = shared` と `store` だけを使い、`backends` は段階 5 の保存先（`sqlite`・`spanner`・`bigtable`）だけで、`rules` は共通契約の番号（W-7・W-8 など）にする。共有するのは、SQLite では同じファイル、Spanner では同じデータベースと同じ接頭辞、Bigtable では同じインスタンスと同じテーブルである。共有した2つ目のストアで、1つ目のストアが書いた集約を読め、古い seq_nr や重複した seq_nr を追記すると楽観ロックになる。`storage = new` は、メモリの場面だけに使える。段階 5 の保存先の場面で使うとデータの誤りとして拒否する。
+`memory/stores.json`（MEM-2）と `memory/payload-isolation.json`（MEM-6）の場面は、次の操作を使う。どちらも `backends` は `["memory"]` だけで、`rules` に MEM-2 または MEM-6 を持つ。`scenarios/stores/shared.json` の場面は、`createStore` の `storage = shared` と `store` だけを使い、`backends` はSQLite・Spanner・Bigtable（`sqlite`・`spanner`・`bigtable`）だけで、`rules` は共通契約の番号（W-7・W-8 など）にする。共有するのは、SQLite では同じファイル、Spanner では同じデータベースと同じ接頭辞、Bigtable では同じインスタンスと同じテーブルである。共有した2つ目のストアで、1つ目のストアが書いた集約を読め、古い seq_nr や重複した seq_nr を追記すると楽観ロックになる。`storage = new` は、メモリの場面だけに使える。SQLite・Spanner・Bigtable の場面で使うとデータの誤りとして拒否する。
 
 - **1つ目のストア**: 予約名 `primary` である。`store` を省略した操作は `primary` に対する操作で、既存の場面の意味は変わらない。
-- **`createStore`**: 場面の途中で2つ目のストアを生成する。`arguments.name` が新しいストアの参照名で、`primary` と、すでに生成した名前は使えない。`arguments.storage` が `new` なら、空の独立したストアを新しい保存先として生成する。`shared` なら、`arguments.shared_with` が指す生成済みのストアの保存先を明示的に共有して生成し、全記録・設定・排他制御を共有する（`memory-store-shared-configuration` は、共有したストアが履歴の保持件数も共有することを、スナップショット付きの追記を重ねた後の履歴で確かめる）。期待は `result = success` だけである。
+- **`createStore`**: 場面の途中で2つ目のストアを生成する。`arguments.name` が新しいストアの参照名で、`primary` と、すでに生成した名前は使えない。`arguments.storage` が `new` なら、空の独立したストアを新しい保存先として生成する。`shared` なら、`arguments.shared_with` が指す生成済みのストアの保存先を明示的に共有して生成し、全記録・設定・排他制御を共有する。`shared` で生成するとき、メモリでは、実行器は2つ目のストアに設定を別に渡さず、保存先が持つ設定（1つ目のストアの `store`）を共有インスタンスに使わせる（MEM-D11）。2つ目のストアに同じ設定を渡して生成すると、設定の共有を確かめたことにならない。SQLite・Spanner・Bigtable では、保存先に記録した設定とクライアントの設定を照合するので、実行器は場面の `store` と同じ設定を渡す。`memory-store-shared-configuration` は、共有したストアが履歴の保持件数も共有することを、スナップショット付きの追記を重ねた後の履歴で確かめる。期待は `result = success` だけである。
 - **`store`**: 永続化・読み取りの操作が任意に持つ。生成済みのストアの参照名で、その操作を実行するストアを指す。生成前の参照名は使えない。
 - 独立の場面は、`createStore` より前に別のストアへ書き、新しく生成したストアで同じ集約を読む。この読み取りは「なし」または空の列を返す。何も書かずに2つ目を読むだけの場面は、空振りの成功になるのでデータの誤りとして拒否する。
 - 言語の API で名前を付けて保存先を作れる実装は、同じ名前を付けただけの2つ目の保存先が、独立の場面と同じ結果になる（記録を共有しない）ことを確かめる。名前を付ける API がない実装は、この点を確かめなくてよい。

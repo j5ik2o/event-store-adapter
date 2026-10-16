@@ -257,7 +257,7 @@ class ConformanceToolsTests(unittest.TestCase):
                     self.check()
 
     def test_new_store_is_rejected_on_stage5_backends(self):
-        relative, identifier = "scenarios/stores/shared.json", "stage5-store-shared"
+        relative, identifier = "scenarios/stores/shared.json", "store-shared-persistent"
         self.check()
         def use_new(case):
             step = next(s for s in case["steps"] if s["op"] == "createStore")
@@ -268,7 +268,7 @@ class ConformanceToolsTests(unittest.TestCase):
             self.check()
 
     def test_stage5_shared_store_rejects_reserved_name_and_provider_specific_rules(self):
-        relative, identifier = "scenarios/stores/shared.json", "stage5-store-shared"
+        relative, identifier = "scenarios/stores/shared.json", "store-shared-persistent"
         original = manifest.read_json(self.root / relative)
         changes = {
             "reserved-name": lambda c: next(s for s in c["steps"] if s["op"] == "createStore")["arguments"].update(name="primary"),

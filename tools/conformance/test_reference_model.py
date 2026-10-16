@@ -129,7 +129,7 @@ class ReferenceModelTests(unittest.TestCase):
             replay(scenario)
 
     def test_stage5_shared_store_stale_append_is_optimistic_lock(self):
-        scenario = case('scenarios/stores/shared.json', 'stage5-store-shared')
+        scenario = case('scenarios/stores/shared.json', 'store-shared-persistent')
         self.assertGreater(replay(copy.deepcopy(scenario)).checked, 0)
         stale = [s for s in scenario['steps']
                  if s['op'] == 'persistEvent' and s.get('store') == 'second'
