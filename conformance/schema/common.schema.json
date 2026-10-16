@@ -357,14 +357,16 @@
                     },
                     "layout_version": {
                       "type": "integer",
-                      "minimum": 1
+                      "minimum": 1,
+                      "maximum": 9223372036854775807
                     },
                     "keep_snapshot_count": {
                       "type": [
                         "integer",
                         "null"
                       ],
-                      "minimum": 1
+                      "minimum": 1,
+                      "maximum": 9223372036854775807
                     },
                     "retention_mode": {
                       "enum": [

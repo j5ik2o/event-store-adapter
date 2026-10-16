@@ -12,7 +12,7 @@
     },
     {
       "path": "README.md",
-      "sha256": "e62bb51c2114ccb60009080aaf3152c69880e774263a43d87dff57ec1ca68fc8"
+      "sha256": "85071ec60760c280c8e06635e401a7dbffdc5cfc100a5e2a7eeb595573e77370"
     },
     {
       "path": "coverage.json",
@@ -72,7 +72,7 @@
     },
     {
       "path": "schema/common.schema.json",
-      "sha256": "6e41fd5c0ac834674aa7c20dbcebdc4151032ad0bca920cff580deaad6a6a418"
+      "sha256": "414c14b39ff27234ef4b82840c19a1a069f0f7ff40ef0c6307a380e8c80941c3"
     },
     {
       "path": "schema/coverage.schema.json",

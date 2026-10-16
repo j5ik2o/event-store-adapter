@@ -234,6 +234,26 @@ class ConformanceToolsTests(unittest.TestCase):
         with self.rejected("持っていないロック"):
             self.check()
 
+    def test_write_lock_must_be_released_before_the_scenario_ends(self):
+        def drop_release(case):
+            index = next(i for i, s in enumerate(case["steps"]) if s["op"] == "releaseWriteLock")
+            del case["steps"][index:]
+        self.case_mutation("sqlite/write-lock.json", "sqlite-write-lock-busy", drop_release)
+        with self.rejected("放さないまま"):
+            self.check()
+
+    def test_ttl_request_mixing_sqlite_with_another_backend_is_rejected(self):
+        self.case_mutation("sqlite/configuration.json", "sqlite-ttl-unsupported", lambda c:
+                           c.update(backends=["sqlite", "spanner"]))
+        with self.assertRaises(ValueError):
+            self.check()
+
+    def test_seeded_keep_count_beyond_signed_64_bits_is_rejected(self):
+        self.case_mutation("sqlite/configuration.json", "sqlite-seeded-configuration-match", lambda c:
+                           c["seed"]["configuration"].update(keep_snapshot_count=2**63))
+        with self.assertRaises(Exception):
+            self.check()
+
     def test_write_lock_cannot_be_held_twice(self):
         def hold_twice(case):
             index = next(i for i, s in enumerate(case["steps"]) if s["op"] == "holdWriteLock")

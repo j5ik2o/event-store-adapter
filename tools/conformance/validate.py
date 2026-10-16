@@ -186,6 +186,8 @@ def check_write_lock(case, where):
             if not held:
                 raise ValueError(f"{where}/{index}: 持っていないロックを放そうとしている")
             held = False
+    if held:
+        raise ValueError(f"{where}: 書き込みのロックを放さないまま場面が終わる")
 
 
 def check_seeded_configuration(case, where):
@@ -419,9 +421,10 @@ def check_case(case, data_format, where, active):
             raise ValueError(f"{where}: change_feed を求める場面は backends が memory だけ、または sqlite だけでなければならない")
         if "lock_wait_milliseconds" in case["store"] and case["backends"] != ["sqlite"]:
             raise ValueError(f"{where}: lock_wait_milliseconds は backends が sqlite だけの場面に置く")
-        if (case["store"]["retention_mode"] == "ttl" and "memory" in case["backends"]
-                and case["backends"] != ["memory"]):
-            raise ValueError(f"{where}: memory を含む ttl の要求は backends が memory だけでなければならない")
+        for backend in ("memory", "sqlite"):
+            if (case["store"]["retention_mode"] == "ttl" and backend in case["backends"]
+                    and case["backends"] != [backend]):
+                raise ValueError(f"{where}: {backend} を含む ttl の要求は backends が {backend} だけでなければならない")
     elif data_format == "values":
         required_input = {"buildAid": "aggregate_id", "validateOccurredAt": "iso8601",
                           "validateSeqNr": "seq_nr", "fnv1a64": "utf8"}[case["operation"]]
