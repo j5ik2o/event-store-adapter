@@ -11,17 +11,19 @@ import sys
 from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 
-from data import epoch_nanoseconds, fnv1a64, materialize, resolve_pointer
+from data import (EnvelopeFormatError, decode_bigtable_envelope, encode_bigtable_event, encode_bigtable_snapshot,
+                  epoch_nanoseconds, fnv1a64, materialize, resolve_pointer)
 from manifest import DEFAULT_ROOT, read_json, verify
-from reference_model import equal_json, replay
+from reference_model import NO_CHANGE_FEED_BACKENDS, NO_TTL_BACKENDS, equal_json, replay
 
 DEFAULT_SPEC_ROOT = Path(__file__).resolve().parents[2] / "docs" / "spec"
 FORMATS = {"values", "scenarios", "layout", "coverage", "manifest"}
 DY19_APIS = {"GetItem", "BatchGetItem", "Query", "TransactWriteItems", "BatchWriteItem", "UpdateItem"}
 PHASES = {
-    "persistEvent": {"serialize-event", "commit"},
+    "persistEvent": {"serialize-event", "commit", "journal-write-previous", "journal-write-tail"},
     "persistEventAndSnapshot": {"serialize-event", "serialize-snapshot", "commit",
-                                "retention-query", "retention-delete", "retention-mark"},
+                                "retention-query", "retention-delete", "retention-mark",
+                                "journal-write-previous", "journal-write-tail"},
     "getLatestSnapshotById": {"read-snapshot", "deserialize-snapshot"},
     "getEventsByIdSinceSeqNr": {"read-events", "deserialize-event"},
     "initialize": {"configuration-read", "configuration-create"},
@@ -31,6 +33,8 @@ PHASES = {
     "mutateWrittenPayload": set(),
     "mutateReadPayload": set(),
 }
+# Bigtable の追記の手順 3 と 5（直前のイベントの書き出し、新しい末尾の書き出し。BT-7）。bigtable だけの場面で使う。
+BIGTABLE_PHASES = {"journal-write-previous", "journal-write-tail"}
 STORE_OPERATIONS = {"createStore"}
 LOCK_OPERATIONS = {"holdWriteLock", "releaseWriteLock"}
 # 段階 5 の保存先。2つ目のストアの共有と、保存先に記録した設定の種まきを使える。
@@ -38,15 +42,59 @@ STAGE5_BACKENDS = {"sqlite", "spanner", "bigtable"}
 # 論理的な設定の種まき（seed.configuration）の項目名。保存先のプロファイルの config の項目名と一致させる。
 CONFIGURATION_FIELDS = {
     "sqlite": {"store_id", "layout_version", "keep_snapshot_count", "retention_mode", "change_feed_enabled"},
+    "spanner": {"store_id", "layout_version", "keep_snapshot_count", "retention_mode", "ttl_grace_days",
+                "change_feed_enabled"},
+    # Bigtable は journal と head の 2 つのテーブルが、それぞれ同じ項目の config:metadata を持つ。
+    "bigtable": {"store_id", "layout_version", "keep_snapshot_count", "retention_mode", "envelope_limit_bytes"},
+}
+BIGTABLE_CONFIGURATION_TABLES = {"journal", "head"}
+# Bigtable の封筒の値の表の操作と、入力の項目の集合（完全一致）。
+VALUE_INPUT_KEYS = {
+    "encodeBigtableEventEnvelope": {"aid", "seq_nr", "occurred_at_ns", "manifest", "payload_hex"},
+    "encodeBigtableSnapshotEnvelope": {"seq_nr", "manifest", "payload_hex"},
+    "decodeBigtableEnvelope": {"kind", "bytes_hex"},
 }
 # 保存先に固有の規則番号。段階 5 の保存先の共有の場面は共通契約の番号だけを使う。
-PROFILE_RULE_PREFIXES = ("MEM-", "DY-", "D-", "SQ-")
+PROFILE_RULE_PREFIXES = ("MEM-", "DY-", "D-", "SQ-", "SPN-", "BT-")
 MUTATION_OPERATIONS = {"mutateWrittenPayload", "mutateReadPayload"}
 READ_OPERATIONS = {"getLatestSnapshotById", "getEventsByIdSinceSeqNr"}
 
 
+def check_envelope_value(case, where):
+    """BT-D6a: 封筒の符号化と復元の期待値を、data.py の独立した実装で照合する。"""
+    operation, inputs, expected = case["operation"], case["input"], case["expect"]
+    if set(inputs) != VALUE_INPUT_KEYS[operation]:
+        raise ValueError(f"{where}: 値操作と入力の種類が一致しない")
+    if operation == "decodeBigtableEnvelope":
+        try:
+            decode_bigtable_envelope(inputs["kind"], bytes.fromhex(inputs["bytes_hex"]))
+        except EnvelopeFormatError:
+            if expected.get("error", {}).get("category") != "storage":
+                raise ValueError(f"{where}: 形の崩れた封筒の復元は storage エラーを期待する") from None
+            return
+        raise ValueError(f"{where}: 値の期待が入力と不一致: 復元に成功する封筒を失敗として期待している")
+    payload = bytes.fromhex(inputs["payload_hex"])
+    if operation == "encodeBigtableEventEnvelope":
+        kind = "event"
+        encoded = encode_bigtable_event(inputs["aid"], inputs["seq_nr"], int(inputs["occurred_at_ns"]),
+                                        inputs["manifest"], payload)
+        restored = {"aid": inputs["aid"], "seq_nr": inputs["seq_nr"],
+                    "occurred_at_ns": int(inputs["occurred_at_ns"]), "manifest": inputs["manifest"],
+                    "payload": payload}
+    else:
+        kind = "snapshot"
+        encoded = encode_bigtable_snapshot(inputs["seq_nr"], inputs["manifest"], payload)
+        restored = {"seq_nr": inputs["seq_nr"], "manifest": inputs["manifest"], "payload": payload}
+    if "error" in expected or expected.get("value") != encoded.hex():
+        raise ValueError(f"{where}: 値の期待が入力と不一致")
+    if decode_bigtable_envelope(kind, bytes.fromhex(expected["value"])) != restored:
+        raise ValueError(f"{where}: 値の期待を復元した結果が入力と不一致")
+
+
 def check_value(case, where):
     """値表の期待値と入力の転記ミスを、保存先実装を使わずに検出する。"""
+    if case["operation"] in VALUE_INPUT_KEYS:
+        return check_envelope_value(case, where)
     inputs, expected = case["input"], case["expect"]
     violated = None
     if case["operation"] == "buildAid":
@@ -87,11 +135,15 @@ def specification_rules(spec_root):
     memory = (spec_root / "storage" / "memory.md").read_text(encoding="utf-8")
     hash_spec = (spec_root / "storage" / "hash.md").read_text(encoding="utf-8")
     sqlite = (spec_root / "storage" / "sqlite.md").read_text(encoding="utf-8")
-    texts = "\n".join([core, dynamo, memory, hash_spec, sqlite])
-    # defined は 5 つの仕様の文書が定義の行で定める規則。判断番号 D-n・MEM-D・SQ-D と草案の規則は含めない。
+    spanner = (spec_root / "storage" / "spanner.md").read_text(encoding="utf-8")
+    bigtable = (spec_root / "storage" / "bigtable.md").read_text(encoding="utf-8")
+    texts = "\n".join([core, dynamo, memory, hash_spec, sqlite, spanner, bigtable])
+    # defined は 7 つの仕様の文書が定義の行で定める規則。判断番号 D-n・MEM-D・SQ-D・SPN-D・BT-D と草案の規則は含めない。
     defined = set(re.findall(r"^- \*\*(?:必須|推奨|任意) ([A-Z]+-\d+)\*\*", texts, re.M))
-    active = defined | set(re.findall(r"^\| (D-\d+) \|", dynamo, re.M))
-    mentioned = set(re.findall(r"\b(?:K|T|H|W|R|E|S|SP|DY|D|F|MEM|SQ)-\d+\b", texts))
+    # 判断番号のうち、DynamoDB の D-n と Bigtable の BT-D6a（封筒の値の表の rules）だけは網羅の対象にする。
+    active = (defined | set(re.findall(r"^\| (D-\d+) \|", dynamo, re.M))
+              | set(re.findall(r"^\| (BT-D6a) \|", bigtable, re.M)))
+    mentioned = set(re.findall(r"\b(?:K|T|H|W|R|E|S|SP|DY|D|F|MEM|SQ|SPN|BT)-\d+\b|\bBT-D6a\b", texts))
     return active, mentioned, defined
 
 
@@ -203,10 +255,40 @@ def check_seeded_configuration(case, where):
     backends = case["backends"]
     if len(backends) != 1 or backends[0] not in CONFIGURATION_FIELDS:
         raise ValueError(f"{where}: 設定の種まきは項目名の表がある1つの保存先の場面だけで使える")
-    if set(configuration) != CONFIGURATION_FIELDS[backends[0]]:
-        raise ValueError(f"{where}: 設定の種まきの項目名が {backends[0]} のプロファイルの config と一致しない")
+    backend = backends[0]
+    if backend == "bigtable":
+        if set(configuration) != BIGTABLE_CONFIGURATION_TABLES:
+            raise ValueError(f"{where}: Bigtable の設定の種まきは journal と head の 2 つのテーブルの設定を別々に書く")
+        tables = list(configuration.values())
+    else:
+        tables = [configuration]
+    if any(set(table) != CONFIGURATION_FIELDS[backend] for table in tables):
+        raise ValueError(f"{where}: 設定の種まきの項目名が {backend} のプロファイルの config と一致しない")
+    if ("row_deletion_policy_days" in case["seed"]) != (backend == "spanner"):
+        raise ValueError(f"{where}: row_deletion_policy_days は spanner の設定の種まきだけが持つ（必須）")
     if "initialization" not in case:
         raise ValueError(f"{where}: 設定の種まきを使う場面は生成の結果（initialization）を観測する")
+
+
+def check_provider_faults(case, where):
+    """SPN-7・BT-7: 保存先に固有の障害の種類と段階が、その保存先だけの場面で使われること（空振りの成功の拒否）。"""
+    for fault in case.get("faults", []):
+        if fault["kind"] == "transaction-aborted":
+            if case["backends"] != ["spanner"]:
+                raise ValueError(f"{where}: 中断（transaction-aborted）の障害は backends が spanner だけの場面で使う")
+            if "SPN-7" not in case["rules"]:
+                raise ValueError(f"{where}: 中断の障害を使う場面の rules に SPN-7 がない")
+            if "transaction_retry_limit" not in case["store"]:
+                raise ValueError(f"{where}: 中断の障害を使う場面は store.transaction_retry_limit を指定する")
+            if (fault["phase"], fault["injection"], fault["repeat"]["mode"]) != ("commit", "replace-request", "count"):
+                raise ValueError(f"{where}: 中断の障害は commit の replace-request を回数（count）で指定する")
+        if fault["phase"] in BIGTABLE_PHASES:
+            if case["backends"] != ["bigtable"]:
+                raise ValueError(f"{where}: {fault['phase']} の障害は backends が bigtable だけの場面で使う")
+            if "BT-7" not in case["rules"]:
+                raise ValueError(f"{where}: Bigtable の書き出しの障害を使う場面の rules に BT-7 がない")
+            if fault["kind"] != "storage-error" or fault["injection"] != "replace-request":
+                raise ValueError(f"{where}: Bigtable の書き出しの障害は storage-error の replace-request で指定する")
 
 
 def check_independent_store(case, index, where):
@@ -251,8 +333,9 @@ def check_payload_mutations(case, where):
 
 
 def rule_sort(rule):
-    prefix, number = rule.rsplit("-", 1)
-    return prefix, int(number)
+    """接頭辞、判断の印（BT-D6a の D）、番号、末尾の文字（BT-D6a の a）の順に並べる。"""
+    prefix, mark, number, suffix = re.fullmatch(r"(.+)-([A-Z]*)(\d+)([a-z]*)", rule).groups()
+    return prefix, mark, int(number), suffix
 
 
 def assert_rules(rules, active, where):
@@ -316,6 +399,7 @@ def check_fault(case, fault, where):
         "sdk-response": {"responses", "unprocessed_keys", "history_pages",
                          "omit_just_written_history", "unprocessed_first_n"},
         "read-interleave": {"after", "then", "interleaved_operation"},
+        "transaction-aborted": {"message"},
     }
     if set(details) - allowed[kind]:
         raise ValueError(f"{where}: 障害の種類とdetailsが不一致")
@@ -390,6 +474,7 @@ def check_case(case, data_format, where, active):
                 raise ValueError(f"{where}/{index}: 操作と返り値の種類が一致しない")
         check_stores(case, where)
         check_write_lock(case, where)
+        check_provider_faults(case, where)
         check_seeded_configuration(case, where)
         check_payload_mutations(case, where)
         for fault in case.get("faults", []):
@@ -416,24 +501,29 @@ def check_case(case, data_format, where, active):
             raise ValueError(f"{where}: TTL 能力条件と保持方式が不一致")
         if "DY-19" in case["rules"] or any("request_scope" in step.get("observe", {}) for step in case["steps"]):
             check_single_aggregate_scope(case, where)
-        # 期限切れ方式と変更フィードを提供しない保存先（メモリ: MEM-3・MEM-12、SQLite: SQ-11・SQ-20）
-        if case["backends"] in (["memory"], ["sqlite"]) and (case["store"]["retention_mode"] == "ttl"
-                                                             or case["store"].get("change_feed")):
+        # 期限切れ方式と変更フィードを提供しない保存先（メモリ: MEM-3・MEM-12、SQLite: SQ-11・SQ-20、
+        # Bigtable: BT-13・BT-17、Spanner の変更フィード: SPN-17）
+        store, backends = case["store"], case["backends"]
+        if len(backends) == 1 and ((store["retention_mode"] == "ttl" and backends[0] in NO_TTL_BACKENDS)
+                                   or (store.get("change_feed") and backends[0] in NO_CHANGE_FEED_BACKENDS)):
             category = case.get("initialization", {}).get("expect", {}).get("error", {}).get("category")
             if category != "configuration":
-                raise ValueError(f"{where}: {case['backends'][0]}が提供しない設定を求める場面は、生成の configuration エラーを期待する")
-        if case["store"].get("change_feed") and case["backends"] not in (["memory"], ["sqlite"]):
-            raise ValueError(f"{where}: change_feed を求める場面は backends が memory だけ、または sqlite だけでなければならない")
-        if "lock_wait_milliseconds" in case["store"] and case["backends"] != ["sqlite"]:
-            raise ValueError(f"{where}: lock_wait_milliseconds は backends が sqlite だけの場面に置く")
-        for backend in ("memory", "sqlite"):
-            if (case["store"]["retention_mode"] == "ttl" and backend in case["backends"]
-                    and case["backends"] != [backend]):
+                raise ValueError(f"{where}: {backends[0]}が提供しない設定を求める場面は、生成の configuration エラーを期待する")
+        if store.get("change_feed") and not (len(backends) == 1 and backends[0] in NO_CHANGE_FEED_BACKENDS):
+            raise ValueError(f"{where}: change_feed を求める場面は backends が1つの保存先だけでなければならない")
+        for name, only in (("lock_wait_milliseconds", "sqlite"), ("transaction_retry_limit", "spanner"),
+                           ("ttl_grace_days", "spanner"), ("envelope_limit_bytes", "bigtable")):
+            if name in store and backends != [only]:
+                raise ValueError(f"{where}: {name} は backends が {only} だけの場面に置く")
+        if backends == ["spanner"] and store["retention_mode"] == "ttl" and "ttl_grace_days" not in store:
+            raise ValueError(f"{where}: spanner の ttl の場面は store.ttl_grace_days を指定する")
+        for backend in sorted(NO_TTL_BACKENDS):
+            if store["retention_mode"] == "ttl" and backend in backends and backends != [backend]:
                 raise ValueError(f"{where}: {backend} を含む ttl の要求は backends が {backend} だけでなければならない")
     elif data_format == "values":
         required_input = {"buildAid": "aggregate_id", "validateOccurredAt": "iso8601",
-                          "validateSeqNr": "seq_nr", "fnv1a64": "utf8"}[case["operation"]]
-        if required_input not in case["input"]:
+                          "validateSeqNr": "seq_nr", "fnv1a64": "utf8"}.get(case["operation"])
+        if required_input is not None and required_input not in case["input"]:
             raise ValueError(f"{where}: 値操作と入力の種類が一致しない")
         check_value(case, where)
     for expected in expectations:
@@ -543,7 +633,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     parser.add_argument("--spec-root", type=Path, default=DEFAULT_SPEC_ROOT,
-                        help="core-contract.md・storage/dynamodb.md・storage/memory.md・storage/hash.md・storage/sqlite.md があるディレクトリ")
+                        help="core-contract.md・storage/dynamodb.md・storage/memory.md・storage/hash.md・storage/sqlite.md・storage/spanner.md・storage/bigtable.md があるディレクトリ")
     parser.add_argument("--update-coverage", action="store_true",
                         help="網羅表を再生成する（その後 manifest rebuild が必要）")
     args = parser.parse_args()
