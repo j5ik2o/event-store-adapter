@@ -114,7 +114,7 @@
     {
       "id": "bigtable-seeded-keep-count-mismatch",
       "rules": [
-        "BT-16"
+        "E-1"
       ],
       "description": "両テーブルに記録した保持件数（2）とクライアントの保持件数（1）が異なると、生成が設定エラーとなる。",
       "backends": [

@@ -85,7 +85,7 @@ Schema は draft 2020-12 である。共通定義は `schema/common.schema.json`
 
 `spanner/configuration.json` の `spanner-change-feed-unsupported`（SPN-17）、`bigtable/configuration.json` の `bigtable-ttl-unsupported`（BT-13）と `bigtable-change-feed-unsupported`（BT-17）も、保存先が提供しない能力を求める設定が、生成時に `configuration` の分類で失敗することを期待する。Spanner は期限切れ方式を提供するので、期限切れ方式の設定は能力の不足として扱わない。「表現不能」の扱いは上と同じである。
 
-Spanner の `seed.configuration` を使う場面は、配置の版・保持件数・保持方式の食い違い（SPN-2）、TTL の猶予の日数がクライアント・記録した設定・行削除ポリシーの間で一致しない場合（SPN-16）、記録した `change_feed_enabled` が真の場合（SPN-17）で、生成が `configuration` の分類で失敗することを期待する。クライアントの猶予の日数が0以下の場面は、種まきなしで同じ分類を期待する（SPN-16）。Bigtable の `seed.configuration` を使う場面は、journal と head の設定の食い違い（BT-D1）、クライアントとの保持件数・封筒の上限の食い違い（BT-16）で、生成が `configuration` の分類で失敗することを期待する。封筒の上限が最大（8388608）を超える設定と、最小の封筒も収まらない設定（16）も、生成が `configuration` の分類で失敗する（BT-16）。一致する場面はどれも生成が成功する。
+Spanner の `seed.configuration` を使う場面は、配置の版・保持件数・保持方式の食い違い（SPN-2）、TTL の猶予の日数がクライアント・記録した設定・行削除ポリシーの間で一致しない場合（SPN-16）、記録した `change_feed_enabled` が真の場合（SPN-17）で、生成が `configuration` の分類で失敗することを期待する。クライアントの猶予の日数が0以下の場面は、種まきなしで同じ分類を期待する（SPN-16）。Bigtable の `seed.configuration` を使う場面は、journal と head の設定の食い違い（BT-D1）、クライアントとの保持件数の食い違い（2章。BT の番号付きの規則がないので、DynamoDB の設定エラーの場面と同じく E-1 を付ける）、クライアントとの封筒の上限の食い違い（BT-16）で、生成が `configuration` の分類で失敗することを期待する。封筒の上限が最大（8388608）を超える設定と、最小の封筒も収まらない設定（16）も、生成が `configuration` の分類で失敗する（BT-16）。一致する場面はどれも生成が成功する。
 
 ### 2つ目のストアとペイロードの書き換え（メモリ）、共有したストア（SQLite・Spanner・Bigtable）
 

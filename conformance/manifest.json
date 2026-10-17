@@ -8,15 +8,15 @@
     },
     {
       "path": "COVERAGE.md",
-      "sha256": "e3717dd36970c45219370b04b74335f9fc6587a4ae2609ae54d185e1dfc0423a"
+      "sha256": "42734424677b9c7bcea409948b306b7ece7645f445425bfd2e54101a3ce4ab1a"
     },
     {
       "path": "README.md",
-      "sha256": "4ced607d3146a788ac7edb09986207cee69e52db3e02dd478407d5b5030a83bb"
+      "sha256": "730c88f09e034ba90d6497899754fb2c817da2a1705db6aa6d1dfdcb636450e0"
     },
     {
       "path": "bigtable/configuration.json",
-      "sha256": "5d8a01204f36ac26ce064ec00c37080ea193f9a18ecb6597fecbca94e5d223c8"
+      "sha256": "1cbd74e83e801250fed3ab36194c67e30771acc42129e0a0cadb539255d105ff"
     },
     {
       "path": "bigtable/envelope-limit.json",
