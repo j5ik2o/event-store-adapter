@@ -85,7 +85,7 @@ Schema は draft 2020-12 である。共通定義は `schema/common.schema.json`
 
 `spanner/configuration.json` の `spanner-change-feed-unsupported`（SPN-17）、`bigtable/configuration.json` の `bigtable-ttl-unsupported`（BT-13）と `bigtable-change-feed-unsupported`（BT-17）も、保存先が提供しない能力を求める設定が、生成時に `configuration` の分類で失敗することを期待する。Spanner は期限切れ方式を提供するので、期限切れ方式の設定は能力の不足として扱わない。「表現不能」の扱いは上と同じである。
 
-Spanner の `seed.configuration` を使う場面は、配置の版・保持件数・保持方式の食い違い（SPN-2）、TTL の猶予の日数がクライアント・記録した設定・行削除ポリシーの間で一致しない場合（SPN-16）、記録した `change_feed_enabled` が真の場合（SPN-17）で、生成が `configuration` の分類で失敗することを期待する。クライアントの猶予の日数が0以下の場面は、種まきなしで同じ分類を期待する（SPN-16）。Bigtable の `seed.configuration` を使う場面は、journal と head の設定の食い違い（BT-D1）、クライアントとの保持件数の食い違い（2章。BT の番号付きの規則がないので、DynamoDB の設定エラーの場面と同じく E-1 を付ける）、クライアントとの封筒の上限の食い違い（BT-16）で、生成が `configuration` の分類で失敗することを期待する。封筒の上限が最大（8388608）を超える設定と、最小の封筒も収まらない設定（16）も、生成が `configuration` の分類で失敗する（BT-16）。一致する場面はどれも生成が成功する。
+Spanner の `seed.configuration` を使う場面は、配置の版・保持件数・保持方式の食い違い（SPN-2）、TTL の猶予の日数がクライアント・記録した設定・行削除ポリシーの間で一致しない場合（SPN-16）、記録した `change_feed_enabled` が真の場合（SPN-17）で、生成が `configuration` の分類で失敗することを期待する。クライアントの猶予の日数が0以下の場面は、種まきなしで同じ分類を期待する（SPN-16）。Bigtable の `seed.configuration` を使う場面は、journal と head の設定の食い違い（2 章の照合。判断の番号 BT-D1 は網羅の対象でないので、データでは食い違う項目の規則を付ける。`bigtable-seeded-table-envelope-limit-mismatch` は封筒の上限が食い違うので BT-16）、クライアントとの保持件数の食い違い（2章。BT の番号付きの規則がないので、DynamoDB の設定エラーの場面と同じく E-1 を付ける）、クライアントとの封筒の上限の食い違い（BT-16）で、生成が `configuration` の分類で失敗することを期待する。封筒の上限が最大（8388608）を超える設定と、最小の封筒も収まらない設定（16）も、生成が `configuration` の分類で失敗する（BT-16）。一致する場面はどれも生成が成功する。
 
 ### 2つ目のストアとペイロードの書き換え（メモリ）、共有したストア（SQLite・Spanner・Bigtable）
 
@@ -127,7 +127,7 @@ Spanner の `seed.configuration` を使う場面は、配置の版・保持件�
 `journal-write-previous` と `journal-write-tail` の段階は、`bigtable/journal-write.json`（BT-7）の場面だけが使う。`backends` は `["bigtable"]` だけで、`rules` に BT-7 を持ち、`kind = storage-error`、`injection = replace-request` で差し込む。
 
 - **`journal-write-previous`**: ヘッドの条件付き更新の前に、取得した直前のイベントを journal へ書き出す処理である。ヘッドがない最初の追記には存在しないので、その追記へ差し込むことはデータの誤りとして拒否する。失敗した追記は保存先の分類のエラーになり、ヘッドは進まず、読み取りはそれまでのイベントを返す。同じ追記を送り直すと成功する。
-- **`journal-write-tail`**: 条件付き更新が成功した後に、新しい末尾のイベントを journal へ書き出す処理である。失敗しても追記は成功し、読み取りはそのイベントまで返す。次の追記の後も、すべてのイベントが欠けずに読める。
+- **`journal-write-tail`**: 条件付き更新が成功した後に、新しい末尾のイベントを journal へ書き出す処理である。失敗しても追記は成功し、失敗は `observe.notifications` の `journal-write-failure` として知らされる。読み取りはそのイベントまで返す。次の追記の後も、すべてのイベントが欠けずに読める。
 - 条件付き更新の応答の消失は、`commit` の `replace-response` で表す。保存先の分類のエラーになり、同じ封筒を送り直すと楽観ロックになる。
 - 「直前のイベントの書き出しの後に、新しい条件付き更新が不成立」の行は、別の書き手の割り込みが要るので場面に含めない。
 
@@ -227,7 +227,7 @@ D-7 の400KBと DY-11 の1MBは、DynamoDB の2進単位である。項目上限
 
 `observe.history` は、その集約の履歴だけを調べる。`active` は印のない履歴、`marked` は seq_nr とエポック秒の期限の組、`absent` は存在してはならない履歴である。active と marked の集合をそれぞれ完全一致で比較する。現在のスナップショットと設定項目は履歴に数えない。メモリでは内部の論理履歴を検査する。印付き履歴をそのまま残す TTL の試験は DynamoDB だけにある。
 
-`observe.notifications` は指定操作の保持失敗を別経路で知らせたかを検査する。`retention-failure` はコールバック・ログなどの観測を共通化した分類であり、公開の通知 API は固定しない。空配列ならその操作に失敗通知がないことである。同じ最終失敗についてログが複数ある場合は、1つの失敗通知へ正規化してよい。
+`observe.notifications` は指定操作の保持失敗を別経路で知らせたかを検査する。`retention-failure` はコールバック・ログなどの観測を共通化した分類であり、公開の通知 API は固定しない。`journal-write-failure` は、Bigtable で条件付き更新が成功した後の新しい末尾の書き出しに失敗し、それを同じく別経路で知らせたことを表す（BT-7 の手順 5）。空配列ならその操作に失敗通知がないことである。同じ最終失敗についてログが複数ある場合は、1つの失敗通知へ正規化してよい。
 
 `observe.requests` は指定 API・段階の要求に対する条件である。式は構造化した属性操作・条件で指定する。実行器は SDK の式と属性名・値の束縛を解析し、属性名へ解決した構造を比較する。空白、節の順序、条件の AND の順序は比較しない。`update.set` は設定する属性と `value_binding`、`update.remove` は取り除く属性、`condition` は属性の存在・不在を表す。`key_condition.all` は AND の条件の集合であり、`operator = eq/gte` と `argument` を操作の aggregate_id・seq_nr へ束縛する。TTL の `#ttl` と `expression_attribute_names` の対応は予約語回避の観測として明示する。`expires` は Unix エポック秒であり、ttl の `value_binding = expires` が参照する値である。条件に含めていない設定値や SDK の自動付与属性は要求しない。`initial_batch_sizes` は未処理項目の再送を除いた削除バッチの件数であり、再送は別に検査する。`no_requests_in_phases` はその操作で送ってはならない要求段階、`request_count` は段階ごとの正確な回数、`minimum_request_count` は最低回数である。`classify-condition-failure-read` は条件不成立の分類のためだけの追加読み取りを指す。
 

@@ -289,7 +289,10 @@ class Model:
             if self.store['retention_count'] is not None:
                 state.history[seq] = None
                 self.retain(state, seq, faults)
-        # 新しい末尾の書き出しの失敗（journal-write-tail）は、確定した追記の成功を変えない。
+        # 新しい末尾の書き出しの失敗（journal-write-tail）は、確定した追記の成功を変えず、通知して後回しにする（BT-7 の手順 5）。
+        # 手順 5 は末尾の書き出しの後に保持を試みるので、通知も書き出しの失敗を先に並べる。
+        if any(fault['phase'] == 'journal-write-tail' for fault in faults):
+            self.notifications = ['journal-write-failure'] + self.notifications
         # 応答を失った条件付き更新・コミットは確定済みで、呼び出し側には成否不明の保存先エラーが返る（SPN-8・BT-7）。
         for fault in faults:
             if fault['phase'] == 'commit' and fault['injection'] == 'replace-response':
@@ -413,7 +416,7 @@ class Model:
     def observe(self, step, where):
         observation = step.get('observe', {})
         if 'notifications' in observation and observation['notifications'] != self.notifications:
-            raise ValueError(f'{where}: 参照モデルの保持失敗通知と不一致')
+            raise ValueError(f'{where}: 参照モデルの失敗通知と不一致')
         if 'history' in observation:
             args = step['arguments']
             identifier = self.events[args['event']]['aggregate_id'] if 'event' in args else args['aggregate_id']

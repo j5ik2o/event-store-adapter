@@ -83,7 +83,7 @@ class ReferenceModelTests(unittest.TestCase):
     def test_retention_failure_keeps_committed_event_and_notifies(self):
         scenario = case('scenarios/core/retention-errors.json', 'core-retention-failure-after-commit')
         scenario['steps'][1]['observe']['notifications'] = []
-        with self.assertRaisesRegex(ValueError, '保持失敗通知'):
+        with self.assertRaisesRegex(ValueError, '失敗通知と不一致'):
             replay(scenario)
 
     def test_history_pages_are_verbatim_and_omit_flag_is_consistent(self):
@@ -455,6 +455,14 @@ class ReferenceModelTests(unittest.TestCase):
         self.faulted_step(scenario, 'journal-write-tail')['expect'] = {
             'error': {'category': 'storage', 'message': {'must_contain': [], 'must_not_contain': []}}}
         with self.assertRaisesRegex(ValueError, '参照モデルと期待が不一致'):
+            replay(scenario)
+
+    def test_bigtable_new_tail_write_failure_is_notified_phase(self):
+        scenario = case('bigtable/journal-write.json', 'bigtable-new-tail-write-failure')
+        step = self.faulted_step(scenario, 'journal-write-tail')
+        self.assertEqual(step['observe'], {'notifications': ['journal-write-failure']})
+        step['observe'] = {'notifications': []}
+        with self.assertRaisesRegex(ValueError, '参照モデルの失敗通知と不一致'):
             replay(scenario)
 
     def test_bigtable_new_tail_write_failure_loses_no_event_in_later_reads_phase(self):

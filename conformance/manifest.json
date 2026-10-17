@@ -12,7 +12,7 @@
     },
     {
       "path": "README.md",
-      "sha256": "730c88f09e034ba90d6497899754fb2c817da2a1705db6aa6d1dfdcb636450e0"
+      "sha256": "8ade5fe3d48a6323a3b835cca63749b8a27ae15ac701d6a1c5429e265e5b521c"
     },
     {
       "path": "bigtable/configuration.json",
@@ -24,7 +24,7 @@
     },
     {
       "path": "bigtable/journal-write.json",
-      "sha256": "f92412ba42b66a6a848105362bf6747798d9f02b3d251e41dea4eed6faa2df99"
+      "sha256": "7cb474caba5a5e0031864cb488dd8a8205ba12a80b94d3393b9abf3b06dc7f12"
     },
     {
       "path": "coverage.json",
@@ -84,7 +84,7 @@
     },
     {
       "path": "schema/common.schema.json",
-      "sha256": "df7011f3e6b6e1eb152dfd427f015767689b890383777ec8c9a5c11f435bc607"
+      "sha256": "2b761e2606791cbcf71768e153c35dd8071cab525af441bb9d6f77eccc1b00e5"
     },
     {
       "path": "schema/coverage.schema.json",
