@@ -63,6 +63,8 @@ class Model:
         self.clock = case.get('clock', {}).get('epoch_seconds')
         self.notifications = []
         self.targets = []
+        # 別の接続が持ち続ける書き込みのロック（SQLite の場面だけ）。ファイル全体に1つで、ストアごとではない。
+        self.write_locked = False
         self.seed(case.get('seed', {}).get('items', []))
 
     def state(self, identifier, store='primary'):
@@ -95,8 +97,8 @@ class Model:
     def initialize(self):
         if self.store['retention_count'] == 0:
             return error('configuration')
-        # メモリの保存先は期限切れ方式と変更フィードを提供しない（MEM-3・MEM-12・MEM-13）。
-        if self.case['backends'] == ['memory'] and (self.store['retention_mode'] == 'ttl' or self.store.get('change_feed', False)):
+        # メモリ（MEM-3・MEM-12・MEM-13）と SQLite（SQ-11・SQ-20）は、期限切れ方式と変更フィードを提供しない。
+        if self.case['backends'] in (['memory'], ['sqlite']) and (self.store['retention_mode'] == 'ttl' or self.store.get('change_feed', False)):
             return error('configuration')
         faults = [f for f in self.case.get('faults', []) if f['operation'] == 0]
         for fault in faults:
@@ -108,7 +110,19 @@ class Model:
             if fault['kind'] == 'sdk-response' and fault['details'].get('unprocessed_keys'):
                 if fault['repeat']['mode'] == 'until-operation-finishes' or ('retry_limit' in self.store and fault['repeat']['count'] > self.store['retry_limit']):
                     return error('storage')
-        return self.config_result(self.case.get('seed', {}).get('items', []))
+        seed = self.case.get('seed', {})
+        if 'configuration' in seed:
+            return self.stored_configuration_result(seed['configuration'])
+        return self.config_result(seed.get('items', []))
+
+    def stored_configuration_result(self, stored):
+        """保存先に記録した設定と、クライアントの設定の照合（SQ-2・SQ-19・SQ-20）。store_id は照合しない。"""
+        if (stored['layout_version'] != self.store.get('layout_version', 1)
+                or stored['keep_snapshot_count'] != self.store['retention_count']
+                or stored['retention_mode'] != self.store['retention_mode']
+                or stored['change_feed_enabled'] != 0):
+            return error('configuration')
+        return {'result': 'success'}
 
     @staticmethod
     def config_result(items):
@@ -182,6 +196,9 @@ class Model:
                     return failure
         if self.case['backends'] == ['dynamodb'] and self.oversize(event, snapshot):
             return error('contract-violation')
+        # 別の接続が書き込みのロックを持つ間は、入力検査と直列化の後、COMMIT の前に保存先のエラーになる（SQ-7）。
+        if self.write_locked:
+            return error('storage')
         for fault in faults:
             if fault['phase'] == 'commit':
                 failure = self.fault_error(fault, event)
@@ -261,6 +278,16 @@ class Model:
         store = step.get('store', 'primary')
         if step['op'] == 'createStore':
             return self.create_store(step['arguments'])
+        if step['op'] == 'holdWriteLock':
+            if self.write_locked:
+                raise ValueError(f'参照モデル: すでに持っているロックをもう一度持つ操作: {index}')
+            self.write_locked = True
+            return {'result': 'success'}
+        if step['op'] == 'releaseWriteLock':
+            if not self.write_locked:
+                raise ValueError(f'参照モデル: 持っていないロックを放す操作: {index}')
+            self.write_locked = False
+            return {'result': 'success'}
         if step['op'] == 'mutateWrittenPayload':
             return self.mutate_payload(self.written[step['arguments']['operation']], step['arguments'])
         if step['op'] == 'mutateReadPayload':

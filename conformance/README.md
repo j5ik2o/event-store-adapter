@@ -1,6 +1,6 @@
 # 適合テストデータ v1
 
-共通契約・DynamoDB プロファイル・メモリプロファイルの期待値を、言語に依存しない UTF-8 の JSON で配るデータである。データの版は `1.2.0` である。[共通契約](../docs/spec/core-contract.md)・[DynamoDB プロファイル](../docs/spec/storage/dynamodb.md)・[メモリプロファイル](../docs/spec/storage/memory.md)が規範であり、このデータは規則を追加しない。[ハッシュ仕様](../docs/spec/storage/hash.md)が収録を求める FNV-1a 64 の4件も含める。値30件、操作場面93件（共通42件・DynamoDB固有45件・メモリ固有6件）、配置1件の計124件で、60規則を対象とする。4つの仕様の文書が定義する73規則は、すべてがケースか `coverage.json` の対象外の理由を持つ。今回の検証はデータと道具だけを対象とし、言語実装や保存先には実行しない。
+共通契約・DynamoDB プロファイル・メモリプロファイル・SQLite プロファイルの期待値を、言語に依存しない UTF-8 の JSON で配るデータである。データの版は `1.3.0` である。[共通契約](../docs/spec/core-contract.md)・[DynamoDB プロファイル](../docs/spec/storage/dynamodb.md)・[メモリプロファイル](../docs/spec/storage/memory.md)・[SQLite プロファイル](../docs/spec/storage/sqlite.md)が規範であり、このデータは規則を追加しない。[ハッシュ仕様](../docs/spec/storage/hash.md)が収録を求める FNV-1a 64 の4件も含める。値30件、操作場面102件（共通42件・DynamoDB固有45件・メモリ固有7件・SQLite固有7件・SQLite・Spanner・Bigtable に共通の共有1件）、配置1件の計133件で、65規則を対象とする。5つの仕様の文書が定義する92規則は、すべてがケースか `coverage.json` の対象外の理由を持つ。共通の場面は `memory`・`dynamodb`・`sqlite`・`spanner`・`bigtable` の5つの保存先を対象とする。Spanner と Bigtable に固有の事例と、Bigtable の封筒の値の表は、この版にはまだ含めない。今回の検証はデータと道具だけを対象とし、言語実装や保存先には実行しない。
 
 ## ファイルと形式
 
@@ -12,6 +12,9 @@
 | `memory/configuration.json` | メモリの設定エラーの操作列（生成の結果だけを期待する） | `schema/scenarios.schema.json` |
 | `memory/stores.json` | メモリの2つ目のストアの生成（独立・共有）の操作列（MEM-2） | `schema/scenarios.schema.json` |
 | `memory/payload-isolation.json` | メモリのペイロードの書き換えの操作列（MEM-6） | `schema/scenarios.schema.json` |
+| `scenarios/stores/shared.json` | SQLite・Spanner・Bigtable で共有した2つ目のストアの操作列 | `schema/scenarios.schema.json` |
+| `sqlite/configuration.json` | SQLite の設定エラーの操作列（提供しない能力と、保存先に記録した設定との食い違い） | `schema/scenarios.schema.json` |
+| `sqlite/write-lock.json` | SQLite の書き込みのロックを別の接続が持ち続ける操作列（SQ-7） | `schema/scenarios.schema.json` |
 | `dynamodb/layout.json` | 3 テーブル・GSI と項目の属性の期待値 | `schema/layout.schema.json` |
 | `coverage.json` | 網羅対象と対象外の理由 | `schema/coverage.schema.json` |
 | `manifest.json` | 版と配布ファイルの SHA-256 | `schema/manifest.schema.json` |
@@ -58,8 +61,8 @@ Schema は draft 2020-12 である。共通定義は `schema/common.schema.json`
 各場面は独立したストアで実行する。場面の中で2つ目のストアが要るときは、`createStore` の操作で作る（「2つ目のストアとペイロードの書き換え（メモリ）」を参照）。DynamoDB のテーブル名・GSI 名は実行器が割り当て、同じ場面の3テーブルは同じリージョンに置く。ほかのケースの項目を使い回さない。実行器は宣言された方式の保持処理を決定的に実行するためのフックと、内部履歴・失敗通知・SDK 要求の検査フックを用意する。
 
 1. `backends` に実行する保存先があることを確認する。`requires = ["ttl"]` は TTL 方式を要求する。v1 の TTL 場面は DynamoDB だけを対象とする。
-2. `store` の設定でストアを生成する。`retention_count = null` は履歴を作らず現在だけを保存する。`delete` は古い履歴を削除し、`ttl` は印を付ける。`ttl_grace_seconds` は DynamoDB の猶予秒である。`change_feed = true` は変更フィードの提供を求める設定であり、省略時は求めない。名前はデータ上の共通名であり、実装の設定 API へ対応付ける。
-3. `seed.items` があれば、ストア生成前にテスト用の権限でその項目を入れる。値の型とバイナリの扱いは後述の属性検査と同じである。設定項目が seed にない場合は、通常の生成手順で初期化する。
+2. `store` の設定でストアを生成する。`retention_count = null` は履歴を作らず現在だけを保存する。`delete` は古い履歴を削除し、`ttl` は印を付ける。`ttl_grace_seconds` は DynamoDB の猶予秒である。`change_feed = true` は変更フィードの提供を求める設定であり、省略時は求めない。`lock_wait_milliseconds` は SQLite のロック待ち（SQ-1 の busy の待ち時間）をミリ秒で指定し、`backends` が `["sqlite"]` だけの場面に置ける。書き込みのロックを持ち続ける場面は、短い値を明示する。名前はデータ上の共通名であり、実装の設定 API へ対応付ける。
+3. `seed.items` があれば、ストア生成前にテスト用の権限でその項目を入れる。値の型とバイナリの扱いは後述の属性検査と同じである。設定項目が seed にない場合は、通常の生成手順で初期化する。`seed.configuration` があれば、前の初期化が保存先に記録した設定を、プロファイルの config の項目名で書いたものとして、ストアの生成より前に記録する。SQLite の項目名は `store_id`（小文字の UUID）・`layout_version`・`keep_snapshot_count`（null か正の整数）・`retention_mode`・`change_feed_enabled`（0 か 1）である。実行器は、保存先の通常の初期化の経路か試験用の権限でこれを記録する。生の行や SDK の形は書かず、`seed.items` と同じ場面には置けない。`seed.configuration` を使う場面は、生成の結果（`initialization`）を観測する。
 4. `initialization` があれば生成結果を検査する。生成失敗のケースは操作列を持たない。生成前の障害は先に登録する。
 5. `generators` があれば後述の手順で文字列を展開する。`fixtures.events` と `fixtures.snapshots` を読み、各操作の直前に参照された封筒を構築する。キーは場面内だけで有効な参照名である。manifest 省略時の期待値は空文字列である。無効な入力の封筒の構築中に生じた規則違反も、対応する操作の失敗として捕捉する。実行器自身の事前検査でライブラリの検査を代替してはならない。
 6. `steps` を配列順に、並行実行せずに実行する。引数の `event`・`snapshot` は fixture の参照、`aggregate_id` と `seq_nr` は値である。書き込みは1操作で1イベントを追記する。
@@ -67,12 +70,14 @@ Schema は draft 2020-12 である。共通定義は `schema/common.schema.json`
 
 `memory/configuration.json` の場面は、メモリの保存先が提供しない期限切れ方式（`retention_mode = ttl`）と変更フィード（`change_feed = true`）を求める設定が、生成時に `configuration` の分類で失敗することを期待する。言語の設定 API で要求そのものを表せない実装（設定の型に期限切れ方式や変更フィードの項目がないなど）は、理由を付けて「表現不能」と報告してよい。扱いは `signed_seq_nr` と同じである。要求を表せるのに設定エラーにならなければ失敗である。
 
-### 2つ目のストアとペイロードの書き換え（メモリ）
+`sqlite/configuration.json` の `sqlite-ttl-unsupported`（SQ-11）と `sqlite-change-feed-unsupported`（SQ-20）も、SQLite の保存先が提供しない期限切れ方式と変更フィードを求める設定が、生成時に `configuration` の分類で失敗することを期待する。「表現不能」の扱いは上と同じである。この扱いはこの2ケースだけに適用し、`seed.configuration` を使う食い違いの場面（記録した保持件数・配置の版・`change_feed_enabled` が設定と異なる場合）には広げない。食い違いの場面は、要求を表せるので、生成が `configuration` の分類で失敗しなければ失敗である。一致する場面は生成が成功する。
 
-`memory/stores.json`（MEM-2）と `memory/payload-isolation.json`（MEM-6）の場面だけが、次の操作を使う。どちらも `backends` は `["memory"]` だけで、`rules` に MEM-2 または MEM-6 を持つ。
+### 2つ目のストアとペイロードの書き換え（メモリ）、共有したストア（SQLite・Spanner・Bigtable）
+
+`memory/stores.json`（MEM-2）と `memory/payload-isolation.json`（MEM-6）の場面は、次の操作を使う。どちらも `backends` は `["memory"]` だけで、`rules` に MEM-2 または MEM-6 を持つ。`scenarios/stores/shared.json` の場面は、`createStore` の `storage = shared` と `store` だけを使い、`backends` はSQLite・Spanner・Bigtable（`sqlite`・`spanner`・`bigtable`）だけで、`rules` は共通契約の番号（W-7・W-8 など）にする。共有するのは、SQLite では同じファイル、Spanner では同じデータベースと同じ接頭辞、Bigtable では同じインスタンスと同じテーブルである。共有した2つ目のストアで、1つ目のストアが書いた集約を読め、古い seq_nr や重複した seq_nr を追記すると楽観ロックになる。`storage = new` は、メモリの場面だけに使える。SQLite・Spanner・Bigtable の場面で使うとデータの誤りとして拒否する。
 
 - **1つ目のストア**: 予約名 `primary` である。`store` を省略した操作は `primary` に対する操作で、既存の場面の意味は変わらない。
-- **`createStore`**: 場面の途中で2つ目のストアを生成する。`arguments.name` が新しいストアの参照名で、`primary` と、すでに生成した名前は使えない。`arguments.storage` が `new` なら、空の独立したストアを新しい保存先として生成する。`shared` なら、`arguments.shared_with` が指す生成済みのストアの保存先を明示的に共有して生成し、全記録・設定・排他制御を共有する。期待は `result = success` だけである。
+- **`createStore`**: 場面の途中で2つ目のストアを生成する。`arguments.name` が新しいストアの参照名で、`primary` と、すでに生成した名前は使えない。`arguments.storage` が `new` なら、空の独立したストアを新しい保存先として生成する。`shared` なら、`arguments.shared_with` が指す生成済みのストアの保存先を明示的に共有して生成し、全記録・設定・排他制御を共有する。`shared` で生成するとき、メモリでは、実行器は2つ目のストアに設定を別に渡さず、保存先が持つ設定（1つ目のストアの `store`）を共有インスタンスに使わせる（MEM-D11）。2つ目のストアに同じ設定を渡して生成すると、設定の共有を確かめたことにならない。SQLite・Spanner・Bigtable では、保存先に記録した設定とクライアントの設定を照合するので、実行器は場面の `store` と同じ設定を渡す。`memory-store-shared-configuration` は、共有したストアが履歴の保持件数も共有することを、スナップショット付きの追記を重ねた後の履歴で確かめる。期待は `result = success` だけである。
 - **`store`**: 永続化・読み取りの操作が任意に持つ。生成済みのストアの参照名で、その操作を実行するストアを指す。生成前の参照名は使えない。
 - 独立の場面は、`createStore` より前に別のストアへ書き、新しく生成したストアで同じ集約を読む。この読み取りは「なし」または空の列を返す。何も書かずに2つ目を読むだけの場面は、空振りの成功になるのでデータの誤りとして拒否する。
 - 言語の API で名前を付けて保存先を作れる実装は、同じ名前を付けただけの2つ目の保存先が、独立の場面と同じ結果になる（記録を共有しない）ことを確かめる。名前を付ける API がない実装は、この点を確かめなくてよい。
@@ -84,6 +89,15 @@ Schema は draft 2020-12 である。共通定義は `schema/common.schema.json`
 言語の型や API で、この書き換えそのものを表せない実装（値が所有権ごと渡されて書き込み後に触れない、ペイロードの型が書き換えできないなど）は、`memory/payload-isolation.json` の対応するケースを、理由を付けて「表現不能」と報告してよい。扱いは `signed_seq_nr` と同じである。この扱いは `memory/payload-isolation.json` の2ケースだけに適用し、ほかのケースには広げない。書き換えを表せるのに保存済みの値が変われば失敗である。
 
 `store.retry_limit` は設定照合の再要求回数の上限であり、初回要求は数えない。実装の上限が回数ではなく待ち時間なら、実行器が同じ未処理応答の列で上限到達を再現する。指数バックオフを待つ試験は、要求列と待ち時間を観測する時計のフックで実時間を短縮してよい。
+
+### 書き込みのロックを持ち続ける操作（SQLite）
+
+`holdWriteLock` と `releaseWriteLock` は、`sqlite/write-lock.json`（SQ-7）の場面だけが使う。`backends` は `["sqlite"]` だけで、`rules` に SQ-7 を持ち、`store.lock_wait_milliseconds` を指定する。`arguments` は空のオブジェクト、`store` は持たず、期待は `result = success` だけである。ロックは、ストアではなくファイル全体に1つだけある。
+
+- **`holdWriteLock`**: 実行器が、ストアの接続とは別の接続を同じファイルに開き、BEGIN IMMEDIATE で書き込みのロックを取って持ち続ける。
+- **`releaseWriteLock`**: 持っているロックを放す（ROLLBACK などで別の接続のトランザクションを閉じる）。
+- ロックを持つ間の追記は、`lock_wait_milliseconds` を超えて待った後、楽観ロックではなく `storage` の分類で失敗し、何も確定しない。ロックを放した後に同じ追記が成功し、読み直せる。
+- 持っていないロックを放す場面、すでに持っているロックをもう一度持つ場面、ロックを放さないまま終わる場面、ロックを持つ間に保存先エラーを期待する追記がない場面は、データの誤りとして拒否する。この操作を、`backends` が `["sqlite"]` だけでない場面で使うことも拒否する。
 
 ### 操作結果
 
@@ -133,13 +147,13 @@ D-7 の400KBと DY-11 の1MBは、DynamoDB の2進単位である。項目上限
 |:--|:--|
 | `serialize-event` / `serialize-snapshot` | payload / 集約状態の直列化 |
 | `deserialize-event` / `deserialize-snapshot` | 読み取ったバイナリからの復元 |
-| `commit` | 書き込み要求、DynamoDB では TransactWriteItems |
+| `commit` | 書き込み要求、DynamoDB では TransactWriteItems、SQLite では COMMIT、Spanner では読み書きトランザクションのコミット、Bigtable ではヘッドの条件付き更新（CheckAndMutateRow） |
 | `read-events` / `read-snapshot` | 各読み取りの保存先応答 |
 | `retention-query` | 保持対象を選ぶ履歴読み取り |
 | `retention-delete` / `retention-mark` | 超過履歴の削除 / 印付け |
 | `configuration-read` / `configuration-create` | 設定項目の照合 / 条件付き作成 |
 
-`kind = serialization-error` はシリアライザの対応段階を失敗させる。既定の JSON シリアライザが正常な JSON で自然に失敗することを期待しない。`storage-error` は保存先・保持フックのその段階の最終失敗を返す。`details.scope = final-retention-failure` のときは、候補選択後、削除が行われる前に保持全体を失敗させる。共通場面の `retention-query` の応答計画は、メモリでは論理履歴のフック、DynamoDB では SDK のフックへ対応付ける。
+`kind = serialization-error` はシリアライザの対応段階を失敗させる。既定の JSON シリアライザが正常な JSON で自然に失敗することを期待しない。`storage-error` は保存先・保持フックのその段階の最終失敗を返す。`details.scope = final-retention-failure` のときは、候補選択後、削除が行われる前に保持全体を失敗させる。共通場面の `retention-query` の応答計画（`history_pages` など、DynamoDB の通信の形に寄ったもの）は、メモリ・`sqlite`・`spanner`・`bigtable` では論理的な履歴のフック、DynamoDB では SDK のフックへ対応付ける。
 
 すべての障害で `injection` を指定し、副作用の有無を区別する。
 
@@ -218,7 +232,7 @@ uv run --project tools/conformance --locked python tools/conformance/validate.py
 uv run --project tools/conformance --locked python -m unittest discover -s tools/conformance -p 'test_*.py'
 ```
 
-規則番号はローカルの `docs/spec/core-contract.md`、`docs/spec/storage/dynamodb.md`、`docs/spec/storage/memory.md`、`docs/spec/storage/hash.md` の定義から収集する。削除済みの番号や本文で言及しただけの番号を、有効なケースの規則として認めない。コピー先で仕様を別の位置に置く場合は `--root` と `--spec-root` でそれぞれ指定する。後者は core-contract.md、storage/dynamodb.md、storage/memory.md、storage/hash.md があるディレクトリである。検証器は、この4つの文書が定義するすべての規則が、ケースか `coverage.json` の対象外の理由を持つことを検査する。ケースも理由もない規則は未網羅として拒否する。
+規則番号はローカルの `docs/spec/core-contract.md`、`docs/spec/storage/dynamodb.md`、`docs/spec/storage/memory.md`、`docs/spec/storage/hash.md`、`docs/spec/storage/sqlite.md` の定義から収集する。SQLite の規則は行の頭が `- **必須 SQ-n**`（推奨・任意も同様）の形のものだけで、草案の SQ-13 と判断の番号（SQ-D）は含めない。削除済みの番号や本文で言及しただけの番号を、有効なケースの規則として認めない。コピー先で仕様を別の位置に置く場合は `--root` と `--spec-root` でそれぞれ指定する。後者は core-contract.md、storage/dynamodb.md、storage/memory.md、storage/hash.md、storage/sqlite.md があるディレクトリである。検証器は、この5つの文書が定義するすべての規則が、ケースか `coverage.json` の対象外の理由を持つことを検査する。ケースも理由もない規則は未網羅として拒否する。
 
 データを変更したときは、次の順に再生成・照合する。網羅表の生成モードは manifest の照合を行わないので、最後の照合まで実行する必要がある。
 
@@ -234,7 +248,7 @@ uv run --project tools/conformance --locked python tools/conformance/validate.py
 
 `tools/conformance/reference_model.py` は、集約ごとのヘッド番号、ジャーナル、現在のスナップショット、履歴とTTL期限を状態として操作列を再生する。モデルは期待値を状態の更新に使わない。成功・エラー分類・規則番号・読み取りの全封筒・保持履歴・失敗通知を、独立に計算した結果と比較する。時刻の値域や項目サイズの明らかな超過、確定前の失敗、取り消し理由、履歴ページ、BatchGetItem の応答差し替えも扱う。
 
-送信後の書き込み失敗や保持の更新・削除応答の失敗では確定状態が仕様から決まらないため、その操作と以後の状態依存操作を理由付きで飛ばす。v1 の93場面では、この理由で飛ばす操作はない。SDK要求の実測、物理属性の型、メッセージの実際の文言はモデルの対象外であり、場面ごとに実行器へ委ねる検査として明示する。項目サイズは既存ケースの属性値だけで上限超過を確かめ、厳密な境界のサイズ計算は扱わない。
+送信後の書き込み失敗や保持の更新・削除応答の失敗では確定状態が仕様から決まらないため、その操作と以後の状態依存操作を理由付きで飛ばす。v1 の102場面では、この理由で飛ばす操作はない。SDK要求の実測、物理属性の型、メッセージの実際の文言はモデルの対象外であり、場面ごとに実行器へ委ねる検査として明示する。項目サイズは既存ケースの属性値だけで上限超過を確かめ、厳密な境界のサイズ計算は扱わない。
 
 T-13 の値域は整数のナノ秒で検査する。言語の時刻型へ変換した後の丸め・往復は実行器の検査であり、モデルが丸め方向を決めることはない。FNV-1a 64 の表は仕様の計算で別途照合する。ADR-0008 と Bigtable 仕様は入出力表の収録を求めていないため、固定バイナリ封筒は v1 の対象外とし、coverage.json に理由を記録する。
 
