@@ -208,7 +208,19 @@ v1.2.0 を 2026-10-15 に置いた（[#51](https://github.com/j5ik2o/event-store
 
 値の表 30 件、操作の場面 93 件（共通契約 42 件、DynamoDB 45 件、メモリ 6 件）、配置 1 件で、60 の規則を扱う。2026-10-15 に 6 言語へ配り、新しい 4 件は 6 言語ともメモリで成功した（[運用方針](../operations/repository-policy.md) の適合状況）。MEM-6 の書き換えは 6 言語とも表せたので、「表現不能」と報告した言語はない。
 
-各リポジトリには `conformance/`（`.gitattributes` で改行の変換を止める）と `tools/conformance/manifest.py` を写し、CI で `manifest.py verify` と、`conformance/manifest.json` の SHA-256（v1.0.0 は `61c26614dbbfba88eebce72cc1d2b0220218839e74dcfb64c19268f7ee2302ce`、v1.1.0 は `0e4dfe44dec0a912ed9d6b28f0634af9fd0dc840895734790e87cf96772e1d50`、v1.2.0 は `432241f3a9e45fc169b3fcdead480b505832af1eed9f4f48357210daccce84eb`）の照合を行う。データを配り直すときは、この値も更新する。
+v1.3.0 を 2026-10-17 に置いた（[#61](https://github.com/j5ik2o/event-store-adapter/pull/61)・[#62](https://github.com/j5ik2o/event-store-adapter/pull/62)。範囲は [#47](https://github.com/j5ik2o/event-store-adapter/issues/47) でオーナーと合意した）。段階 5 の 3 つの保存先を 1 つの版にまとめた。1.0.0〜1.2.0 のケースは、共通契約の場面の `backends` のほかは変えずに、次を足した。
+
+- 共通契約の 42 場面の `backends` に、`sqlite`・`spanner`・`bigtable` を足した。
+- 各保存先の設定エラーの場面。提供しない能力を求める設定と、保存先に記録した設定との食い違いである。食い違いは、プロファイルの config の項目名で書く論理的な設定の種まき（`seed.configuration`）で作る。
+- 論理的な段階への差し込みで書ける障害の場面。SQLite では別の接続が書き込みのロックを持ち続ける操作（SQ-7）、Spanner では中断のやり直しとその上限（SPN-7）とコミットの応答の消失（SPN-8）、Bigtable では journal の書き出しの失敗と条件付き更新の応答の消失（BT-7）と封筒の上限（BT-16）である。
+- 同じ保存先を共有した 2 つ目のストアの場面（`scenarios/stores/shared.json`）。
+- Bigtable の封筒の固定バイナリ形式の値の表 10 件（`values/bigtable-envelope.json`、BT-D6a）。
+- メモリで、共有したストアが設定も共有することを確かめる場面 1 件（MEM-2。1.2.0 の後に js#1071 で指摘された点）。
+- SQLite・Spanner・Bigtable のプロファイルを規則の定義元に加えた。生の行や SDK の応答の形に寄るもの、本当に同時に走る競合、SQLite と Spanner のテーブルの形は、`coverage.json` に理由を書いて各言語の試験に任せる。
+
+値の表 40 件、操作の場面 128 件（共通契約 42 件、DynamoDB 45 件、メモリ 7 件、SQLite 7 件、Spanner 14 件、Bigtable 12 件、3 つの保存先に共通の共有 1 件）、配置 1 件で、75 の規則を扱う。7 つの仕様の文書が定義する 124 の規則は、すべてがケースか対象外の理由を持つ。6 言語への配布は、この後に言語ごとの課題で行う。
+
+各リポジトリには `conformance/`（`.gitattributes` で改行の変換を止める）と `tools/conformance/manifest.py` を写し、CI で `manifest.py verify` と、`conformance/manifest.json` の SHA-256（v1.0.0 は `61c26614dbbfba88eebce72cc1d2b0220218839e74dcfb64c19268f7ee2302ce`、v1.1.0 は `0e4dfe44dec0a912ed9d6b28f0634af9fd0dc840895734790e87cf96772e1d50`、v1.2.0 は `432241f3a9e45fc169b3fcdead480b505832af1eed9f4f48357210daccce84eb`、v1.3.0 は `0157c012042afa9a19f0bff509a433a4bd5ddc5b674de864a41bec453c460691`）の照合を行う。データを配り直すときは、この値も更新する。
 
 ## 7. 旧データの移行（IP-D8、2026-10-05 合意）
 
