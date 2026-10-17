@@ -56,7 +56,7 @@
         },
         "rule": {
           "type": "string",
-          "pattern": "^(K|T|H|W|R|E|S|SP|DY|D|F|MEM|SQ)-[1-9][0-9]*$"
+          "pattern": "^((K|T|H|W|R|E|S|SP|DY|D|F|MEM|SQ|SPN|BT)-[1-9][0-9]*|BT-D6a)$"
         },
         "message": {
           "type": "object",
@@ -145,7 +145,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(K|T|H|W|R|E|S|SP|DY|D|F|MEM|SQ)-[1-9][0-9]*$"
+            "pattern": "^((K|T|H|W|R|E|S|SP|DY|D|F|MEM|SQ|SPN|BT)-[1-9][0-9]*|BT-D6a)$"
           },
           "minItems": 1,
           "uniqueItems": true
@@ -207,6 +207,17 @@
             },
             "change_feed": {
               "type": "boolean"
+            },
+            "ttl_grace_days": {
+              "type": "integer"
+            },
+            "transaction_retry_limit": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "envelope_limit_bytes": {
+              "type": "integer",
+              "minimum": 1
             }
           },
           "required": [
@@ -395,6 +406,171 @@
                 "configuration"
               ],
               "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "configuration": {
+                  "type": "object",
+                  "properties": {
+                    "store_id": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                    },
+                    "layout_version": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9223372036854775807
+                    },
+                    "keep_snapshot_count": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 1,
+                      "maximum": 9223372036854775807
+                    },
+                    "retention_mode": {
+                      "enum": [
+                        "delete",
+                        "ttl"
+                      ]
+                    },
+                    "change_feed_enabled": {
+                      "type": "boolean"
+                    },
+                    "ttl_grace_days": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 1,
+                      "maximum": 9223372036854775807
+                    }
+                  },
+                  "required": [
+                    "store_id",
+                    "layout_version",
+                    "keep_snapshot_count",
+                    "retention_mode",
+                    "ttl_grace_days",
+                    "change_feed_enabled"
+                  ],
+                  "additionalProperties": false
+                },
+                "row_deletion_policy_days": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 1,
+                  "maximum": 9223372036854775807
+                }
+              },
+              "required": [
+                "configuration",
+                "row_deletion_policy_days"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "configuration": {
+                  "type": "object",
+                  "properties": {
+                    "journal": {
+                      "type": "object",
+                      "properties": {
+                        "store_id": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                        },
+                        "layout_version": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9223372036854775807
+                        },
+                        "keep_snapshot_count": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 1,
+                          "maximum": 9223372036854775807
+                        },
+                        "retention_mode": {
+                          "enum": [
+                            "delete"
+                          ]
+                        },
+                        "envelope_limit_bytes": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9223372036854775807
+                        }
+                      },
+                      "required": [
+                        "store_id",
+                        "layout_version",
+                        "keep_snapshot_count",
+                        "retention_mode",
+                        "envelope_limit_bytes"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "head": {
+                      "type": "object",
+                      "properties": {
+                        "store_id": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                        },
+                        "layout_version": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9223372036854775807
+                        },
+                        "keep_snapshot_count": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 1,
+                          "maximum": 9223372036854775807
+                        },
+                        "retention_mode": {
+                          "enum": [
+                            "delete"
+                          ]
+                        },
+                        "envelope_limit_bytes": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9223372036854775807
+                        }
+                      },
+                      "required": [
+                        "store_id",
+                        "layout_version",
+                        "keep_snapshot_count",
+                        "retention_mode",
+                        "envelope_limit_bytes"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "journal",
+                    "head"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "configuration"
+              ],
+              "additionalProperties": false
             }
           ]
         },
@@ -432,7 +608,9 @@
                   "retention-delete",
                   "retention-mark",
                   "configuration-read",
-                  "configuration-create"
+                  "configuration-create",
+                  "journal-write-previous",
+                  "journal-write-tail"
                 ]
               },
               "kind": {
@@ -441,7 +619,8 @@
                   "serialization-error",
                   "sdk-error",
                   "sdk-response",
-                  "read-interleave"
+                  "read-interleave",
+                  "transaction-aborted"
                 ]
               },
               "details": {

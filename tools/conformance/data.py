@@ -3,6 +3,7 @@
 import copy
 from datetime import datetime, timezone
 import re
+import struct
 
 
 def materialize(case):
@@ -67,3 +68,74 @@ def epoch_nanoseconds(iso):
     seconds = datetime.strptime(match[1], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
     delta = seconds - datetime(1970, 1, 1, tzinfo=timezone.utc)
     return (delta.days * 86400 + delta.seconds) * 1_000_000_000 + int(match[2])
+
+
+class EnvelopeFormatError(ValueError):
+    """Bigtable の封筒として復元できないバイト列（形式の版・長さ・未使用の末尾の違反）。"""
+
+
+def _pack(fmt, value, what):
+    try:
+        return struct.pack(fmt, value)
+    except struct.error as error:
+        raise ValueError(f"封筒の{what}が範囲外: {value}") from error
+
+
+def _length_prefixed(prefix_format, data, what):
+    return _pack(prefix_format, len(data), what + "の長さ") + data
+
+
+def encode_bigtable_event(aid, seq_nr, occurred_at_ns, manifest, payload):
+    """bigtable.md 4章のイベント封筒。すべてビッグエンディアンで、先頭の 0x01 は形式の版。"""
+    return (b'\x01' + _length_prefixed('>H', aid.encode('utf-8'), 'aid')
+            + _pack('>Q', seq_nr, 'seq_nr') + _pack('>q', occurred_at_ns, 'occurred_at_ns')
+            + _length_prefixed('>I', manifest.encode('utf-8'), 'manifest')
+            + _length_prefixed('>I', payload, 'payload'))
+
+
+def encode_bigtable_snapshot(seq_nr, manifest, payload):
+    """bigtable.md 4章のスナップショット封筒。"""
+    return (b'\x01' + _pack('>Q', seq_nr, 'seq_nr')
+            + _length_prefixed('>I', manifest.encode('utf-8'), 'manifest')
+            + _length_prefixed('>I', payload, 'payload'))
+
+
+class _Reader:
+    def __init__(self, data):
+        self.data, self.offset = data, 0
+
+    def take(self, size):
+        if size > len(self.data) - self.offset:
+            raise EnvelopeFormatError("封筒の長さが足りない")
+        chunk = self.data[self.offset:self.offset + size]
+        self.offset += size
+        return chunk
+
+    def unpack(self, fmt):
+        return struct.unpack(fmt, self.take(struct.calcsize(fmt)))[0]
+
+    def text(self, size):
+        try:
+            return self.take(size).decode('utf-8')
+        except UnicodeDecodeError as error:
+            raise EnvelopeFormatError("封筒の文字列が UTF-8 でない") from error
+
+
+def decode_bigtable_envelope(kind, data):
+    """封筒を項目へ復元する。形式の版・長さ・未使用の末尾の違反は EnvelopeFormatError。"""
+    if kind not in ('event', 'snapshot'):
+        raise ValueError(f"封筒の種類が不正: {kind}")
+    reader = _Reader(data)
+    if reader.unpack('>B') != 1:
+        raise EnvelopeFormatError("未知の封筒の形式版")
+    result = {}
+    if kind == 'event':
+        result['aid'] = reader.text(reader.unpack('>H'))
+    result['seq_nr'] = reader.unpack('>Q')
+    if kind == 'event':
+        result['occurred_at_ns'] = reader.unpack('>q')
+    result['manifest'] = reader.text(reader.unpack('>I'))
+    result['payload'] = reader.take(reader.unpack('>I'))
+    if reader.offset != len(data):
+        raise EnvelopeFormatError("封筒に未使用の末尾がある")
+    return result

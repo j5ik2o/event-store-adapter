@@ -8,15 +8,27 @@
     },
     {
       "path": "COVERAGE.md",
-      "sha256": "17ba8c75e6208b7e2de045ee1079a3d119de88de4d611e966ed61b8a8efe6fb0"
+      "sha256": "e3717dd36970c45219370b04b74335f9fc6587a4ae2609ae54d185e1dfc0423a"
     },
     {
       "path": "README.md",
-      "sha256": "85b0aff8c56ff4063546139977ff6a59200d1c57e908c24a7e5403a1e8d356c5"
+      "sha256": "4ced607d3146a788ac7edb09986207cee69e52db3e02dd478407d5b5030a83bb"
+    },
+    {
+      "path": "bigtable/configuration.json",
+      "sha256": "5d8a01204f36ac26ce064ec00c37080ea193f9a18ecb6597fecbca94e5d223c8"
+    },
+    {
+      "path": "bigtable/envelope-limit.json",
+      "sha256": "fcdf53b7a6c5613dc2df725827d5edb1f9e24950c23b300a8a6187904f5d97a7"
+    },
+    {
+      "path": "bigtable/journal-write.json",
+      "sha256": "f92412ba42b66a6a848105362bf6747798d9f02b3d251e41dea4eed6faa2df99"
     },
     {
       "path": "coverage.json",
-      "sha256": "2ba03e5be33418614019e12e923fe883c913281e5b369029340b2f5135193edf"
+      "sha256": "14962a70a918d813798951df7929e51ad4d89d6c2f719803a16875b735bafc52"
     },
     {
       "path": "dynamodb/configuration.json",
@@ -72,11 +84,11 @@
     },
     {
       "path": "schema/common.schema.json",
-      "sha256": "414c14b39ff27234ef4b82840c19a1a069f0f7ff40ef0c6307a380e8c80941c3"
+      "sha256": "df7011f3e6b6e1eb152dfd427f015767689b890383777ec8c9a5c11f435bc607"
     },
     {
       "path": "schema/coverage.schema.json",
-      "sha256": "1edb3c101a31e70a6955cb916a046f0432587f6a338ba52cc998d3847cb279f3"
+      "sha256": "5c1cc464c68c611c19ef7cac0e74900c9cc70675d2161a85bd1732d839d928f4"
     },
     {
       "path": "schema/layout.schema.json",
@@ -92,7 +104,15 @@
     },
     {
       "path": "schema/values.schema.json",
-      "sha256": "13f473deba40714f2b764f8f9d5faa1dae807611b5e0cafd7b9f34b01237daf7"
+      "sha256": "eb70165ca1cdd0eecccb628640b33eee7244c0beb2d42e04f81c7b0c095a8976"
+    },
+    {
+      "path": "spanner/commit.json",
+      "sha256": "2d56d724df9164f4d88e16bfcdae4b22d66fe320e32e867208d53de256fde372"
+    },
+    {
+      "path": "spanner/configuration.json",
+      "sha256": "c1db73bbf78488a00e5503c63e468cbc1ed15e5b523d4ca2f21836b8f5a7ba02"
     },
     {
       "path": "sqlite/configuration.json",
@@ -105,6 +125,10 @@
     {
       "path": "values/aid.json",
       "sha256": "e51a83c931e30261d7c97b5b787511b773513468eb2c05316c99888ca8c4037b"
+    },
+    {
+      "path": "values/bigtable-envelope.json",
+      "sha256": "92f914fd6a8767b61bd51c439061ebc6ab9d9996b0ae6207e3003e7a7dea08b8"
     },
     {
       "path": "values/hash.json",

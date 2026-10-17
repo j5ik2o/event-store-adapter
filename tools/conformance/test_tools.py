@@ -42,7 +42,7 @@ class ConformanceToolsTests(unittest.TestCase):
         self.assertGreater(documents, 0)
         self.assertGreater(counts["scenarios"], 0)
         self.assertGreater(covered, 0)
-        self.assertEqual(excluded, 36)
+        self.assertEqual(excluded, 59)
         self.assertGreater(checked, 0)
 
     def test_manifest_cli_uses_only_standard_library_and_detects_change(self):
@@ -157,7 +157,7 @@ class ConformanceToolsTests(unittest.TestCase):
 
     def test_every_defined_rule_has_case_or_reason(self):
         _, _, defined = validate.specification_rules(validate.DEFAULT_SPEC_ROOT)
-        self.assertEqual(len(defined), 92)
+        self.assertEqual(len(defined), 124)
         rows = {}
         for line in (manifest.DEFAULT_ROOT / "COVERAGE.md").read_text(encoding="utf-8").splitlines():
             cells = [cell.strip() for cell in line.strip("|").split(" | ")]
@@ -510,6 +510,290 @@ class ConformanceToolsTests(unittest.TestCase):
                            c["steps"][0]["observe"]["history"]["marked"][1].update(ttl=1))
         with self.rejected("参照モデルの履歴・TTL期限"):
             self.check()
+
+
+    # ---- Spanner と Bigtable の規則の収集と網羅 ----
+
+    def restore(self, relative):
+        shutil.copyfile(manifest.DEFAULT_ROOT / relative, self.root / relative)
+
+    def test_spanner_and_bigtable_rules_are_collected_from_definition_lines_defined(self):
+        active, _, defined = validate.specification_rules(validate.DEFAULT_SPEC_ROOT)
+        self.assertEqual({r for r in defined if r.startswith("SPN-")},
+                         {f"SPN-{n}" for n in range(1, 18) if n != 15})
+        self.assertEqual({r for r in defined if r.startswith("BT-")},
+                         {f"BT-{n}" for n in range(1, 18) if n != 15})
+        self.assertIn("BT-D6a", active)
+
+    def test_draft_and_decision_numbers_are_not_defined_rules(self):
+        _, _, defined = validate.specification_rules(validate.DEFAULT_SPEC_ROOT)
+        for rule in ["SPN-15", "BT-15", "BT-D6a", "BT-D1", "SPN-D1"]:
+            with self.subTest(rule=rule):
+                self.assertNotIn(rule, defined)
+        coverage = (manifest.DEFAULT_ROOT / "COVERAGE.md").read_text(encoding="utf-8")
+        self.assertNotIn("| SPN-15 |", coverage)
+        self.assertNotIn("| BT-15 |", coverage)
+
+    def test_bt_d6a_is_listed_after_bt_17_defined_in_the_coverage_table(self):
+        self.assertEqual(sorted(["BT-D6a", "BT-17", "BT-2", "BT-1"], key=validate.rule_sort),
+                         ["BT-1", "BT-2", "BT-17", "BT-D6a"])
+        self.assertEqual(sorted(["K-2", "SQ-10", "SQ-9", "D-8"], key=validate.rule_sort),
+                         ["D-8", "K-2", "SQ-9", "SQ-10"])
+        rows = [line.split(" | ")[0].strip("| ") for line in
+                (manifest.DEFAULT_ROOT / "COVERAGE.md").read_text(encoding="utf-8").splitlines()
+                if line.startswith("| BT-")]
+        self.assertEqual(rows[-1], "BT-D6a")
+
+    def test_schema_rejects_malformed_provider_rule_numbers_defined(self):
+        for rule in ["BT-D6b", "SPN-D1", "BT-0"]:
+            with self.subTest(rule=rule):
+                self.restore("values/aid.json")
+                self.mutate("values/aid.json", lambda doc: doc["cases"][0].update(rules=[rule]))
+                with self.rejected("Schema 不一致"):
+                    self.check()
+
+    def test_coverage_rejects_spanner_and_bigtable_rules_without_case_or_reason(self):
+        for rule in ["SPN-10", "SPN-12", "SPN-14", "BT-1", "BT-14", "BT-6"]:
+            with self.subTest(rule=rule):
+                self.restore("coverage.json")
+                self.mutate("coverage.json", lambda doc: doc.update(
+                    exclusions=[x for x in doc["exclusions"] if x["rule"] != rule]))
+                with self.rejected("未網羅"):
+                    self.check()
+
+    def test_coverage_rejects_case_that_uses_an_excluded_spanner_rule(self):
+        self.mutate("values/aid.json", lambda doc: doc["cases"][0]["rules"].append("SPN-10"))
+        with self.rejected("対象外なのにケースあり"):
+            self.check()
+
+    def test_coverage_requires_bt_d6a_from_the_envelope_value_table(self):
+        self.assertIn("BT-D6a", manifest.read_json(manifest.DEFAULT_ROOT / "coverage.json")["required_rules"])
+        self.mutate("values/bigtable-envelope.json", lambda doc: [c.update(rules=["T-9"]) for c in doc["cases"]])
+        with self.rejected("未網羅"):
+            self.check()
+
+    def test_coverage_table_gives_every_spanner_and_bigtable_rule_a_case_or_reason(self):
+        _, _, defined = validate.specification_rules(validate.DEFAULT_SPEC_ROOT)
+        wanted = {r for r in defined if r.startswith(("SPN-", "BT-"))} | {"BT-D6a"}
+        rows = {}
+        for line in (manifest.DEFAULT_ROOT / "COVERAGE.md").read_text(encoding="utf-8").splitlines():
+            cells = [cell.strip() for cell in line.strip("|").split(" | ")]
+            if len(cells) == 3 and cells[0] in wanted:
+                rows[cells[0]] = cells
+        self.assertEqual(set(rows), wanted)
+        for rule, (_, cases, reason) in rows.items():
+            with self.subTest(rule=rule):
+                self.assertTrue(cases != "—" or reason != "—")
+        self.assertNotEqual(rows["BT-D6a"][1], "—")
+
+    # ---- 提供しない能力を求める設定 ----
+
+    def test_spanner_change_feed_setting_requires_configuration_error_unsupported(self):
+        relative, identifier = "spanner/configuration.json", "spanner-change-feed-unsupported"
+        self.check()
+        self.case_mutation(relative, identifier, lambda c:
+                           c["initialization"]["expect"]["error"].update(category="storage"))
+        with self.rejected("configuration エラーを期待する"):
+            self.check()
+        self.restore(relative)
+        self.case_mutation(relative, identifier, lambda c: c.pop("initialization"))
+        with self.rejected("configuration エラーを期待する"):
+            self.check()
+
+    def test_bigtable_unsupported_settings_require_configuration_error_unsupported(self):
+        relative = "bigtable/configuration.json"
+        for identifier in ["bigtable-ttl-unsupported", "bigtable-change-feed-unsupported"]:
+            with self.subTest(case=identifier):
+                self.restore(relative)
+                self.case_mutation(relative, identifier, lambda c:
+                                   c["initialization"]["expect"]["error"].update(category="storage"))
+                with self.rejected("configuration エラーを期待する"):
+                    self.check()
+
+    def test_ttl_request_mixing_bigtable_with_another_backend_is_rejected_unsupported(self):
+        self.case_mutation("bigtable/configuration.json", "bigtable-ttl-unsupported", lambda c:
+                           c.update(backends=["sqlite", "bigtable"]))
+        with self.assertRaises(ValueError):
+            self.check()
+
+    # ---- 設定の種まき ----
+
+    def test_spanner_seed_requires_row_deletion_policy_days_seeded(self):
+        self.case_mutation("spanner/configuration.json", "spanner-seeded-configuration-match", lambda c:
+                           c["seed"].pop("row_deletion_policy_days"))
+        with self.assertRaises(ValueError):
+            self.check()
+
+    def test_spanner_seed_rejects_sqlite_shaped_values_seeded(self):
+        self.case_mutation("spanner/configuration.json", "spanner-seeded-configuration-match", lambda c:
+                           c["seed"]["configuration"].update(change_feed_enabled=0))
+        with self.assertRaises(ValueError):
+            self.check()
+
+    def test_spanner_ttl_requires_grace_days_seeded(self):
+        self.case_mutation("spanner/configuration.json", "spanner-seeded-ttl-configuration-match", lambda c:
+                           c["store"].pop("ttl_grace_days"))
+        with self.assertRaises(ValueError):
+            self.check()
+
+    def test_bigtable_seed_requires_journal_and_head_tables_seeded(self):
+        relative, identifier = "bigtable/configuration.json", "bigtable-seeded-configuration-match"
+        changes = {
+            "no-head": lambda c: c["seed"]["configuration"].pop("head"),
+            "flat-shape": lambda c: c["seed"].update(configuration=c["seed"]["configuration"]["journal"]),
+            "unknown-key": lambda c: c["seed"]["configuration"]["head"].update(table_name="x"),
+        }
+        for label, change in changes.items():
+            with self.subTest(change=label):
+                self.restore(relative)
+                self.case_mutation(relative, identifier, change)
+                with self.assertRaises(ValueError):
+                    self.check()
+
+    # ---- 中断（ABORTED）からのやり直し ----
+
+    def test_aborted_fault_requires_spanner_only_backends_aborted(self):
+        relative, identifier = "spanner/commit.json", "spanner-aborted-retry-within-limit"
+        self.check()
+        for backends in (["spanner", "bigtable"], ["bigtable"], ["spanner", "sqlite"]):
+            with self.subTest(backends=backends):
+                self.restore(relative)
+                self.case_mutation(relative, identifier, lambda c: c.update(backends=backends))
+                with self.assertRaises(ValueError):
+                    self.check()
+
+    def test_aborted_fault_requires_spn7_and_retry_limit_aborted(self):
+        relative, identifier = "spanner/commit.json", "spanner-aborted-retry-within-limit"
+        changes = {
+            "no-retry-limit": lambda c: c["store"].pop("transaction_retry_limit"),
+            "no-spn7": lambda c: c.update(rules=[r for r in c["rules"] if r != "SPN-7"]),
+        }
+        for label, change in changes.items():
+            with self.subTest(change=label):
+                self.restore(relative)
+                self.case_mutation(relative, identifier, change)
+                with self.assertRaises(ValueError):
+                    self.check()
+
+    def test_spanner_store_names_require_spanner_only_backends_aborted(self):
+        relative, identifier = "bigtable/journal-write.json", "bigtable-cas-response-lost"
+        for name, value in (("transaction_retry_limit", 3), ("ttl_grace_days", 7)):
+            with self.subTest(name=name):
+                self.restore(relative)
+                self.case_mutation(relative, identifier, lambda c: c["store"].update({name: value}))
+                with self.assertRaises(ValueError):
+                    self.check()
+
+    # ---- Bigtable の封筒の上限 ----
+
+    def test_envelope_limit_bytes_requires_bigtable_only_backends_envelope_limit(self):
+        relative, identifier = "bigtable/envelope-limit.json", "bigtable-envelope-over-limit"
+        self.check()
+        for backends in (["bigtable", "sqlite"], ["spanner"]):
+            with self.subTest(backends=backends):
+                self.restore(relative)
+                self.case_mutation(relative, identifier, lambda c: c.update(backends=backends))
+                with self.assertRaises(ValueError):
+                    self.check()
+
+    def test_over_limit_append_requires_bt16_and_sequence_number_envelope_limit(self):
+        relative, identifier = "bigtable/envelope-limit.json", "bigtable-envelope-over-limit"
+        error = lambda c: next(s for s in c["steps"] if s["expect"].get("error", {}).get("category") == "contract-violation")["expect"]["error"]
+        changes = {
+            "no-rule": lambda c: error(c).update(rule="T-9"),
+            "no-seq-nr": lambda c: error(c)["message"].update(must_contain=["BT-16"]),
+        }
+        for label, change in changes.items():
+            with self.subTest(change=label):
+                self.restore(relative)
+                self.case_mutation(relative, identifier, change)
+                with self.assertRaises(ValueError):
+                    self.check()
+
+    # ---- Bigtable の書き出しの段階 ----
+
+    def test_bigtable_write_phases_require_bigtable_only_backends_phase(self):
+        relative = "bigtable/journal-write.json"
+        for identifier in ["bigtable-previous-event-write-failure", "bigtable-new-tail-write-failure"]:
+            for backends in (["bigtable", "sqlite"], ["spanner"], ["memory", "bigtable"]):
+                with self.subTest(case=identifier, backends=backends):
+                    self.restore(relative)
+                    self.case_mutation(relative, identifier, lambda c: c.update(backends=backends))
+                    with self.assertRaises(ValueError):
+                        self.check()
+
+    def test_bigtable_write_phases_require_bt7_phase(self):
+        relative = "bigtable/journal-write.json"
+        for identifier in ["bigtable-previous-event-write-failure", "bigtable-new-tail-write-failure"]:
+            with self.subTest(case=identifier):
+                self.restore(relative)
+                self.case_mutation(relative, identifier, lambda c:
+                                   c.update(rules=[r for r in c["rules"] if r != "BT-7"] or ["E-1"]))
+                with self.assertRaises(ValueError):
+                    self.check()
+
+    def test_bigtable_previous_event_write_fault_on_first_append_is_rejected_phase(self):
+        relative, identifier = "bigtable/journal-write.json", "bigtable-previous-event-write-failure"
+        self.check()
+
+        def fault_on_first_append(case):
+            fault = next(f for f in case["faults"] if f["phase"] == "journal-write-previous")
+            fault["operation"] = 1
+            case["steps"][0]["expect"] = {"error": {"category": "storage",
+                                                    "message": {"must_contain": [], "must_not_contain": []}}}
+        self.case_mutation(relative, identifier, fault_on_first_append)
+        with self.rejected("直前のイベントがない追記に journal-write-previous の障害は差し込めない"):
+            self.check()
+
+    # ---- Bigtable の封筒の値の表 ----
+
+    EVENT_ROW_INPUT = {"aid": "Order-9", "seq_nr": 1, "occurred_at_ns": "0", "manifest": "", "payload_hex": ""}
+    EVENT_ROW_HEX = "0100074f726465722d39" + "0000000000000001" + "0000000000000000" + "00000000" + "00000000"
+
+    def event_row(self, expected=EVENT_ROW_HEX):
+        return {"operation": "encodeBigtableEventEnvelope", "input": dict(self.EVENT_ROW_INPUT),
+                "expect": {"value": expected}}
+
+    def decode_row(self, bytes_hex, kind="event"):
+        return {"operation": "decodeBigtableEnvelope", "input": {"kind": kind, "bytes_hex": bytes_hex},
+                "expect": {"error": {"category": "storage",
+                                     "message": {"must_contain": [], "must_not_contain": []}}}}
+
+    def test_envelope_value_row_accepts_hand_computed_encoding_envelope(self):
+        validate.check_value(self.event_row(), "row")
+
+    def test_envelope_value_row_with_one_changed_byte_is_rejected_envelope(self):
+        with self.rejected("値の期待が入力と不一致"):
+            validate.check_value(self.event_row(self.EVENT_ROW_HEX[:-2] + "01"), "row")
+
+    def test_envelope_value_table_in_distributed_data_rejects_one_changed_byte_envelope(self):
+        def change(doc):
+            row = next(c for c in doc["cases"] if c["operation"] == "encodeBigtableEventEnvelope")
+            last = row["expect"]["value"][-2:]
+            row["expect"]["value"] = row["expect"]["value"][:-2] + ("01" if last == "00" else "00")
+        self.mutate("values/bigtable-envelope.json", change)
+        with self.rejected("値の期待が入力と不一致"):
+            self.check()
+
+    def test_valid_envelope_cannot_be_expected_to_fail_to_decode_envelope(self):
+        with self.rejected("値の期待が入力と不一致"):
+            validate.check_value(self.decode_row(self.EVENT_ROW_HEX), "row")
+
+    def test_malformed_envelopes_are_accepted_as_storage_errors_envelope(self):
+        malformed = {
+            "trailing-byte": self.EVENT_ROW_HEX + "00",
+            "length-mismatch": self.EVENT_ROW_HEX[:-8] + "00000005" + "00000000",
+            "unknown-version": "02" + self.EVENT_ROW_HEX[2:],
+        }
+        for label, bytes_hex in malformed.items():
+            with self.subTest(case=label):
+                validate.check_value(self.decode_row(bytes_hex), "row")
+
+    def test_envelope_value_row_requires_exactly_its_input_keys_envelope(self):
+        row = self.event_row()
+        row["input"]["unexpected"] = 1
+        with self.assertRaises(ValueError):
+            validate.check_value(row, "row")
 
 
 if __name__ == "__main__":

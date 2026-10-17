@@ -22,6 +22,15 @@ class ReplayReport:
     skipped: list = field(default_factory=list)
 
 
+# 期限切れ方式（ttl）と変更フィードを提供しない保存先。Spanner は期限切れ方式を提供するが、変更フィードは提供しない。
+NO_TTL_BACKENDS = {'memory', 'sqlite', 'bigtable'}
+NO_CHANGE_FEED_BACKENDS = {'memory', 'sqlite', 'spanner', 'bigtable'}
+# Bigtable の封筒の上限（BT-16）。最小は、manifest と payload が空の最も短い封筒（スナップショット）の固定部分 17 バイト。
+BIGTABLE_ENVELOPE_LIMIT_DEFAULT = 1048576
+BIGTABLE_ENVELOPE_LIMIT_MAXIMUM = 8388608
+BIGTABLE_SMALLEST_ENVELOPE = 17
+
+
 def aid(identifier):
     return identifier['type_name'] + '-' + identifier['value']
 
@@ -97,8 +106,16 @@ class Model:
     def initialize(self):
         if self.store['retention_count'] == 0:
             return error('configuration')
-        # メモリ（MEM-3・MEM-12・MEM-13）と SQLite（SQ-11・SQ-20）は、期限切れ方式と変更フィードを提供しない。
-        if self.case['backends'] in (['memory'], ['sqlite']) and (self.store['retention_mode'] == 'ttl' or self.store.get('change_feed', False)):
+        # メモリ（MEM-3・MEM-12・MEM-13）、SQLite（SQ-11・SQ-20）、Bigtable（BT-13・BT-17）は期限切れ方式と変更フィードを、
+        # Spanner（SPN-17）は変更フィードを提供しない。
+        backends = self.case['backends']
+        if len(backends) == 1 and ((self.store['retention_mode'] == 'ttl' and backends[0] in NO_TTL_BACKENDS)
+                                   or (self.store.get('change_feed', False) and backends[0] in NO_CHANGE_FEED_BACKENDS)):
+            return error('configuration')
+        # Spanner の TTL の猶予は正の日数（SPN-16）。Bigtable の封筒の上限は最小の封筒以上、最大以下（BT-16）。
+        if backends == ['spanner'] and self.store.get('ttl_grace_days', 1) <= 0:
+            return error('configuration')
+        if backends == ['bigtable'] and not BIGTABLE_SMALLEST_ENVELOPE <= self.envelope_limit() <= BIGTABLE_ENVELOPE_LIMIT_MAXIMUM:
             return error('configuration')
         faults = [f for f in self.case.get('faults', []) if f['operation'] == 0]
         for fault in faults:
@@ -112,17 +129,46 @@ class Model:
                     return error('storage')
         seed = self.case.get('seed', {})
         if 'configuration' in seed:
-            return self.stored_configuration_result(seed['configuration'])
+            return self.stored_configuration_result(seed)
         return self.config_result(seed.get('items', []))
 
-    def stored_configuration_result(self, stored):
-        """保存先に記録した設定と、クライアントの設定の照合（SQ-2・SQ-19・SQ-20）。store_id は照合しない。"""
-        if (stored['layout_version'] != self.store.get('layout_version', 1)
-                or stored['keep_snapshot_count'] != self.store['retention_count']
-                or stored['retention_mode'] != self.store['retention_mode']
-                or stored['change_feed_enabled'] != 0):
-            return error('configuration')
-        return {'result': 'success'}
+    def envelope_limit(self):
+        return self.store.get('envelope_limit_bytes', BIGTABLE_ENVELOPE_LIMIT_DEFAULT)
+
+    def stored_configuration_result(self, seed):
+        """保存先に記録した設定と、クライアントの設定の照合。store_id は照合しない。保存先ごとにプロファイルが定める。"""
+        backend = self.case['backends'][0]
+        if backend == 'spanner':
+            matches = self.spanner_configuration_matches(seed['configuration'], seed['row_deletion_policy_days'])
+        elif backend == 'bigtable':
+            matches = self.bigtable_configuration_matches(seed['configuration'])
+        else:
+            matches = self.sqlite_configuration_matches(seed['configuration'])
+        return {'result': 'success'} if matches else error('configuration')
+
+    def common_configuration_matches(self, stored):
+        return (stored['layout_version'] == self.store.get('layout_version', 1)
+                and stored['keep_snapshot_count'] == self.store['retention_count']
+                and stored['retention_mode'] == self.store['retention_mode'])
+
+    def sqlite_configuration_matches(self, stored):
+        """SQ-2・SQ-19・SQ-20"""
+        return self.common_configuration_matches(stored) and stored['change_feed_enabled'] == 0
+
+    def spanner_configuration_matches(self, stored, policy_days):
+        """SPN-2・SPN-16・SPN-17。TTL の猶予の日数は、クライアント・config・行削除ポリシーで一致する正の日数。"""
+        if not self.common_configuration_matches(stored) or stored['change_feed_enabled']:
+            return False
+        if self.store['retention_mode'] != 'ttl':
+            return stored['ttl_grace_days'] is None and policy_days is None
+        days = {self.store.get('ttl_grace_days'), stored['ttl_grace_days'], policy_days}
+        return len(days) == 1 and None not in days and next(iter(days)) > 0
+
+    def bigtable_configuration_matches(self, stored):
+        """BT-D1・BT-16。journal と head の config:metadata を両方照合し、クライアントの設定とも一致させる。"""
+        journal, head = stored['journal'], stored['head']
+        return (journal == head and self.common_configuration_matches(journal)
+                and journal['envelope_limit_bytes'] == self.envelope_limit())
 
     @staticmethod
     def config_result(items):
@@ -183,6 +229,16 @@ class Model:
         snap = 0 if snapshot is None else identifier + length(snapshot.get('manifest', '')) + binary(snapshot['aggregate'])
         return max(head, snap) > 409600
 
+    def bigtable_oversize(self, event, snapshot, limit):
+        """BT-16: 封筒の大きさの下限の見積り（固定部分 + 文字列のバイト数 + 空白なしの JSON の payload）が上限を超える。"""
+        def length(value):
+            return len(value.encode('utf-8'))
+        def binary(value):
+            return len(json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode('utf-8'))
+        event_size = 27 + length(aid(event['aggregate_id'])) + length(event.get('manifest', '')) + binary(event['payload'])
+        snapshot_size = 0 if snapshot is None else 17 + length(snapshot.get('manifest', '')) + binary(snapshot['aggregate'])
+        return max(event_size, snapshot_size) > limit
+
     def write(self, args, faults, store='primary', index=None):
         event = self.events[args['event']]
         snapshot = self.snapshots[args['snapshot']] if 'snapshot' in args else None
@@ -196,11 +252,18 @@ class Model:
                     return failure
         if self.case['backends'] == ['dynamodb'] and self.oversize(event, snapshot):
             return error('contract-violation')
+        # Bigtable の封筒の上限を超える入力は、書き込み前に規則 BT-16 の契約違反として拒否する。
+        if self.case['backends'] == ['bigtable'] and self.bigtable_oversize(event, snapshot, self.envelope_limit()):
+            return error('contract-violation', 'BT-16')
         # 別の接続が書き込みのロックを持つ間は、入力検査と直列化の後、COMMIT の前に保存先のエラーになる（SQ-7）。
         if self.write_locked:
             return error('storage')
+        # Spanner は ABORTED を上限までやり直す（SPN-7）。上限（初回を数えない）を超えた中断は何も確定せず保存先エラーにする。
         for fault in faults:
-            if fault['phase'] == 'commit':
+            if fault['kind'] == 'transaction-aborted' and fault['repeat']['count'] > self.store['transaction_retry_limit']:
+                return error('storage')
+        for fault in faults:
+            if fault['phase'] == 'commit' and fault['injection'] == 'replace-request':
                 failure = self.fault_error(fault, event)
                 if failure:
                     return failure
@@ -210,6 +273,12 @@ class Model:
             return error('optimistic-lock')
         if seq != (head or 0) + 1:
             return error('contract-violation', 'W-8')
+        # Bigtable は条件付き更新の前に直前のイベントを書き出す（BT-7 の手順 3）。失敗した追記は保存先エラーで、ヘッドは進まない。
+        for fault in faults:
+            if fault['phase'] == 'journal-write-previous':
+                if head is None:
+                    raise ValueError('参照モデル: 直前のイベントがない追記に journal-write-previous の障害は差し込めない')
+                return error('storage')
         # 原子的に確定し、保持はその後に行う。
         state.head = seq
         state.journal[seq] = copy.deepcopy(envelope(event))
@@ -220,6 +289,13 @@ class Model:
             if self.store['retention_count'] is not None:
                 state.history[seq] = None
                 self.retain(state, seq, faults)
+        # 新しい末尾の書き出しの失敗（journal-write-tail）は、確定した追記の成功を変えない。
+        # 応答を失った条件付き更新・コミットは確定済みで、呼び出し側には成否不明の保存先エラーが返る（SPN-8・BT-7）。
+        for fault in faults:
+            if fault['phase'] == 'commit' and fault['injection'] == 'replace-response':
+                failure = self.fault_error(fault, event)
+                if failure:
+                    return failure
         return {'result': 'success'}
 
     def retain(self, state, written_seq, faults):
@@ -366,13 +442,11 @@ def replay(case):
     for index, step in enumerate(case['steps'], 1):
         where = f"{case['id']}/{index}"
         faults = [f for f in case.get('faults', []) if f['operation'] == index]
-        # 送信後の書き込み失敗は確定状態が仕様から決まらないため、以後も推測しない。
+        # 送信後の保持の失敗は履歴の確定状態が仕様から決まらないため、以後も推測しない。
         for fault in faults:
-            if fault['injection'] == 'replace-response' and fault['kind'] in {'sdk-error', 'storage-error'}:
-                if fault['phase'] == 'commit':
-                    unknown_state = '送信後の書き込み応答の失敗では確定状態が不明'
-                elif fault['phase'] in {'retention-delete', 'retention-mark'}:
-                    unknown_state = '送信後の保持応答の失敗では履歴の確定状態が不明'
+            if (fault['injection'] == 'replace-response' and fault['kind'] in {'sdk-error', 'storage-error'}
+                    and fault['phase'] in {'retention-delete', 'retention-mark'}):
+                unknown_state = '送信後の保持応答の失敗では履歴の確定状態が不明'
         if unknown_state:
             report.skipped.append((where, unknown_state))
             continue
