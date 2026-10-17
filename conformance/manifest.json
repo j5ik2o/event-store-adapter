@@ -12,7 +12,7 @@
     },
     {
       "path": "README.md",
-      "sha256": "85071ec60760c280c8e06635e401a7dbffdc5cfc100a5e2a7eeb595573e77370"
+      "sha256": "85b0aff8c56ff4063546139977ff6a59200d1c57e908c24a7e5403a1e8d356c5"
     },
     {
       "path": "coverage.json",
@@ -68,7 +68,7 @@
     },
     {
       "path": "scenarios/stores/shared.json",
-      "sha256": "ce8ccdd228986e9d4df14162a3ac52d93d20166ab8f68151cc3ae2d0b9d9e1e4"
+      "sha256": "893707fd8b4421f86c31d55a1472b992b8c5f5ae72725333a579fbe60197fd98"
     },
     {
       "path": "schema/common.schema.json",

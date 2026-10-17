@@ -177,7 +177,10 @@ def check_write_lock(case, where):
     if "lock_wait_milliseconds" not in case["store"]:
         raise ValueError(f"{where}: 書き込みのロックを持ち続ける場面は store.lock_wait_milliseconds を指定する")
     held = False
+    blocked = False
     for index, step in enumerate(steps, 1):
+        if held and step["op"].startswith("persist") and step["expect"].get("error", {}).get("category") == "storage":
+            blocked = True
         if step["op"] == "holdWriteLock":
             if held:
                 raise ValueError(f"{where}/{index}: すでに持っているロックをもう一度持とうとしている")
@@ -188,6 +191,8 @@ def check_write_lock(case, where):
             held = False
     if held:
         raise ValueError(f"{where}: 書き込みのロックを放さないまま場面が終わる")
+    if not blocked:
+        raise ValueError(f"{where}: ロックを持つ間に、保存先エラーを期待する追記がない（空振りの成功）")
 
 
 def check_seeded_configuration(case, where):

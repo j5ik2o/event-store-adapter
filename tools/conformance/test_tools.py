@@ -242,6 +242,15 @@ class ConformanceToolsTests(unittest.TestCase):
         with self.rejected("放さないまま"):
             self.check()
 
+    def test_write_lock_requires_a_blocked_append(self):
+        def drop_blocked(case):
+            hold = next(i for i, s in enumerate(case["steps"]) if s["op"] == "holdWriteLock")
+            release = next(i for i, s in enumerate(case["steps"]) if s["op"] == "releaseWriteLock")
+            del case["steps"][hold + 1:release]
+        self.case_mutation("sqlite/write-lock.json", "sqlite-write-lock-busy", drop_blocked)
+        with self.rejected("空振り"):
+            self.check()
+
     def test_ttl_request_mixing_sqlite_with_another_backend_is_rejected(self):
         self.case_mutation("sqlite/configuration.json", "sqlite-ttl-unsupported", lambda c:
                            c.update(backends=["sqlite", "spanner"]))
