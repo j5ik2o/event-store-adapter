@@ -157,7 +157,7 @@ LocalStack 2.1.0、トークンなしで動く LocalStack の最新の正式版 
 ### 4.2 言語ごとの主な作業
 
 - **rs**: スナップショット封筒に manifest を足し、version を外す。`persist_event_and_snapshot` がスナップショット封筒を受け取り、読み取りがヘッドの seq_nr を返すようにする。aid 文字列をライブラリが組み立て、`KeyResolver` とシャード数を廃止する。保持処理の時機と失敗の扱いを `GenericEventStore` で改める。DynamoDB は 3 テーブルと設定項目に作り直す。ヘッドの条件付き書き込みで照合し（dynamodb.md 6.1 章、W-8）、外れ方を旧項目で判別する（D-5）。読み取りのページ送り、疎な GSI、項目サイズの事前検査（D-7）も入れる。dynamodb.md 11 章の移行ツールを作る。SQLite・Bigtable は、段階 5 まで新しいメジャーから外す。CHANGELOG と AGENTS.md の誤りも直す。
-- **js**: 4.0.0 に続けて、短い間隔で 2 度目のメジャー（5.0.0）を出すことになる。公開 API を封筒に置き換え、`version`・`expectedVersion`・`isCreated` を外す。契約違反の分類を足し、読み取りと生成の失敗も分類して返す。シリアライザがペイロードだけを扱うようにする。DynamoDB とメモリを作り直す。Spanner を出し直す段階 5 までに、Spanner を任意の依存にするエントリポイントの分け方を決める。使っていない依存（`aws-sdk` v2・`moment`・`winston`）を外す。
+- **js**: 4.0.0 に続けて、短い間隔で 2 度目のメジャー（5.0.0）を出すことになる。公開 API を封筒に置き換え、`version`・`expectedVersion`・`isCreated` を外す。契約違反の分類を足し、読み取りと生成の失敗も分類して返す。シリアライザがペイロードだけを扱うようにする。DynamoDB とメモリを作り直す。Spanner を出し直す段階 5 までに、Spanner を任意の依存にするエントリポイントの分け方を決める（2026-10-19 にオーナーが決定。同じパッケージの別の入口 `event-store-adapter-js/spanner` とし、`@google-cloud/spanner` を任意の peer 依存にする。元の入口は Spanner の SDK を読み込まない。10 章）。使っていない依存（`aws-sdk` v2・`moment`・`winston`）を外す。
 - **java**: 公開 API（同期・非同期）、エラー分類（契約違反・設定を追加）、`Class<T>` に頼るシリアライザ、DynamoDB を作り直す。メモリ実装を足す（IP-D5）。試験はほぼ一から書く。試験用ライブラリ（Testcontainers）の版の混在も直す。
 - **kotlin**: `api(...)` で java の新 API に依存し、`kotlinx.coroutines` の `await` を使う。POM の名前と URL、README の groupId の誤りを直す。
 - **scala**: java の新 API を包み直す。Snapshot を参照するリゾルバを足す。sbt-dynver で次のメジャーの Snapshot 版を作る方法を決める。README の groupId の誤りを直す。
@@ -219,7 +219,7 @@ v1.3.0 を 2026-10-17 に置いた（[#61](https://github.com/j5ik2o/event-store
 - メモリで、共有したストアが設定も共有することを確かめる場面 1 件（MEM-2。1.2.0 の後に js#1071 で指摘された点）。
 - SQLite・Spanner・Bigtable のプロファイルを規則の定義元に加えた。生の行や SDK の応答の形に寄るもの、本当に同時に走る競合、SQLite と Spanner のテーブルの形は、`coverage.json` に理由を書いて各言語の試験に任せる。
 
-値の表 40 件、操作の場面 128 件（共通契約 42 件、DynamoDB 45 件、メモリ 7 件、SQLite 7 件、Spanner 14 件、Bigtable 12 件、3 つの保存先に共通の共有 1 件）、配置 1 件で、75 の規則を扱う。7 つの仕様の文書が定義する 124 の規則は、すべてがケースか対象外の理由を持つ。6 言語への配布は、この後に言語ごとの課題で行う。
+値の表 40 件、操作の場面 128 件（共通契約 42 件、DynamoDB 45 件、メモリ 7 件、SQLite 7 件、Spanner 14 件、Bigtable 12 件、3 つの保存先に共通の共有 1 件）、配置 1 件で、75 の規則を扱う。7 つの仕様の文書が定義する 124 の規則は、すべてがケースか対象外の理由を持つ。2026-10-19 に 6 言語へ配り、メモリの設定の共有の場面は 6 言語とも成功した。SQLite・Spanner・Bigtable の場面は、6 言語ともその保存先を提供しないので、理由付きの対象外と報告している（[運用方針](../operations/repository-policy.md) の適合状況）。
 
 各リポジトリには `conformance/`（`.gitattributes` で改行の変換を止める）と `tools/conformance/manifest.py` を写し、CI で `manifest.py verify` と、`conformance/manifest.json` の SHA-256（v1.0.0 は `61c26614dbbfba88eebce72cc1d2b0220218839e74dcfb64c19268f7ee2302ce`、v1.1.0 は `0e4dfe44dec0a912ed9d6b28f0634af9fd0dc840895734790e87cf96772e1d50`、v1.2.0 は `432241f3a9e45fc169b3fcdead480b505832af1eed9f4f48357210daccce84eb`、v1.3.0 は `0157c012042afa9a19f0bff509a433a4bd5ddc5b674de864a41bec453c460691`）の照合を行う。データを配り直すときは、この値も更新する。
 
@@ -348,6 +348,15 @@ rs・js・go・java の設計文書（各リポジトリの `docs/design/next-ma
 | 修正版の公開の承認 | 前もってまとめて承認しない。今までどおり、出す前に毎回オーナーに聞く | オーナー |
 
 5 章の、言語をまたいでテーブルを読み書きする試験は、公開前のコミットでしか行っていないので、公開した版でやり直す（[#42](https://github.com/j5ik2o/event-store-adapter/issues/42)）。
+
+### 決めたこと（2026-10-19）
+
+3 つのプロファイルと適合テストデータ 1.3.0 がそろった後、段階 5 の実装の進め方を決めた。
+
+| 項目 | 決定 | 決めた人 |
+|:--|:--|:--|
+| 段階 5 の実装の順 | rs の SQLite（[rs#309](https://github.com/j5ik2o/event-store-adapter-rs/issues/309)）と js の Spanner（[js#1067](https://github.com/j5ik2o/event-store-adapter-js/issues/1067)）を並べて始める。rs の Bigtable（[rs#310](https://github.com/j5ik2o/event-store-adapter-rs/issues/310)）は、同じクレートの SQLite の保存先がマージされた後に始める。各保存先は、保存先の実装と適合試験、移行ツールと文書の 2 つに分けて進める | オーナー |
+| js の Spanner の入口 | 同じパッケージの別の入口 `event-store-adapter-js/spanner` とする。`@google-cloud/spanner` は任意の peer 依存にし、元の入口は Spanner の SDK を読み込まない（4.2） | オーナー |
 
 ## 11. リスクと対策
 
