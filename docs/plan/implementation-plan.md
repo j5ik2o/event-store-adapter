@@ -358,6 +358,25 @@ rs・js・go・java の設計文書（各リポジトリの `docs/design/next-ma
 | 段階 5 の実装の順 | rs の SQLite（[rs#309](https://github.com/j5ik2o/event-store-adapter-rs/issues/309)）と js の Spanner（[js#1067](https://github.com/j5ik2o/event-store-adapter-js/issues/1067)）を並べて始める。rs の Bigtable（[rs#310](https://github.com/j5ik2o/event-store-adapter-rs/issues/310)）は、同じクレートの SQLite の保存先がマージされた後に始める。各保存先は、保存先の実装と適合試験、移行ツールと文書の 2 つに分けて進める | オーナー |
 | js の Spanner の入口 | 同じパッケージの別の入口 `event-store-adapter-js/spanner` とする。`@google-cloud/spanner` は任意の peer 依存にし、元の入口は Spanner の SDK を読み込まない（4.2） | オーナー |
 
+### 進み具合と決めたこと（2026-10-21）
+
+3 つの保存先のうち、2 つは保存先の実装と適合試験、移行ツールと文書の両方がそろった。どれもまだ公開していない。版を出すときは、改めてオーナーの承認を取る。
+
+| 保存先 | 保存先の実装と適合試験 | 移行ツールと文書 |
+|:--|:--|:--|
+| rs の SQLite | [rs#319](https://github.com/j5ik2o/event-store-adapter-rs/pull/319) | [rs#324](https://github.com/j5ik2o/event-store-adapter-rs/pull/324)（機能 `sqlite-migration` の `migrate_v3_sqlite` と、移行の道具の SQLite の引数） |
+| js の Spanner | [js#1081](https://github.com/j5ik2o/event-store-adapter-js/pull/1081) | [js#1084](https://github.com/j5ik2o/event-store-adapter-js/pull/1084)（スキーマと初期化の文書、v4 からの移行の案内） |
+| rs の Bigtable | [rs#321](https://github.com/j5ik2o/event-store-adapter-rs/pull/321) | 2 つに分けて進めている。認証のある生成の関数（[rs#327](https://github.com/j5ik2o/event-store-adapter-rs/issues/327)）がマージされた後に、v3 からの移行ツールと文書を行う |
+
+| 項目 | 決定 | 決めた人 |
+|:--|:--|:--|
+| rs の Bigtable の生成の入力（前半、2026-10-20） | データ用と管理用の 2 つの接続（tonic の `Channel`）を受け取る形に限り、認証は扱わない。このままでは本番で使えないので、版を公開する前に認証の扱いを決める | オーナー |
+| rs の Bigtable の認証（2026-10-21） | 利用者が用意する非同期のトークンの取得元も受け取る生成の関数を、もう 1 つ足す。ストアは、データ API と管理 API のすべての要求に `authorization: Bearer <トークン>` を付ける。Google の認証のライブラリは、ライブラリの依存に足さない。今の生成の関数と、接続などの型の項目は変えない | オーナー |
+| rs の移行の道具の Bigtable の認証（2026-10-21） | 公開しない移行の道具だけが Google の認証のライブラリに依存し、Google の既定の認証情報（Application Default Credentials）でトークンを自動で更新する。エミュレーター用の引数では認証を飛ばす | オーナー |
+| rs の移行のエラーの表示（2026-10-20） | DynamoDB と SQLite の移行が共有する `MigrationError` の表示を `migration failed during …` にする。DynamoDB の移行の標準エラーの文言から「DynamoDB」の語が消えるが、項目・終了コード・JSON の報告は変わらない。保存先を見分ける項目を足すと、公開の項目を持つ構造体の組み立てが壊れるため | オーナー |
+
+v3 の SQLite からの移行では、旧の保持の履歴を、新しいファイルの保持件数に合わせて移す（保持件数が n なら集約ごとに新しい n 件、保持なしなら移さない）。SQLite のプロファイル 6 章の「削除済み・未保持の過去の履歴を補作しない」に合わせた読み方で、rs の移行ガイドに書いてある。
+
 ## 11. リスクと対策
 
 | リスク | 対策 |
