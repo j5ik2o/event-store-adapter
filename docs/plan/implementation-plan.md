@@ -360,12 +360,12 @@ rs・js・go・java の設計文書（各リポジトリの `docs/design/next-ma
 
 ### 進み具合と決めたこと（2026-10-21）
 
-3 つの保存先のうち、2 つは保存先の実装と適合試験、移行ツールと文書の両方がそろった。どれもまだ公開していない。版を出すときは、改めてオーナーの承認を取る。
+3 つの保存先のうち、rs の SQLite は、保存先の実装と適合試験、移行ツールと文書の両方がそろった。js の Spanner は、文書と移行の案内まで入ったが、7 章（IP-D8）が求める移行ツールがまだない。js の後半の指示書（[js#1083](https://github.com/j5ik2o/event-store-adapter-js/issues/1083)）に、コーディネーターが誤って「移行のツールは作らない」と書いたためで、オーナーの決定ではない。移行ツールを足すまで、js の Spanner の後半は終わっていない。どれもまだ公開していない。版を出すときは、改めてオーナーの承認を取る。
 
 | 保存先 | 保存先の実装と適合試験 | 移行ツールと文書 |
 |:--|:--|:--|
 | rs の SQLite | [rs#319](https://github.com/j5ik2o/event-store-adapter-rs/pull/319) | [rs#324](https://github.com/j5ik2o/event-store-adapter-rs/pull/324)（機能 `sqlite-migration` の `migrate_v3_sqlite` と、移行の道具の SQLite の引数） |
-| js の Spanner | [js#1081](https://github.com/j5ik2o/event-store-adapter-js/pull/1081) | [js#1084](https://github.com/j5ik2o/event-store-adapter-js/pull/1084)（スキーマと初期化の文書、v4 からの移行の案内） |
+| js の Spanner | [js#1081](https://github.com/j5ik2o/event-store-adapter-js/pull/1081) | [js#1084](https://github.com/j5ik2o/event-store-adapter-js/pull/1084)（スキーマと初期化の文書、v4 からの移行の案内）。移行ツールはまだない |
 | rs の Bigtable | [rs#321](https://github.com/j5ik2o/event-store-adapter-rs/pull/321) | 2 つに分けて進めている。認証のある生成の関数（[rs#327](https://github.com/j5ik2o/event-store-adapter-rs/issues/327)）がマージされた後に、v3 からの移行ツールと文書を行う |
 
 | 項目 | 決定 | 決めた人 |
