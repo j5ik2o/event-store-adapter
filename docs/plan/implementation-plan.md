@@ -378,7 +378,9 @@ rs・js・go・java の設計文書（各リポジトリの `docs/design/next-ma
 
 v3 の SQLite からの移行では、旧ファイルに残っている保持の履歴を、新しいファイルの保持件数に合わせて移す（保持件数が n なら集約ごとに新しい n 件、保持なしなら移さない）。SQLite のプロファイル 6 章の「削除済み・未保持の過去の履歴を補作しない」に合わせた読み方で、rs の移行ガイドに書いてある。
 
-v3 の Bigtable からの移行でも、同じ考え方で旧の履歴の行を移す。v5 の Bigtable は head の今のスナップショットも履歴の件数に数える（プロファイル 7 章）ので、旧の履歴の行の位置と今のスナップショットの位置を合わせた集合から、新しい n 件を移す。保持なしなら移さない。rs の移行ガイドに書いてある。Bigtable の試験がたまに落ちる問題（[rs#325](https://github.com/j5ik2o/event-store-adapter-rs/issues/325)）は、[rs#333](https://github.com/j5ik2o/event-store-adapter-rs/pull/333) で直した。
+v3 の Bigtable からの移行でも、同じ考え方で旧の履歴の行を移す。v5 の Bigtable は head の今のスナップショットも履歴の件数に数える（[Bigtable のプロファイル](../spec/storage/bigtable.md)の 7 章）ので、旧の履歴の行の位置と今のスナップショットの位置を合わせた集合から、新しい n 件を移す。保持なしなら移さない。rs の移行ガイドに書いてある。
+
+なお、Bigtable の試験がたまに落ちる問題（[rs#325](https://github.com/j5ik2o/event-store-adapter-rs/issues/325)）は、[rs#333](https://github.com/j5ik2o/event-store-adapter-rs/pull/333) で直した。
 
 ## 11. リスクと対策
 
