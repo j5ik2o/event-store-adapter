@@ -360,7 +360,7 @@ rs・js・go・java の設計文書（各リポジトリの `docs/design/next-ma
 
 ### 進み具合と決めたこと（2026-10-22）
 
-3 つの保存先とも、保存先の実装と適合試験、移行ツールと文書の両方がそろった（2026-10-22）。js の Spanner の移行ツールは、後半の指示書（[js#1083](https://github.com/j5ik2o/event-store-adapter-js/issues/1083)）にコーディネーターが誤って「移行のツールは作らない」と書いたため一度抜けたが（オーナーの決定ではない）、7 章（IP-D8）に合わせて後から足した。どれもまだ公開していない。版を出すときは、改めてオーナーの承認を取る。
+3 つの保存先とも、保存先の実装と適合試験、移行ツールと文書の両方がそろった（2026-10-22）。js の Spanner の移行ツールは、後半の指示書（[js#1083](https://github.com/j5ik2o/event-store-adapter-js/issues/1083)）にコーディネーターが誤って「移行のツールは作らない」と書いたため一度抜けたが（オーナーの決定ではない）、7 章（IP-D8）に合わせて後から足した。2026-10-22 にオーナーの承認を得て、rs を 5.1.0（crates.io、[リリース](https://github.com/j5ik2o/event-store-adapter-rs/releases/tag/v5.1.0)）、js を 5.1.0（npm、[リリース](https://github.com/j5ik2o/event-store-adapter-js/releases/tag/v5.1.0)）として公開した。どちらも機能を足した版なので、版の 2 番目を上げた。java・kotlin・scala・go は段階 5 の変更がないので、版を出していない。
 
 | 保存先 | 保存先の実装と適合試験 | 移行ツールと文書 |
 |:--|:--|:--|
