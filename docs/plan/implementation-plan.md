@@ -358,15 +358,15 @@ rs・js・go・java の設計文書（各リポジトリの `docs/design/next-ma
 | 段階 5 の実装の順 | rs の SQLite（[rs#309](https://github.com/j5ik2o/event-store-adapter-rs/issues/309)）と js の Spanner（[js#1067](https://github.com/j5ik2o/event-store-adapter-js/issues/1067)）を並べて始める。rs の Bigtable（[rs#310](https://github.com/j5ik2o/event-store-adapter-rs/issues/310)）は、同じクレートの SQLite の保存先がマージされた後に始める。各保存先は、保存先の実装と適合試験、移行ツールと文書の 2 つに分けて進める | オーナー |
 | js の Spanner の入口 | 同じパッケージの別の入口 `event-store-adapter-js/spanner` とする。`@google-cloud/spanner` は任意の peer 依存にし、元の入口は Spanner の SDK を読み込まない（4.2） | オーナー |
 
-### 進み具合と決めたこと（2026-10-21）
+### 進み具合と決めたこと（2026-10-22）
 
-3 つの保存先のうち、rs の SQLite は、保存先の実装と適合試験、移行ツールと文書の両方がそろった。js の Spanner は、文書と移行の案内まで入ったが、7 章（IP-D8）が求める移行ツールがまだない。js の後半の指示書（[js#1083](https://github.com/j5ik2o/event-store-adapter-js/issues/1083)）に、コーディネーターが誤って「移行のツールは作らない」と書いたためで、オーナーの決定ではない。移行ツールを足すまで、js の Spanner の後半は終わっていない。どれもまだ公開していない。版を出すときは、改めてオーナーの承認を取る。
+3 つの保存先とも、保存先の実装と適合試験、移行ツールと文書の両方がそろった（2026-10-22）。js の Spanner の移行ツールは、後半の指示書（[js#1083](https://github.com/j5ik2o/event-store-adapter-js/issues/1083)）にコーディネーターが誤って「移行のツールは作らない」と書いたため一度抜けたが（オーナーの決定ではない）、7 章（IP-D8）に合わせて後から足した。どれもまだ公開していない。版を出すときは、改めてオーナーの承認を取る。
 
 | 保存先 | 保存先の実装と適合試験 | 移行ツールと文書 |
 |:--|:--|:--|
 | rs の SQLite | [rs#319](https://github.com/j5ik2o/event-store-adapter-rs/pull/319) | [rs#324](https://github.com/j5ik2o/event-store-adapter-rs/pull/324)（機能 `sqlite-migration` の `migrate_v3_sqlite` と、移行の道具の SQLite の引数） |
-| js の Spanner | [js#1081](https://github.com/j5ik2o/event-store-adapter-js/pull/1081) | [js#1084](https://github.com/j5ik2o/event-store-adapter-js/pull/1084)（スキーマと初期化の文書、v4 からの移行の案内）。移行ツールはまだない |
-| rs の Bigtable | [rs#321](https://github.com/j5ik2o/event-store-adapter-rs/pull/321) | 2 つに分けて進めている。認証のある生成の関数（[rs#327](https://github.com/j5ik2o/event-store-adapter-rs/issues/327)）がマージされた後に、v3 からの移行ツールと文書を行う |
+| js の Spanner | [js#1081](https://github.com/j5ik2o/event-store-adapter-js/pull/1081) | [js#1084](https://github.com/j5ik2o/event-store-adapter-js/pull/1084)（スキーマと初期化の文書、v4 からの移行の案内）と [js#1088](https://github.com/j5ik2o/event-store-adapter-js/pull/1088)（入口 `event-store-adapter-js/spanner` の `migrateV4Spanner`。v4 の `aggregate_id` はアプリケーションの `asString()` の結果でキーから戻せないので、型名と値は利用者が渡す復元の関数で戻す） |
+| rs の Bigtable | [rs#321](https://github.com/j5ik2o/event-store-adapter-rs/pull/321) | [rs#328](https://github.com/j5ik2o/event-store-adapter-rs/pull/328)（トークンの取得元を受け取る生成の関数）と [rs#330](https://github.com/j5ik2o/event-store-adapter-rs/pull/330)（機能 `bigtable-migration` の `migrate_v3_bigtable` と、移行の道具の Bigtable の引数） |
 
 | 項目 | 決定 | 決めた人 |
 |:--|:--|:--|
@@ -374,8 +374,13 @@ rs・js・go・java の設計文書（各リポジトリの `docs/design/next-ma
 | rs の Bigtable の認証（2026-10-21） | 利用者が用意する非同期のトークンの取得元も受け取る生成の関数を、もう 1 つ足す。ストアは、データ API と管理 API のすべての要求に `authorization: Bearer <トークン>` を付ける。Google の認証のライブラリは、ライブラリの依存に足さない。今の生成の関数と、接続などの型の項目は変えない | オーナー |
 | rs の移行の道具の Bigtable の認証（2026-10-21） | 公開しない移行の道具だけが Google の認証のライブラリに依存し、Google の既定の認証情報（Application Default Credentials）でトークンを自動で更新する。エミュレーター用の引数では認証を飛ばす | オーナー |
 | rs の移行のエラーの表示（2026-10-20） | DynamoDB と SQLite の移行が共有する `MigrationError` の表示を `migration failed during …` にする。DynamoDB の移行の標準エラーの文言から「DynamoDB」の語が消えるが、項目・終了コード・JSON の報告は変わらない。保存先を見分ける項目を足すと、公開の項目を持つ構造体の組み立てが壊れるため | オーナー |
+| Bigtable の `config` の列ファミリの GC（2026-10-22） | 規則は足さず、プロファイル 2 章に説明を書く（P-60）。`config` に年齢による GC を付けると設定行が消え、確定済みの規則で以後の生成が設定エラーになるので、付けない配置を勧める。はじめは BT-2 の規則として足すことで合意したが、確定した規則を変えるには仕様か適合テストデータの版を上げる決まり（P-47・P-55）があるので、説明にとどめた。rs#330 のレビューで見つかった | オーナー |
 
 v3 の SQLite からの移行では、旧ファイルに残っている保持の履歴を、新しいファイルの保持件数に合わせて移す（保持件数が n なら集約ごとに新しい n 件、保持なしなら移さない）。SQLite のプロファイル 6 章の「削除済み・未保持の過去の履歴を補作しない」に合わせた読み方で、rs の移行ガイドに書いてある。
+
+v3 の Bigtable からの移行でも、同じ考え方で旧の履歴の行を移す。v5 の Bigtable は head の今のスナップショットも履歴の件数に数える（[Bigtable のプロファイル](../spec/storage/bigtable.md)の 7 章）ので、旧の履歴の行の位置と今のスナップショットの位置を合わせた集合から、新しい n 件を移す。保持なしなら移さない。rs の移行ガイドに書いてある。
+
+なお、Bigtable の試験がたまに落ちる問題（[rs#325](https://github.com/j5ik2o/event-store-adapter-rs/issues/325)）は、[rs#333](https://github.com/j5ik2o/event-store-adapter-rs/pull/333) で直した。
 
 ## 11. リスクと対策
 
