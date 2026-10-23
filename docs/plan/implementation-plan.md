@@ -382,6 +382,8 @@ v3 の Bigtable からの移行でも、同じ考え方で旧の履歴の行を�
 
 なお、Bigtable の試験がたまに落ちる問題（[rs#325](https://github.com/j5ik2o/event-store-adapter-rs/issues/325)）は、[rs#333](https://github.com/j5ik2o/event-store-adapter-rs/pull/333) で直した。
 
+FNV-1a 64 の 4 件（hash.md の K-1）は、5 章のとおり、ハッシュを使う保存先で実行する。js の Spanner の適合試験は、[js#1081](https://github.com/j5ik2o/event-store-adapter-js/pull/1081) から実行して成功している。rs の Bigtable は行キーの接頭辞にこのハッシュを使うが、適合試験の実行器が最初のメジャーの理由のまま対象外と報告していた。2026-10-23 に見つけ、[rs#337](https://github.com/j5ik2o/event-store-adapter-rs/pull/337) で、Bigtable の leg が保存先と同じハッシュの関数で 4 件を実行するようにして成功した。ハッシュの関数は 5.1.0 と同じなので、版の出し直しは要らない。ほかの leg と、ハッシュを使う保存先を提供しない言語では、理由付きの対象外のままである。
+
 ## 11. リスクと対策
 
 | リスク | 対策 |
