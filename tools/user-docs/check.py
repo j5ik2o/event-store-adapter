@@ -16,7 +16,8 @@ TEMPLATE_PATH = "user-docs/template.json"
 CONFIG_PATH = "user-docs/repo.json"
 CONFIG_KEYS = ("package", "docs_root", "storages", "extra_documents", "moved")
 
-FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+FENCE_OPEN = re.compile(r"^(`{3,}|~{3,})(.*)$")
+CONTAINER_PREFIX = re.compile(r"^(?:[ \t]*(?:>|[-+*][ \t]|\d{1,9}[.)][ \t]))*[ \t]*")
 HEADING = re.compile(r"^ {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*$")
 INLINE_CODE = re.compile(r"(`+).+?\1")
 INLINE_LINK = re.compile(r"\]\(\s*(<[^>]*>|[^)\s]*)[^)]*\)")
@@ -234,10 +235,11 @@ def load_config(path: Path, root: Path, template: dict, problems: list[Problem])
         report("extra_documents は文字列の並びにする")
         return None
     kept_extra: list[str] = []
-    for item in extra:
-        error = path_shape_error(item)
+    for raw in extra:
+        error = path_shape_error(raw)
+        item = posixpath.normpath(raw)
         if error is not None:
-            report(f"extra_documents のパスが正しくない ({item}): {error}")
+            report(f"extra_documents のパスが正しくない ({raw}): {error}")
         elif item in kept_extra:
             report(f"extra_documents のパスが重複: {item}")
         else:
@@ -257,13 +259,15 @@ def load_config(path: Path, root: Path, template: dict, problems: list[Problem])
         taken.add(item)
     destinations = set(required_paths) | set(kept_extra)
     kept_moved: dict[str, str] = {}
-    for old, new in moved.items():
-        old_error = path_shape_error(old)
-        new_error = path_shape_error(new)
+    for old_raw, new_raw in moved.items():
+        old_error = path_shape_error(old_raw)
+        new_error = path_shape_error(new_raw)
+        old = posixpath.normpath(old_raw)
+        new = posixpath.normpath(new_raw)
         if old_error is not None:
-            report(f"moved の古いパスが正しくない ({old}): {old_error}")
+            report(f"moved の古いパスが正しくない ({old_raw}): {old_error}")
         elif new_error is not None:
-            report(f"moved の新しいパスが正しくない ({new}): {new_error}")
+            report(f"moved の新しいパスが正しくない ({new_raw}): {new_error}")
         elif old in taken:
             report(f"moved の古いパスが、型の文書または型の外の文書と重なる: {old}")
         elif new not in destinations:
@@ -287,10 +291,25 @@ def read_text(file: Path) -> str:
     return file.read_text(encoding="utf-8").replace("\r\n", "\n")
 
 
+def read_document(file: Path, root: Path, problems: list[Problem]) -> str | None:
+    """文書を読む。読めなければ、そのファイルの誤りを problems に足して None を返す。"""
+    try:
+        return read_text(file)
+    except OSError as error:
+        problems.append(Problem(relative(file, root), None, f"文書を読めない: {error.strerror or error}"))
+    except UnicodeDecodeError as error:
+        problems.append(Problem(relative(file, root), None, f"UTF-8 として読めない: {error.reason}"))
+    return None
+
+
 def check_first_line(file: Path, english_name: str, template: dict, root: Path) -> list[Problem]:
     if not file.is_file():
         return []
-    first = read_text(file).split("\n")[0]
+    problems: list[Problem] = []
+    text = read_document(file, root, problems)
+    if text is None:
+        return problems
+    first = text.split("\n")[0]
     expected = expected_first_line(template, english_name)
     if first != expected:
         return [Problem(relative(file, root), 1, f"1 行目が決まった先頭の一行でない（期待: {expected}）")]
@@ -305,11 +324,12 @@ def parse_markdown(text: str) -> tuple[list[tuple[int, int, str]], list[tuple[in
     fence_length = 0
     for number, line in enumerate(text.replace("\r\n", "\n").split("\n"), start=1):
         if fence_char:
-            closing = re.match(r"^ {0,3}(" + re.escape(fence_char) + r"{" + str(fence_length) + r",})[ \t]*$", line)
+            unwrapped = line[CONTAINER_PREFIX.match(line).end() :]
+            closing = re.match(r"^(" + re.escape(fence_char) + r"{" + str(fence_length) + r",})[ \t]*$", unwrapped)
             if closing:
                 fence_char = ""
             continue
-        opening = FENCE_OPEN.match(line)
+        opening = FENCE_OPEN.match(line[CONTAINER_PREFIX.match(line).end() :])
         if opening and not (opening.group(1)[0] == "`" and "`" in opening.group(2)):
             fence_char = opening.group(1)[0]
             fence_length = len(opening.group(1))
@@ -400,7 +420,10 @@ def check_headings(doc: dict, docs_root: Path, root: Path) -> list[Problem]:
         if not path.is_file():
             problems.append(Problem(shown[lang], None, "型が求める文書がない"))
             continue
-        parsed[lang] = heading_lists(parse_markdown(read_text(path))[0])
+        text = read_document(path, root, problems)
+        if text is None:
+            continue
+        parsed[lang] = heading_lists(parse_markdown(text)[0])
     matched = {}
     for lang, lists in parsed.items():
         h2 = [entry[lang] for entry in doc["h2"]]
@@ -433,7 +456,10 @@ def check_headings(doc: dict, docs_root: Path, root: Path) -> list[Problem]:
 def check_links(file: Path, root: Path) -> list[Problem]:
     problems: list[Problem] = []
     shown = relative(file, root)
-    for number, target in parse_markdown(read_text(file))[1]:
+    text = read_document(file, root, problems)
+    if text is None:
+        return problems
+    for number, target in parse_markdown(text)[1]:
         target = target.strip()
         if target.startswith("<") and target.endswith(">"):
             target = target[1:-1]
@@ -466,7 +492,10 @@ def check_moved(old: str, new: str, docs_root: Path, template: dict, root: Path)
         if not file.is_file():
             problems.append(Problem(shown, None, "移ったことを示すファイルがない"))
             continue
-        actual_lines = read_text(file).split("\n")
+        text = read_document(file, root, problems)
+        if text is None:
+            continue
+        actual_lines = text.split("\n")
         expected_lines = content.split("\n")
         if actual_lines != expected_lines:
             line = 1

@@ -523,6 +523,36 @@ class UserDocsCheckTests(unittest.TestCase):
         self.insert_after(root, "README.md", "## Installation", text)
         self.assertEqual([p.render() for p in self.problems(root)], [])
 
+    def test_nested_code_blocks_are_code(self):
+        bodies = {
+            "quote": "\n> ```sh\n> # comment\n> [e](docs/NOPE.md)\n> ```\n",
+            "list indent": "\n1. Run:\n\n   ```sh\n   # comment\n   [e](docs/NOPE.md)\n   ```\n\n2. Done\n",
+            "nested bullet": "\n- a\n  - b\n\n      ~~~sh\n      # comment\n      [e](docs/NOPE.md)\n      ~~~\n",
+        }
+        for name, text in bodies.items():
+            with self.subTest(name):
+                root = self.tree()
+                self.insert_after(root, "README.md", "## Installation", text)
+                self.assertEqual([p.render() for p in self.problems(root)], [])
+
+    def test_nested_code_block_does_not_leak_after_close(self):
+        root = self.tree()
+        text = "\n> ```sh\n> # comment\n> ```\n\n[e](docs/NOPE.md)\n"
+        self.insert_after(root, "README.md", "## Installation", text)
+        problems = self.problems(root)
+        self.assertEqual(len(problems), 1, [p.render() for p in problems])
+        self.assertIn("NOPE", problems[0].message)
+
+    def test_unreadable_documents_are_reported_and_others_continue(self):
+        root = self.tree()
+        (root / "README.md").write_bytes(b"\xff\xfe\x00bad")
+        self.edit(root, "docs/MIGRATION_GUIDE.md", "# ", "# X")
+        problems = self.problems(root)
+        paths = [p.path for p in problems]
+        self.assertIn("README.md", paths)
+        self.assertIn("docs/MIGRATION_GUIDE.md", paths)
+        self.assertTrue(any("UTF-8" in p.message for p in problems if p.path == "README.md"))
+
     # --- C11: 照合 5（型の外の文書） ---
 
     def test_extra_documents_need_both_languages_and_free_headings(self):
@@ -537,6 +567,25 @@ class UserDocsCheckTests(unittest.TestCase):
         problems = self.problems(root)
         self.assertIn("docs/MIGRATION_GUIDE_v3.md", [p.path for p in problems])
         self.assertEqual({p.path for p in problems}, {"docs/MIGRATION_GUIDE_v3.md", "docs/MIGRATION_GUIDE_v3.ja.md"})
+
+    def test_config_paths_are_normalized(self):
+        extra = ["./docs/MIGRATION_GUIDE_v3.md"]
+        moved = {"./docs/OLD_NAME.md": "./docs/DYNAMODB_DATABASE_SCHEMA.md"}
+        root = self.tree(extra=["docs/MIGRATION_GUIDE_v3.md"], moved={"docs/OLD_NAME.md": "docs/DYNAMODB_DATABASE_SCHEMA.md"})
+        self.edit_repo(root, lambda v: v.update(extra_documents=extra, moved=moved))
+        self.assertEqual([p.render() for p in self.problems(root)], [])
+
+    def test_config_paths_outside_root_stay_errors(self):
+        for name, change in {
+            "parent": lambda v: v.update(extra_documents=["./../OUT.md"]),
+            "inner parent": lambda v: v.update(extra_documents=["docs/../OUT.md"]),
+            "absolute": lambda v: v.update(extra_documents=["/docs/OUT.md"]),
+            "moved parent": lambda v: v.update(moved={"../OLD.md": "docs/DYNAMODB_DATABASE_SCHEMA.md"}),
+        }.items():
+            with self.subTest(name):
+                root = self.tree()
+                self.edit_repo(root, change)
+                self.assertTrue(any(p.path == CONFIG for p in self.problems(root)))
 
     # --- C3, C12: 照合 6（移ったことを示すファイル） ---
 

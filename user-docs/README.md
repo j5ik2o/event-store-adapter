@@ -88,6 +88,12 @@ The first line of every Japanese document (`X.ja.md`) is the following. `{englis
 
 Lines inside fenced code blocks (``` or ~~~) are not headings and their links are not checked.
 
+Writing rules for documents:
+
+- Write headings only with a leading `#` (ATX style). Do not use underlined headings (`===` or `---`); the checker counts only `#` headings.
+- Write each link on a single line. The checker does not check links that span lines.
+- Keep English and Japanese content aligned, and do not change the first line of the Japanese document.
+
 ## Moved files
 
 When a document is renamed, a short file stays at the old path so that links from published READMEs do not break. Its content is fixed. `{link}` is the relative path from the old file's directory to the new document, with `/` separators.
