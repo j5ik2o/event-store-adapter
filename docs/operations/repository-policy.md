@@ -143,7 +143,7 @@ takt を使うリポジトリは、次の配置にそろえる。テンプレー
 
 - 初回の環境準備や OpenCode の接続設定を変えたときは、Ollama のモデル情報を取得した後に OpenCode 経由の応答も確認する。`opencode run --model ollama/deepseek-v4.1-flash:cloud 'ツールを使わず準備完了とだけ返答してください'` を実行し、`--model` の値を `ollama/glm-5.3:cloud`、`ollama/glm-5.3-flash:cloud` に替えて残りの 2 モデルも確認する。3 モデルすべてで短い応答が成功してから takt を起動する。モデルの一覧やローカルのモデル情報だけでは、OpenCode の接続先や Cloud のアカウントで応答できることは確認できない。
 
-## 適合状況（2026-10-15）
+## 適合状況（2026-10-23）
 
 2026-10-03 の時点で、1〜4 章と 8 章は、6 リポジトリすべてで適合していた。必須チェックは `CI Success` だけで、strict が有効（会話の解決の必須は無効）、マージは squash のみ、CI の全ジョブに `timeout-minutes` があり、workflow で動く AI レビューと独自のスレッドのゲートはない。同日に足した 1 章の「公開の workflow」には、java・kotlin・js・scala・rs が適合している（scala は #853、js は手動実行の CI を除く #990、rs は #239 も含む）。go はパッケージの登録先に公開しないので対象外。8 章の takt の版は、同日に 6 リポジトリとも 0.68.0 にそろえ、Renovate では更新しない設定にした（rs #240、js #992、java #686、scala #854、kotlin #822、go #383）。
 
