@@ -358,7 +358,7 @@ rs・js・go・java の設計文書（各リポジトリの `docs/design/next-ma
 | 段階 5 の実装の順 | rs の SQLite（[rs#309](https://github.com/j5ik2o/event-store-adapter-rs/issues/309)）と js の Spanner（[js#1067](https://github.com/j5ik2o/event-store-adapter-js/issues/1067)）を並べて始める。rs の Bigtable（[rs#310](https://github.com/j5ik2o/event-store-adapter-rs/issues/310)）は、同じクレートの SQLite の保存先がマージされた後に始める。各保存先は、保存先の実装と適合試験、移行ツールと文書の 2 つに分けて進める | オーナー |
 | js の Spanner の入口 | 同じパッケージの別の入口 `event-store-adapter-js/spanner` とする。`@google-cloud/spanner` は任意の peer 依存にし、元の入口は Spanner の SDK を読み込まない（4.2） | オーナー |
 
-### 進み具合と決めたこと（2026-10-22）
+### 進み具合と決めたこと（2026-10-23）
 
 3 つの保存先とも、保存先の実装と適合試験、移行ツールと文書の両方がそろった（2026-10-22）。js の Spanner の移行ツールは、後半の指示書（[js#1083](https://github.com/j5ik2o/event-store-adapter-js/issues/1083)）にコーディネーターが誤って「移行のツールは作らない」と書いたため一度抜けたが（オーナーの決定ではない）、7 章（IP-D8）に合わせて後から足した。2026-10-22 にオーナーの承認を得て、rs を 5.1.0（crates.io、[リリース](https://github.com/j5ik2o/event-store-adapter-rs/releases/tag/v5.1.0)）、js を 5.1.0（npm、[リリース](https://github.com/j5ik2o/event-store-adapter-js/releases/tag/v5.1.0)）として公開した。どちらも機能を足した版なので、版の 2 番目を上げた。java・kotlin・scala・go は段階 5 の変更がないので、版を出していない。
 
@@ -381,6 +381,8 @@ v3 の SQLite からの移行では、旧ファイルに残っている保持の
 v3 の Bigtable からの移行でも、同じ考え方で旧の履歴の行を移す。v5 の Bigtable は head の今のスナップショットも履歴の件数に数える（[Bigtable のプロファイル](../spec/storage/bigtable.md)の 7 章）ので、旧の履歴の行の位置と今のスナップショットの位置を合わせた集合から、新しい n 件を移す。保持なしなら移さない。rs の移行ガイドに書いてある。
 
 なお、Bigtable の試験がたまに落ちる問題（[rs#325](https://github.com/j5ik2o/event-store-adapter-rs/issues/325)）は、[rs#333](https://github.com/j5ik2o/event-store-adapter-rs/pull/333) で直した。
+
+FNV-1a 64 の 4 件（hash.md の K-1）は、5 章のとおり、ハッシュを使う保存先で実行する。js の Spanner の適合試験は、[js#1081](https://github.com/j5ik2o/event-store-adapter-js/pull/1081) から実行して成功している。rs の Bigtable は行キーの接頭辞にこのハッシュを使うが、適合試験の実行器が最初のメジャーの理由のまま対象外と報告していた。2026-10-23 に見つけ、[rs#337](https://github.com/j5ik2o/event-store-adapter-rs/pull/337) で、Bigtable の leg が保存先と同じハッシュの関数で 4 件を実行するようにして成功した。ハッシュの関数は 5.1.0 と同じなので、版の出し直しは要らない。ほかの leg と、ハッシュを使う保存先を提供しない言語では、理由付きの対象外のままである。
 
 ## 11. リスクと対策
 
