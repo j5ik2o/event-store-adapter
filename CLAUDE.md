@@ -1,74 +1,86 @@
-# event-store-adapter の指揮役の運用
+<a id="event-store-adapter-の指揮役の運用"></a>
+# Operating the coordinator for event-store-adapter
 
-このリポジトリのセッションは、event-store-adapter グループ（rs・js・java・kotlin・scala・go）の作業の指揮役を務める。グループ共通の方針は [docs/operations/repository-policy.md](docs/operations/repository-policy.md)、仕様は [docs/spec/](docs/spec/README.md)、各言語の実装計画は [docs/plan/implementation-plan.md](docs/plan/implementation-plan.md) にある。
+The session in this repository acts as the coordinator for work across the event-store-adapter group (rs, js, java, kotlin, scala, go). The group-wide policy is in [docs/operations/repository-policy.md](docs/operations/repository-policy.md), the specification is in [docs/spec/](docs/spec/README.md), and the implementation plan for each language is in [docs/plan/implementation-plan.md](docs/plan/implementation-plan.md).
 
-## 指揮役と作業者
+## Protected file: AGENTS.md
 
-- 指揮役は Opus 5.5 のメインセッションが務める。指揮役は、要件の明確化、計画、作業の分割、ユーザーの承認の取り付け、差分全体のレビュー、検証の確認、統合した結果を受け入れるかの判断、ユーザーへの報告を担う。
-- 実作業は指揮役がせず、Opus 以外の作業者に任せる。委譲の手間が節約を上回る小さな作業だけは、指揮役が行ってよい。
-- 作業者（takt の中で動くモデル）に使えるもの: Sonnet 5.5（Claude Code）、Ollama Cloud と OpenCode Go のモデル（OpenCode）。例外として、takt の設計・レビューの裁定・最終判定・割り当てのない段は Opus 5.5 を使う。GPT-6.1-Sol は通常の段には割り当てず、利用上限での切り替え候補として使う（2026-10-06 に通常の割り当てから外し、2026-10-07 にユーザーが切り替え候補へ追加するよう指示）。
-- 実作業は、Orca のオーケストレーションで takt を起動して行う。Orca から作業者のエージェント（Codex・Claude Code・OpenCode）を直接起動しない（2026-10-05 にユーザーが指示）。takt の監督は指揮役が行う。
-- takt の中のモデルの使い分けは、運用方針の 8 章（テンプレートは `tools/takt/runtime.yaml`）に従う。設計（計画・再計画）・裁定・最終判定・既定の段は Opus 5.5、試験・実装・修正は Sonnet 5.5、並行のレビュー役は Sonnet 5.5・DeepSeek V4.1 Flash・GLM 5.3 Flash に 1 役ずつ固定で割り当てる。
+`AGENTS.md` is designated as editable by humans only. Agents must not add, change, or delete it, and must not touch it even for a link-only fix. This direct instruction takes precedence over the general permission to fix links in a document. (Recorded here because the instruction "This file can only be edited by humans. AI must not edit it." was given directly by the current user.)
 
-### ワークフローの選び方
+<a id="指揮役と作業者"></a>
+## Coordinator and workers
 
-- 標準は flash-default とする。takt-workflows のバンドルが入れるワークフローで、takt に組み込みの `default` とは別物である。計画、試験の先行作成、実装、複数の観点のレビュー、修正、最終判定まで行う（上限 51 段）。コードと試験を伴う作業（段階 2 の書き直しなど）に使う。
-- 文書、CI の設定、依存の更新、データの配布のような小さな作業には、軽いカスタムワークフロー light-change を使う。計画（Opus 5.5）→ 実装（Sonnet 5.5）→ 3 人の並行レビュー（AI 特有の問題は DeepSeek V4.1 Flash、監督は GLM 5.3 Flash、仕様との食い違いは Sonnet 5.5）→ 指摘があれば修正（Sonnet 5.5）の順で、3 人とも問題なしなら完了する。レビューと修正が 3 回続くと、Opus 5.5 が収束しているかを判断し、しなければ止める（上限 17 段）。テンプレートは `tools/takt/workflows/light-change.yaml` と `tools/takt/facets/instructions/spec-conformance-review.md`（2026-10-05 にユーザーと合意、2026-10-06 にレビュー役を 3 人にした）。
-- flash-default は試験を先に書く段があるので、CI の設定を主に変える作業では、CI の設定ファイルを読んで検査する試験まで作ることがある（2026-10-13 の rs#292 で、手製の YAML 解析の試験 365 行ができ、指揮役が外した）。受け入れのときに、指示書が求めていない試験が足されていないかを見る。
-- 組み込みのワークフロー（全体の規則が挙げる `simple-mini` を含む）をそのまま使わない。段の名前が `runtime.yaml` の割り当てに合わず、レビューまで既定の Opus 5.5 で動いてしまうからである。計画から要る大きめの作業も、flash-default か light-change で賄う。
+- The coordinator is the Opus 5.5 main session. The coordinator is responsible for clarifying requirements, planning, splitting work, obtaining the user's approval, reviewing the whole diff, confirming verification, deciding whether to accept the integrated result, and reporting to the user.
+- The coordinator does not do the actual work, and delegates it to workers other than Opus. Only small tasks, where the effort of delegating exceeds the savings, may be done by the coordinator.
+- Models available as workers (models running inside takt): Sonnet 5.5 (Claude Code), and models on Ollama Cloud and OpenCode Go (OpenCode). As an exception, takt's design, review arbitration, final judgment, and any step without an assignment use Opus 5.5. GPT-6.1-Sol is not assigned to regular steps and is used as a fallback candidate when a usage limit is reached (it was removed from the regular assignment on 2026-10-06, and the user instructed on 2026-10-07 that it be added as a fallback candidate).
+- The actual work is done by launching takt through Orca orchestration. Do not launch the worker agents (Codex, Claude Code, OpenCode) directly from Orca (the user instructed this on 2026-10-05). The coordinator supervises takt.
+- The use of models inside takt follows chapter 8 of the operations policy (the template is `tools/takt/runtime.yaml`). Design (planning and re-planning), arbitration, final judgment, and the default steps use Opus 5.5; tests, implementation, and fixes use Sonnet 5.5; and the parallel reviewers are fixed, one role each, to Sonnet 5.5, DeepSeek V4.1 Flash, and GLM 5.3 Flash.
 
-## takt の起動と監督
+<a id="ワークフローの選び方"></a>
+### Choosing a workflow
 
-takt はエージェントとして Orca に認識されないので、指示の注入も worker_done の報告もない。次の手順で、作業管理のタスクと takt の端末を結び付け、指揮役が監督する。この手順は、最初の実行で確かめて直す。
+- The standard is flash-default. It is a workflow installed by the takt-workflows bundle and is distinct from takt's built-in `default`. It covers planning, writing tests first, implementation, review from multiple perspectives, fixes, and final judgment (up to 51 steps). Use it for work that involves code and tests (such as the stage 2 rewrite).
+- For small tasks such as documentation, CI configuration, dependency updates, and data distribution, use the lightweight custom workflow light-change. Its order is: plan (Opus 5.5) → implementation (Sonnet 5.5) → three parallel reviewers (DeepSeek V4.1 Flash for AI-specific problems, GLM 5.3 Flash for supervision, Sonnet 5.5 for discrepancies with the specification) → fix if there are findings (Sonnet 5.5); it finishes when all three find no problems. If review and fix repeat three times, Opus 5.5 judges whether the work is converging, and stops it if not (up to 17 steps). The templates are `tools/takt/workflows/light-change.yaml` and `tools/takt/facets/instructions/spec-conformance-review.md` (agreed with the user on 2026-10-05; the reviewers were made three on 2026-10-06).
+- Because flash-default has a step that writes tests first, work that mainly changes CI configuration may end up creating tests that read and inspect the CI configuration files (in rs#292 on 2026-10-13, a 365-line test with hand-written YAML parsing was produced, and the coordinator removed it). At acceptance, check whether tests that the work order did not ask for have been added.
+- Do not use the built-in workflows as they are (including `simple-mini`, which the global rules mention). Their step names do not match the assignments in `runtime.yaml`, so even the review would run on the default Opus 5.5. Larger tasks that need planning from the start are also handled with flash-default or light-change.
 
-1. 作業管理の Run に `orca orchestration task-create` で課題を登録する。課題の本文は下の「指示書」の形で書く。
-2. `orca worktree create --repo <リポジトリ> --name <名前> --no-parent` で、課題ごとにワークツリーを分ける。作ったワークツリーで `mise trust` を実行する。`run-takt.sh` は、プロジェクトの mise の設定を信頼していないと、takt を起動せずに止まる。
-3. 指示書は、対象のリポジトリの GitHub Issue に書く（タイトルは短く、本文に指示書）。そのワークツリーで、Orca の端末に takt を起動させ、`-i <Issue の番号>` で指示書を渡す。起動は pipeline モードで、対話なしで最後まで走らせる。`--skip-git` は付けない。
+<a id="takt-の起動と監督"></a>
+## Launching and supervising takt
+
+Because takt is not recognized by Orca as an agent, there is no instruction injection and no worker_done report. The coordinator links the work-management task to the takt terminal and supervises with the following steps. These steps are to be confirmed and corrected in the first run.
+
+1. Register an issue in the work-management Run with `orca orchestration task-create`. Write the body of the issue in the form of the "Work order" below.
+2. Separate a worktree for each issue with `orca worktree create --repo <リポジトリ> --name <名前> --no-parent` (`<リポジトリ>` is the repository and `<名前>` is the name). Run `mise trust` in the created worktree. If the project's mise configuration is not trusted, `run-takt.sh` stops without launching takt.
+3. Write the work order in a GitHub Issue of the target repository (a short title, with the work order in the body). In that worktree, have an Orca terminal launch takt, and pass the work order with `-i <Issue の番号>`. Launch in pipeline mode and run to the end without interaction. Do not add `--skip-git`.
 
    ```sh
    orca terminal create --worktree id:<repoId>::<path> --title "<作業名>" --command \
      '.takt/bin/run-takt.sh --claude-account <claude の設定> --codex-account <codex の設定> --pipeline --auto-pr -w <ワークフロー> -b <ブランチ> -i <Issue の番号>; echo "takt-exit: $?"' --json
    ```
 
-   - 起動の入口は `.takt/bin/run-takt.sh` とする（2026-10-05 にユーザーが、takt-workflows の run-takt.sh を各リポジトリに配るよう指示。置き場所は 2026-10-06 に、takt-workflows のインストーラーに合わせて `.takt/bin/` とすることで合意）。全体の規則（`~/.claude/CLAUDE.md`）は takt を直接起動してラッパーを挟まないとするが、このグループでは、このスクリプトがアカウントの選択と `TAKT_CONFIG_DIR`（プロジェクトの `.takt/home`）の設定を担うので、例外として使う。これ以外のラッパーは挟まない。
-   - アカウントの設定ディレクトリはマシンごとの事情なので、リポジトリには書かず、指揮役の memory に記録してある。
-   - takt を動かすマシンには、Claude Code（Sonnet 5.5・Opus 5.5）と、OpenCode Go の認証を済ませた OpenCode（レビュー役の DeepSeek V4.1 Flash・GLM 5.3 Flash）が要る。利用上限での切り替え候補の GPT-6.1-Sol を動かすため、Codex のアカウントと CLI も用意する。上流の起動スクリプトでもこの両方が必須である。
-   - GPT-6.1-Sol の候補を有効にする前に、`gpt-6.1-sol` に対応した Codex コマンドラインと、このモデルを利用できるアカウント・ワークスペースの設定を確認する。`run-takt.sh --codex-account` に渡すものと同じ設定ディレクトリを使い、`TAKT_CODEX_ACCOUNT_DIR='<Codex の設定ディレクトリ>' .takt/bin/takt-codex.sh exec --model gpt-6.1-sol --sandbox read-only '準備完了とだけ返答してください'` のような短い実行が成功することを確かめてから takt を起動する。例の設定ディレクトリは、マシンで使う実際のパスに置き換える。利用条件は [OpenAI Docs のモデルの説明](https://learn.chatgpt.com/docs/models) に従う。モデルへのアクセスや対応するコマンドラインが用意できないマシンでは、起動を止めて指揮役へ報告する。
-   - Ollama Cloud の候補には、Ollama アプリまたはコマンドラインから Cloud にサインインし、ローカルの Ollama サーバーを起動しておく。OpenCode には、`http://localhost:11434/v1` を接続先とする独自の提供元 `ollama` と、`deepseek-v4.1-flash:cloud`・`glm-5.3:cloud`・`glm-5.3-flash:cloud` を登録する。`opencode models ollama` に、この 3 モデルが `ollama/` から始まる名前で出ることを確かめる。設定例と認証の説明は [OpenCode の提供元の設定](https://opencode.ai/docs/providers/) と [Ollama Cloud](https://docs.ollama.com/cloud) にある。Cloud の利用枠も必要である。
-   - OpenCode のモデル一覧だけでは、ローカル Ollama にモデルの情報があることを確かめられない。起動の前に `ollama pull deepseek-v4.1-flash:cloud`、`ollama pull glm-5.3:cloud`、`ollama pull glm-5.3-flash:cloud` をそれぞれ実行し、同じ 3 モデルを `ollama show <モデル名>` で取得できることを確かめる。
-   - 初回の環境準備や OpenCode の接続設定を変えたときは、モデルの情報を取得した後に `opencode run --model ollama/deepseek-v4.1-flash:cloud 'ツールを使わず準備完了とだけ返答してください'` で短い応答が成功することを確かめる。`--model` の値を `ollama/glm-5.3:cloud`、`ollama/glm-5.3-flash:cloud` に替え、残りの 2 モデルも同じように確認する。OpenCode に登録した接続先を経由して、サインインしたアカウントで 3 モデルとも応答できることを確かめてから takt を起動する。確認できないモデルがあれば起動を止めて指揮役へ報告する。
-   - 指示書を `-t "$(cat <指示書>)"` で渡さない。takt は `-t` の文字列をそのまま PR のタイトルとコミットのメッセージ（`takt: <全文>`）にするので、長い指示書では PR のタイトルが長すぎて PR を作れない（2026-10-06 の試運転で、push の後に PR の作成だけが失敗した）。`-i` なら、PR のタイトルは `[#<番号>] <Issue のタイトル>`、コミットは `feat: <Issue のタイトル> (#<番号>)` になる（2026-10-06 に ideo-plus/takt-workflows#65 で、PR まで自動で作られることを確かめた）。squash でマージするときに、指揮役が Conventional Commits のタイトルに付け直す。
-   - 出力はファイルにリダイレクトしない。takt は `.takt/runs/<run>/` に記録を残す。最後の `echo "takt-exit: $?"` で、端末に takt の終了コードを残す。端末は閉じないので、終わった後も `orca terminal read` で出力を読める。
-   - 起動の直後に `orca terminal read` で、`run-takt: TAKT_CONFIG_DIR:` がワークツリーの `.takt/home` を指していることを確かめる。`~/.takt/` は読ませず、書き換えもしない。
-4. `orca orchestration dispatch --task <課題> --to <端末>` で、課題を端末に結び付ける。注入（`--inject`）はしない。
-5. 監督: 実行中は `orca terminal read --terminal <端末>` と takt の実行記録（`.takt/runs/`）で、段の切り替わり・使ったモデル・エラーを見る。段の切り替わりは、実行記録の `logs/*.jsonl` の `step_start`・`step_complete`・`workflow_complete`・`workflow_abort` で分かる。終わりは、`orca terminal read` の出力に `takt-exit:` が出たことで判断する。範囲の外の作業や長引きを見つけたら、`orca terminal send --terminal <端末> --text $'\x03' --interrupt` で止め、範囲を絞って起動し直す。同じマシンで別の takt が動いていることがあるので、プロセスを直接止めるときは、ブランチ名などで自分の takt だと確かめてからにする。
-6. 受け入れ: 差分・成果物・CI を指示書の受け入れの条件と照らして確かめる。結果は `orca orchestration task-update --id <課題> --status completed|failed --result <要約>` で記録する。その後、端末（`orca terminal close`）とワークツリーを閉じる（下の「後片付け」）。
+   - The entry point for launching is `.takt/bin/run-takt.sh` (on 2026-10-05 the user instructed that takt-workflows' run-takt.sh be distributed to each repository; the location was agreed on 2026-10-06 to be `.takt/bin/`, to match the takt-workflows installer). The global rules (`~/.claude/CLAUDE.md`) say to launch takt directly without a wrapper in between, but in this group this script is responsible for selecting the account and setting `TAKT_CONFIG_DIR` (the project's `.takt/home`), so it is used as an exception. No other wrapper is placed in between.
+   - The account configuration directories are specific to each machine, so they are not written in the repository and are recorded in the coordinator's memory.
+   - The machine that runs takt needs Claude Code (Sonnet 5.5 and Opus 5.5) and OpenCode with OpenCode Go authentication completed (reviewers DeepSeek V4.1 Flash and GLM 5.3 Flash). To run GPT-6.1-Sol, the fallback candidate for usage limits, also prepare a Codex account and CLI. The upstream launch script requires both as well.
+   - Before enabling the GPT-6.1-Sol candidate, confirm the Codex command line that supports `gpt-6.1-sol` and the settings of the account and workspace that can use this model. Use the same configuration directory as the one passed to `run-takt.sh --codex-account`, and confirm that a short run such as `TAKT_CODEX_ACCOUNT_DIR='<Codex の設定ディレクトリ>' .takt/bin/takt-codex.sh exec --model gpt-6.1-sol --sandbox read-only '準備完了とだけ返答してください'` succeeds before launching takt. Replace the example configuration directory with the actual path used on the machine. Follow [the model description in OpenAI Docs](https://learn.chatgpt.com/docs/models) for the terms of use. On a machine where access to the model or a compatible command line cannot be prepared, stop the launch and report to the coordinator.
+   - For the Ollama Cloud candidates, sign in to Cloud from the Ollama app or the command line, and start the local Ollama server. In OpenCode, register a custom provider `ollama` whose endpoint is `http://localhost:11434/v1`, together with `deepseek-v4.1-flash:cloud`, `glm-5.3:cloud`, and `glm-5.3-flash:cloud`. Confirm that `opencode models ollama` lists these three models under names starting with `ollama/`. Configuration examples and an explanation of authentication are in [OpenCode's provider configuration](https://opencode.ai/docs/providers/) and [Ollama Cloud](https://docs.ollama.com/cloud). A Cloud usage allowance is also required.
+   - The OpenCode model list alone cannot confirm that the local Ollama has the model information. Before launching, run `ollama pull deepseek-v4.1-flash:cloud`, `ollama pull glm-5.3:cloud`, and `ollama pull glm-5.3-flash:cloud` one by one, and confirm that the same three models can be retrieved with `ollama show <モデル名>`.
+   - At the first environment setup, or when the OpenCode connection settings are changed, after retrieving the model information, confirm that a short response succeeds with `opencode run --model ollama/deepseek-v4.1-flash:cloud 'ツールを使わず準備完了とだけ返答してください'`. Change the `--model` value to `ollama/glm-5.3:cloud` and `ollama/glm-5.3-flash:cloud`, and confirm the remaining two models in the same way. Confirm that all three models can respond with the signed-in account through the endpoint registered in OpenCode before launching takt. If any model cannot be confirmed, stop the launch and report to the coordinator.
+   - Do not pass the work order with `-t "$(cat <指示書>)"`. takt uses the string given to `-t` as is for the PR title and the commit message (`takt: <全文>`), so with a long work order the PR title is too long and the PR cannot be created (in the trial run on 2026-10-06, only the PR creation failed after the push). With `-i`, the PR title becomes `[#<番号>] <Issue のタイトル>` and the commit becomes `feat: <Issue のタイトル> (#<番号>)` (it was confirmed on 2026-10-06 in ideo-plus/takt-workflows#65 that even the PR is created automatically). When merging by squash, the coordinator re-titles it as a Conventional Commits title.
+   - Do not redirect the output to a file. takt leaves its records in `.takt/runs/<run>/`. The final `echo "takt-exit: $?"` leaves takt's exit code in the terminal. The terminal is not closed, so the output can be read with `orca terminal read` even after the run ends.
+   - Immediately after launch, confirm with `orca terminal read` that `run-takt: TAKT_CONFIG_DIR:` points to the worktree's `.takt/home`. Do not have it read `~/.takt/`, and do not rewrite it.
+4. Link the issue to the terminal with `orca orchestration dispatch --task <課題> --to <端末>`. Do not inject (`--inject`).
+5. Supervision: while the run is in progress, use `orca terminal read --terminal <端末>` and takt's run records (`.takt/runs/`) to watch the step transitions, the models used, and errors. The step transitions can be seen from `step_start`, `step_complete`, `workflow_complete`, and `workflow_abort` in the run record's `logs/*.jsonl`. The end is judged by `takt-exit:` appearing in the output of `orca terminal read`. If you find work outside the scope or a prolonged run, stop it with `orca terminal send --terminal <端末> --text $'\x03' --interrupt`, narrow the scope, and launch again. Other takt runs may be running on the same machine, so when stopping a process directly, first confirm by branch name or similar that it is your own takt.
+6. Acceptance: check the diff, deliverables, and CI against the acceptance conditions in the work order. Record the result with `orca orchestration task-update --id <課題> --status completed|failed --result <要約>`. After that, close the terminal (`orca terminal close`) and the worktree (see "Cleanup" below).
 
-### takt にできないこと
+<a id="takt-にできないこと"></a>
+### What takt cannot do
 
-- takt の中の Claude は、takt の実行中、`.takt/tools`・`.takt/facets`・`.takt/workflows`・`.takt/steps` の下を読めない。takt-workflows のインストーラーが `.claude/settings.json` に入れる拒否の規則（`Read(./.takt/<ディレクトリ>/**)`。段にワークフローの部品を読ませないためのもの）によるもので、読めないのでそこへの書き込みもできない。`.takt/runs`（各段の報告。修正の段はここのレビューの報告を読んで直す）や `runtime.yaml`・`config.yaml` は対象外で、読み書きできる。`.takt/runs` まで止めるとワークフローが動かなくなるので、拒否の規則を広げない。この規則は takt の実行中の段にだけ効き、指揮役や takt の外の作業は制限しない。ワークフローや facet を作る・配る作業は、指揮役が小さな作業として行う。
-- takt は途中で質問できない。判断がつかないときは ABORT して、レポートに理由を残す。
+- Claude inside takt cannot read anything under `.takt/tools`, `.takt/facets`, `.takt/workflows`, and `.takt/steps` while takt is running. This is due to the deny rules (`Read(./.takt/<ディレクトリ>/**)`, which keep the steps from reading the workflow's parts) that the takt-workflows installer puts in `.claude/settings.json`; since it cannot read them, it cannot write to them either. `.takt/runs` (the reports of each step; the fix step reads the review reports there and fixes accordingly), `runtime.yaml`, and `config.yaml` are excluded and can be read and written. Stopping even `.takt/runs` would make the workflow stop working, so do not widen the deny rules. These rules apply only to steps running inside takt, and do not restrict the coordinator or work outside takt. Creating and distributing workflows and facets is done by the coordinator as a small task.
+- takt cannot ask questions midway. When it cannot decide, it must ABORT and leave the reason in the report.
 
-## 指示書
+<a id="指示書"></a>
+## Work order
 
-- 指示書には、対象、変えるもの、制約、書き込み範囲、受け入れの条件、検証の手順を書く。
-- 検証の手順は、制約・受け入れの条件と食い違わないようにする。takt の計画の段は食い違いを見つけると、打ち切りの条件に従って ABORT する（2026-10-06 の試運転で、検証の grep が、残すべき正しい行にも当たって ABORT した）。残す行があるなら、検索の対象をそれと区別できる形に絞る。
-- 書き込み範囲は、作業者どうしで重ねない。同じ作業ツリーを使う作業者がぶつかる場合は、Orca で worktree を分ける。
-- 実機の操作を任せるときは、ユーザーが承認した範囲（起動する構成・引数・計測・停止）を指示書に書く。範囲の外の操作が要るときは、作業者は自分で判断せず、止まって指揮役に知らせる。指揮役がユーザーに確認する。
-- GPT 系のモデル（takt の中の GPT-6.1-Sol など）は、頼んでいない確認・集計・測り直し・記録づくりを重ねて、作業を無駄に長くしがちである。指示書に時間の上限と打ち切りの条件を書く。takt は途中で質問できないので、上限を超えそうなときや範囲の外の操作が要るときは、止まって理由を書き残すよう指示書に書く。
+- A work order contains the target, what to change, constraints, the write scope, the acceptance conditions, and the verification procedure.
+- The verification procedure must not contradict the constraints and acceptance conditions. When takt's planning step finds a contradiction, it ABORTs according to the abort conditions (in the trial run on 2026-10-06, the verification grep also matched a correct line that should have been kept, and it aborted). If there are lines to be kept, narrow the search target to a form that can be distinguished from them.
+- Write scopes must not overlap between workers. If workers using the same working tree would collide, separate the worktrees with Orca.
+- When delegating operations on real hardware, write the range the user approved (the configuration to start, the arguments, the measurements, and the stop) in the work order. When an operation outside the range is needed, the worker must not decide by itself, and must stop and notify the coordinator. The coordinator asks the user.
+- GPT-family models (such as GPT-6.1-Sol inside takt) tend to pile on confirmations, aggregations, re-measurements, and record-making that were not requested, and make the work needlessly long. Write a time limit and abort conditions in the work order. Because takt cannot ask questions midway, write in the work order that when the limit is likely to be exceeded or an operation outside the scope is needed, it must stop and leave the reason.
 
-## 監督と受け入れ
+<a id="監督と受け入れ"></a>
+## Supervision and acceptance
 
-- takt に任せたときは、依頼した側（指揮役）が監督する。
-- takt の完了や作成された PR の説明をそのまま信じない。差分・成果物・ログ・数値を指示書の受け入れの条件と照らし合わせ、指示どおりの結果になっているかを自分で確かめてから受け入れる。
-- 途中の報告でも、承認の範囲や書き込み範囲を外れていないかを見る。
-- 満たしていなければ、同じ作業者に直させるか、受け入れずにユーザーに報告する。
-- 端末の出力と takt の実行記録を見て、範囲の外の作業や長引きを見つけたら、すぐに止めて範囲を絞る。
+- When work is delegated to takt, the requester (the coordinator) supervises it.
+- Do not simply trust takt's completion or the description of the PR it created. Compare the diff, deliverables, logs, and numbers against the acceptance conditions in the work order, and confirm yourself that the result is as instructed before accepting.
+- Even for interim reports, check whether they stay within the approved range and the write scope.
+- If the conditions are not met, either have the same worker fix it, or do not accept it and report to the user.
+- If you find work outside the scope or a prolonged run in the terminal output and takt's run records, stop it immediately and narrow the scope.
 
-## 後片付け
+<a id="後片付け"></a>
+## Cleanup
 
-ゴミが残っていると見通しが悪くなるので、終わったものはその場で閉じる。
+Leftover clutter makes things hard to see, so close finished things on the spot.
 
-- 作業が終わった worktree と端末（セッション）は閉じる。
-- PR がマージされて作業者を解放したら、未コミットの変更と未 push のコミットがないこと（squash でマージしたなら PR が MERGED であること）を確かめて、`orca worktree rm` で消す。
-- 実機の計測や SSH 転送に使っている端末は、停止の確認が終わるまで残す。
+- Close the worktree and the terminal (session) of finished work.
+- When a PR has been merged and the worker is released, confirm that there are no uncommitted changes and no unpushed commits (if merged by squash, that the PR is MERGED), and then remove it with `orca worktree rm`.
+- Keep terminals used for measurements on real hardware or SSH forwarding until the stop has been confirmed.

@@ -11,3 +11,5 @@ The following libraries is designed to turn DynamoDB into an Event Store for CQR
 - [Kotlin Version](https://github.com/j5ik2o/event-store-adapter-kotlin)
 - [Swift Version](https://github.com/lemo-nade-room/event-store-adapter-swift)
 - [.NET Version](https://github.com/j5ik2o/event-store-adapter-dotnet)
+
+For development, see [CONTRIBUTING.md](CONTRIBUTING.md).

@@ -2,22 +2,25 @@
 status: accepted
 ---
 
-# Bigtable のスナップショット履歴を、対応するイベントと同じ行に置く
+<a id="bigtable-のスナップショット履歴を対応するイベントと同じ行に置く"></a>
+# Place Bigtable's snapshot history in the same row as the corresponding event
 
-Bigtable のスナップショット履歴は、対応するイベントと同じジャーナル行に保存する（2026-10-04、オーナーと合意、BT-D2）。
+Bigtable's snapshot history is stored in the same journal row as the corresponding event (2026-10-04, agreed with the owner, BT-D2).
 
-古い履歴の payload だけを取り除く。イベントは消さない。削除済みの印も残す。後から遅れた書き出しが来ても、イベントのセルが既にあれば初回作成の条件を満たせず、削除した履歴を復活させられない。
+Only the payload of old history is removed. Events are not deleted. A deletion marker is also kept. Even if a delayed write-out arrives later, if the event's cell already exists, the condition for initial creation cannot be satisfied, so the deleted history cannot be revived.
 
-ヘッドには末尾イベントと現在のスナップショットを置き、過去の履歴は置かない。確定済みの末尾を書き出してからヘッドを進める方式（ADR-0005）で、必要な履歴も同じ行へ原子的に保存する。これにより、履歴のコピーだけが失敗したまま、ヘッドの唯一のコピーが置き換わる問題を防ぐ。
+The head holds the tail event and the current snapshot, and does not hold past history. With the approach of writing out the confirmed tail and then advancing the head (ADR-0005), the necessary history is also saved atomically in the same row. This prevents the problem in which only the copy of the history fails while the head's only copy is replaced.
 
-## 検討した代案
+<a id="検討した代案"></a>
+## Considered Options
 
-- **ヘッドに最新 n 件の固定スロットを置く**: ヘッドと履歴を一度に更新できるが、保持件数とスナップショットの大きさの積が行サイズの上限に収まる必要がある。保持件数に行サイズ由来の制限を加える案は採らない。
-- **履歴専用の別の行へ写す**: 履歴の範囲を効率よく読めるが、行をまたぐコピーの失敗からの回復と、削除後の復活防止を追加で設計する必要がある。最初の配置では採らない。
+- **Place fixed slots for the latest n entries in the head**: The head and the history can be updated at once, but the product of the retained count and the snapshot size must fit within the row size limit. We do not adopt the idea of adding a row-size-derived limit to the retained count.
+- **Copy to a separate row dedicated to history**: A range of history can be read efficiently, but recovery from a failed copy across rows and prevention of revival after deletion need additional design. We do not adopt it for the initial layout.
 
-## 影響
+<a id="影響"></a>
+## Consequences
 
-- ヘッドの大きさは、保持する履歴の件数 n に比例しない。
-- 履歴の整理では、集約のジャーナル範囲から履歴の印を探す。読み取り量はジャーナルの長さに影響される。この費用も合意に含む。
-- 削除済みの履歴の印は、消さないイベントとともに残す。履歴の payload は取り除く。
-- 具体的なキー・封筒の形式、テーブルの初期化、クラスタ構成、期限切れ方式、変更フィード、封筒の上限は、[Bigtable プロファイル](../spec/storage/bigtable.md) の各判断で確認する。
+- The size of the head is not proportional to the number n of history entries retained.
+- When tidying history, the history markers are searched for in the aggregate's journal range. The amount read is affected by the length of the journal. This cost is also included in the agreement.
+- Deleted-history markers are kept together with the events that are not deleted. The payload of the history is removed.
+- The concrete key and envelope formats, table initialization, cluster configuration, expiration method, change feed, and envelope limit are confirmed in the individual decisions of the [Bigtable profile](../spec/storage/bigtable.md).

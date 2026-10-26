@@ -2,21 +2,22 @@
 status: accepted
 ---
 
-# 仕様は言語中立に本リポジトリで管理し、意味論は rs v3 の封筒モデルを基準にする
+<a id="仕様は言語中立に本リポジトリで管理し意味論は-rs-v3-の封筒モデルを基準にする"></a>
+# Keep the specification language-neutral in this repository, with the semantics based on rs v3's envelope model
 
-2026-10-02 時点で、実装は 2 系統に割れている。event-store-adapter-rs v3.0.2 は Event / Aggregate trait を廃止してイベント封筒・スナップショット封筒へ移行した。js（3.1.2-snapshot.0）・java・kotlin・scala・go は、イベント自身がメタデータと `isCreated` を持つ旧来の契約のままである。保存形式も、パーティションキーのハッシュが 4 通りあるなど実装ごとに違い、テーブルを共有すると相互運用できない。
+As of 2026-10-02, the implementations are split into two lines. event-store-adapter-rs v3.0.2 abandoned the Event / Aggregate traits and moved to the event envelope and the snapshot envelope. js (3.1.2-snapshot.0), java, kotlin, scala, and go remain on the older contract, in which the event itself carries the metadata and `isCreated`. The storage formats also differ from one implementation to another, for example with four different partition-key hashes, so sharing a table does not give interoperability.
 
-そこで、仕様を本リポジトリの `docs/spec/` に言語中立の文書として置き、各実装はそれに適合させる。意味論の基準には rs v3 の封筒モデルを採る。ドメイン型にライブラリの trait を求めないこと、`expected_version` を明示すること、最新スナップショットの読み取りが seq_nr と version を返すこと、新規作成を `seq_nr == 1 ⇔ expected_version == 0` で判定すること、呼び出し規約違反を独立したエラー分類にすることの 5 点で、旧来の契約より優れていると判断した。なお、このうち version と `expected_version` は、後に ADR-0004 で seq_nr による照合に置き換えた。
+Therefore, the specification is placed in this repository's `docs/spec/` as language-neutral documents, and each implementation conforms to it. We adopt rs v3's envelope model as the basis for the semantics. We judged it better than the older contract on five points: it does not require the library's trait on domain types; it makes `expected_version` explicit; reading the latest snapshot returns seq_nr and version; it decides new creation by `seq_nr == 1 ⇔ expected_version == 0`; and it makes violations of the calling convention an independent error category. Of these, version and `expected_version` were later replaced by checking against seq_nr in ADR-0004.
 
-ただし基準にするのは rs v3 の**モデル**であり、rs のコードではない。rs v3 には仕様に入れてはならない不具合がある（ハッシュに `DefaultHasher` を使う、保持ポリシーが新しい履歴を消す、ジャーナル読み取りがページを送らない）。これらは他実装の良い部分で補正し、rs 自身も仕様に合わせて改修する。
+However, what we take as the basis is rs v3's **model**, not rs's code. rs v3 has defects that must not enter the specification (it uses `DefaultHasher` for hashing, the retention policy deletes newer history, and journal reads do not advance through pages). These are corrected with the good parts of the other implementations, and rs itself is also changed to match the specification.
 
 ## Considered Options
 
-- **旧来の契約を基準にする**: 6 実装中 5 実装が既に従っているので移行は小さい。しかし `isCreated` の押し付けやメタデータの二重保持といった構造上の問題を全言語に固定化するので採らない。
-- **rs のコードをそのまま参照実装にする**: 文書を書く手間は省けるが、rs 固有の不具合と Rust 固有の書き方（`usize`、`&mut self`、`with_*` ビルダー）まで標準になるので採らない。
+- **Use the older contract as the basis**: 5 of the 6 implementations already follow it, so the migration is small. However, it would fix structural problems such as forcing `isCreated` and holding metadata twice into every language, so we do not adopt it.
+- **Use rs's code as it is as the reference implementation**: It saves the effort of writing documents, but rs-specific defects and Rust-specific idioms (`usize`, `&mut self`, `with_*` builders) would become the standard, so we do not adopt it.
 
 ## Consequences
 
-- 仕様は 3 層で構成する。保存先に依存しない共通契約、保存先ごとのストレージプロファイル、言語に依存しない適合テストデータである。エラーの返し方（Result か例外か）や型の表現は各言語に任せ、仕様は分類と値の範囲だけを決める。
-- 旧来の契約に従う実装（js・java・kotlin・scala・go、および README に載っている php・swift・dotnet）はすべて破壊的変更になる。
-- rs も破壊的変更を避けられない（ADR-0002、ADR-0003）。
+- The specification consists of three layers: the core contract, independent of the storage backend; a storage profile for each storage backend; and language-independent conformance test data. How errors are returned (Result or exceptions) and how types are expressed are left to each language, and the specification decides only the categories and the ranges of values.
+- Every implementation that follows the older contract (js, java, kotlin, scala, go, and php, swift, and dotnet, which are listed in the README) will have a breaking change.
+- rs also cannot avoid a breaking change (ADR-0002, ADR-0003).

@@ -1,16 +1,18 @@
-# リリースノートを作る共通のスクリプト
+<a id="リリースノートを作る共通のスクリプト"></a>
+# Shared scripts that create release notes
 
-6 言語のリポジトリの版上げの workflow が使う、GitHub Release のリリースノートを作るスクリプトの正本。変更の記録は、Conventional Commits の件名から作るこのリリースノートだけとする。
+The canonical source of the scripts that create the GitHub Release release notes, used by the version-bump workflows of the repositories of the 6 languages. The only record of changes is these release notes, created from Conventional Commits subjects.
 
-| ファイル | 役割 |
+| File | Role |
 |---|---|
-| `create-release-note-header.py` | 版の見出し行を出す |
-| `create-release-note-body.py` | コミットから節ごとの一覧を出す |
-| `test_release_notes.py` | 2 つのスクリプトの試験 |
+| `create-release-note-header.py` | Outputs the version heading line |
+| `create-release-note-body.py` | Outputs the list for each section from the commits |
+| `test_release_notes.py` | Tests of the two scripts |
 
-Python 3.10 以上と標準ライブラリだけで動く。
+They run with only Python 3.10 or later and the standard library.
 
-## 呼び方（workflow に書く形）
+<a id="呼び方workflow-に書く形"></a>
+## How to call them (the form written in the workflow)
 
 ```sh
 python3 .github/create-release-note-header.py "$SERVER_URL" "$REPOSITORY" "$PREV_TAG" "$NEXT_TAG" > changelog.txt
@@ -18,38 +20,42 @@ git log "$PREV_TAG..$NEXT_TAG" --no-merges --format='%H%x1f%s%x1f%b%x1e' \
   | python3 .github/create-release-note-body.py "$SERVER_URL" "$REPOSITORY" >> changelog.txt
 ```
 
-`$SERVER_URL` は `https://github.com`、`$REPOSITORY` は `owner/name`。`git log` を `--grep` で絞らない。型の判定は body のスクリプトがする。
+`$SERVER_URL` is `https://github.com`, and `$REPOSITORY` is `owner/name`. Do not narrow `git log` with `--grep`. The body script decides the types.
 
-## 入力の形（body）
+<a id="入力の形body"></a>
+## Input format (body)
 
-標準入力に、`\x1e` でコミットを区切り、各コミットを「完全なハッシュ `\x1f` 件名 `\x1f` 本文」の形で渡す。区切りの前後の改行は無視する。空の入力では何も出さず、終了コード 0 で終わる。
+Standard input separates commits with `\x1e`, and each commit is passed in the form "full hash `\x1f` subject `\x1f` body". Newlines before and after the separator are ignored. For empty input, it outputs nothing and ends with exit code 0.
 
-## 出力の形
+<a id="出力の形"></a>
+## Output format
 
-header は `### [5.0.2](https://github.com/o/r/compare/v5.0.1...v5.0.2) (YYYY-MM-DD)` の行を出す。
+The header outputs a line of the form `### [5.0.2](https://github.com/o/r/compare/v5.0.1...v5.0.2) (YYYY-MM-DD)`.
 
-body は次の順に、項目のある節だけを `### 見出し` で出し、各節の後に空行を 1 つ置く。節の中は入力の順のまま。
+The body outputs, in the following order, only the sections that have items, each as `### 見出し` (heading), and places one blank line after each section. Within a section, the input order is kept.
 
 1. `⚠ BREAKING CHANGES`
-2. `Features`（feat）、`Bug Fixes`（fix）、`Performance Improvements`（perf）、`Reverts`（revert）、`Documentation`（docs）、`Styles`（style）、`Code Refactoring`（refactor）、`Tests`（test）、`Build Systems`（build）、`Continuous Integration`（ci）、`Chores`（chore）、`Other Changes`（ほかの型）
+2. `Features` (feat), `Bug Fixes` (fix), `Performance Improvements` (perf), `Reverts` (revert), `Documentation` (docs), `Styles` (style), `Code Refactoring` (refactor), `Tests` (test), `Build Systems` (build), `Continuous Integration` (ci), `Chores` (chore), `Other Changes` (other types)
 
-項目の形:
+The form of an item:
 
 ```
 * **スコープ:** 説明 ([#番号](SERVER_URL/REPOSITORY/pull/番号)) ([短いハッシュ](SERVER_URL/REPOSITORY/commit/完全なハッシュ))
 ```
 
-- 件名は `型(スコープ)!: 説明` の形。スコープと `!` は省略できる。説明の末尾の ` (#数字)` は PR の番号として取り出す。
-- 破壊的な変更は、件名の型の直後に `!` がある、本文に `BREAKING CHANGE:`・`BREAKING-CHANGE:` で始まる行がある、件名が `BREAKING CHANGE:`・`BREAKING-CHANGE:` で始まる、のどれか。破壊的な変更の節に載せ、型の節にも載せる。
-- 破壊的な変更の節に載せる文は、本文の印の後ろの文とする。文は、空行か、次の footer の行（`Co-authored-by: x`、`Refs #12` のような `語: 値`・`語 #値` の形）の手前までとする。本文に印が複数あれば、文のある印ごとに 1 項目にする（文のない印は項目にしない）。本文に印がないか、どの印にも文がなければ、件名の印の後ろの文、件名の説明、件名そのものの順に使う。
-- 件名が Conventional Commits の形でないコミットは、破壊的な変更の印があるときだけ、破壊的な変更の節に載せる。
+- The subject has the form `型(スコープ)!: 説明` (type, scope, description). The scope and `!` can be omitted. A trailing ` (#数字)` in the description is extracted as the PR number.
+- A breaking change is any of: a `!` immediately after the type in the subject; a line in the body starting with `BREAKING CHANGE:` or `BREAKING-CHANGE:`; or a subject starting with `BREAKING CHANGE:` or `BREAKING-CHANGE:`. It is listed in the breaking-changes section and also in its type's section.
+- The sentence listed in the breaking-changes section is the sentence after the marker in the body. The sentence extends up to a blank line or the next footer line (a `語: 値` or `語 #値` form such as `Co-authored-by: x` or `Refs #12`). If the body has multiple markers, each marker that has a sentence becomes one item (a marker without a sentence does not become an item). If the body has no marker, or no marker has a sentence, use, in this order, the sentence after the marker in the subject, the description of the subject, and the subject itself.
+- A commit whose subject is not in the Conventional Commits form is listed in the breaking-changes section only when it has a breaking-change marker.
 
-## 配り方
+<a id="配り方"></a>
+## Distribution
 
-- 各リポジトリは、`create-release-note-header.py` と `create-release-note-body.py` を `.github/` の直下に、`test_release_notes.py` を、そのリポジトリの版上げの試験と同じディレクトリ（rs・go は `.github/`、js・java・kotlin・scala は `.github/tests/`）に、同じ内容で写す。内容は変えない。
-- ハブの正本を変えたら、コーディネーターが 6 リポジトリに配り直す。
+- Each repository copies `create-release-note-header.py` and `create-release-note-body.py` directly under `.github/`, and `test_release_notes.py` into the same directory as that repository's version-bump tests (`.github/` for rs and go, `.github/tests/` for js, java, kotlin, and scala), with the same content. Do not change the content.
+- When the hub's canonical source is changed, the coordinator redistributes to the 6 repositories.
 
-## 試験
+<a id="試験"></a>
+## Tests
 
 ```sh
 python3 -B -m unittest discover -s tools/release-notes -p 'test_*.py' -v

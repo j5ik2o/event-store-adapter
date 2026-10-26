@@ -2,29 +2,30 @@
 status: accepted
 ---
 
-# 保存される値の表現を言語に依存しない形で固定する
+<a id="保存される値の表現を言語に依存しない形で固定する"></a>
+# Fix the representation of stored values in a language-independent form
 
-保存形式の細部が実装ごとに違い、同じ集約でも言語によって書かれる値が変わる。2026-10-02 時点の差は次のとおり。
+The details of the storage format differ from one implementation to another, so the values written for the same aggregate change depending on the language. The differences as of 2026-10-02 are as follows.
 
-- パーティションキーのハッシュ: rs は `DefaultHasher`、js は hashCode 系を `asString()` に適用、java は `Math.abs(hashCode)`、go は FNV-1a 64
-- occurred_at の単位: rs はナノ秒、js と java はミリ秒、go は利用者が渡した整数そのまま
-- aid 列の文字列: 利用者の `Display` / `asString()` 実装に任されている。rs のサンプルは値だけを返し、rs の文書は `user-account-<値>` を例示していて、同じリポジトリの中でも食い違う
+- Partition-key hash: rs uses `DefaultHasher`, js applies a hashCode-style function to `asString()`, java uses `Math.abs(hashCode)`, and go uses FNV-1a 64
+- Unit of occurred_at: rs uses nanoseconds, js and java use milliseconds, and go uses the integer the user passed, as it is
+- The string in the aid column: it is left to the user's `Display` / `asString()` implementation. rs's sample returns only the value, while rs's documentation gives `user-account-<値>` as an example, so even within the same repository they disagree
 
-いずれも一度書いたデータに焼き付き、後から変えるには全件の書き直しが要る。そこで次の 4 点を固定する。
+All of these get burned into data once written, and changing them later requires rewriting every record. So we fix the following four points.
 
-1. **キーの接頭辞に使うハッシュは FNV-1a 64** とする（2026-10-03 改定）。入力は aid 文字列全体の UTF-8 バイト列、出力は符号なし 64bit 整数である。論理シャードをやめたので、シャード数で割らない。キーにハッシュを使うプロファイルの接頭辞に使い、DynamoDB では使わない（[ADR-0006](0006-key-by-aggregate-id-instead-of-logical-shards.md)、[ハッシュ](../spec/storage/hash.md)）。js は BigInt で実装する。
-2. **seq_nr は 0 以上 2^53−1 以下の整数**とする（当初は version も対象だったが、version は ADR-0004 で廃止した）。js の number で誤差なく扱える上限で、実用上この範囲を超える集約は想定しない。各言語の型（`u64`、`long` など）はこの範囲を表せればよい。
-3. **occurred_at は Unix エポックからのナノ秒**で保存する。rs・java・go はナノ秒を往復で保てる。js の `Date` はミリ秒までしか持てないので、読み取り時にミリ秒未満が落ちることを仕様に明記する。ナノ秒値は 2^53 を超えるため、js は保存・読み取りの変換に BigInt を使う。
-4. **aid 列の文字列は `${型名}-${値}`** とし、ライブラリが型名と値から組み立てる。利用者の `Display` / `asString()` には依存しない。型名は `-` を含まないものとし、最初の `-` までを型名にする（2026-10-03 追記。型名と値の両方に `-` を許すと、異なる集約 ID が同じ文字列になるため。値は UUID など `-` を含むことが多いので、制限は型名にかける）。
+1. **The hash used for the key prefix is FNV-1a 64** (revised on 2026-10-03). The input is the UTF-8 byte sequence of the whole aid string, and the output is an unsigned 64-bit integer. Because logical shards were dropped, it is not divided by the shard count. It is used for the prefix in profiles that use a hash in the key, and is not used in DynamoDB ([ADR-0006](0006-key-by-aggregate-id-instead-of-logical-shards.md), [hash](../spec/storage/hash.md)). js implements it with BigInt.
+2. **seq_nr is an integer from 0 to 2^53−1 inclusive** (version was originally also covered, but version was abolished in ADR-0004). This is the upper limit that a js number can handle without error, and in practice no aggregate is expected to exceed this range. Each language's type (`u64`, `long`, and so on) only needs to be able to represent this range.
+3. **occurred_at is stored as nanoseconds from the Unix epoch**. rs, java, and go can keep nanoseconds through a round trip. js's `Date` can only hold milliseconds, so the specification states explicitly that sub-millisecond values are lost on reading. Because nanosecond values exceed 2^53, js uses BigInt for the conversion on storing and reading.
+4. **The string in the aid column is `${型名}-${値}`** (type name and value), and the library assembles it from the type name and the value. It does not depend on the user's `Display` / `asString()`. The type name must not contain `-`, and the type name is everything up to the first `-` (added on 2026-10-03. If both the type name and the value were allowed to contain `-`, different aggregate IDs would become the same string. Values such as UUIDs often contain `-`, so the restriction is placed on the type name).
 
 ## Considered Options
 
-- **ハッシュに java 互換の hashCode を使う**: java・kotlin・scala の既存データとは互換になる。しかし `Math.abs(Integer.MIN_VALUE)` が負のまま残るため、シャード数が 2 のべき乗でないと負のシャード番号を返す欠陥がある。採らない。
-- **occurred_at をミリ秒に揃える**: js と java の既存データに合い、全言語で実装が単純になる。しかし rs v3 が既に持つナノ秒精度を捨て、同じミリ秒内のイベントの発生順を区別できなくなる。採らない。
-- **aid 列を値だけにする**: 短くなるが、型の違う集約で値が衝突したときに GSI 上で区別できない。採らない。
-- **aid 列に型名の長さを前置する、または型名の `-` をエスケープする**（2026-10-03 検討）: 型名を制限せずに一意にできる。しかし前置は aid を読みにくくし、エスケープは全言語で同じ処理を正しく実装する負担が増える。採らない。
+- **Use java-compatible hashCode for the hash**: It would be compatible with the existing data of java, kotlin, and scala. However, `Math.abs(Integer.MIN_VALUE)` stays negative, so there is a defect in which a negative shard number is returned unless the shard count is a power of 2. We do not adopt it.
+- **Align occurred_at to milliseconds**: It matches the existing data of js and java, and the implementation becomes simple in every language. However, it discards the nanosecond precision that rs v3 already has, and the order of occurrence of events within the same millisecond could no longer be distinguished. We do not adopt it.
+- **Make the aid column only the value**: It becomes shorter, but when values collide between aggregates of different types, they cannot be distinguished on the GSI. We do not adopt it.
+- **Prefix the aid column with the length of the type name, or escape `-` in the type name** (considered on 2026-10-03): It could be made unique without restricting the type name. However, a prefix makes the aid harder to read, and escaping increases the burden of implementing the same processing correctly in every language. We do not adopt it.
 
 ## Consequences
 
-- 全実装でパーティションキーが変わる。既存データは全件の書き直しが必要になる（移行方式は ADR-0002 を参照）。
-- キーにハッシュを使うプロファイルでは、ジャーナルと集約ヘッドに同じ aid のハッシュを使う。ハッシュの実装を誤るとヘッドを見失うので、全言語で入出力表を検証する。入力の aid と剰余を使わないことは ADR-0006・K-1・K-2 に従う。
+- The partition key changes in every implementation. Existing data must be rewritten in full (see ADR-0002 for the migration method).
+- In profiles that use a hash in the key, the same aid hash is used for the journal and the aggregate head. If the hash implementation is wrong, the head is lost, so the input/output table is verified in every language. Not using the input aid and the remainder follows ADR-0006, K-1, and K-2.
