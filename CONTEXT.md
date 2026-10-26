@@ -30,12 +30,12 @@ _Avoid_: sequence number (シーケンス番号), offset (オフセット), vers
 <a id="集約の現在位置"></a>
 ### Current position of an aggregate
 
-**Confirmation** (確定):
-An append becoming established as a record of the aggregate. Only confirmed appends appear in the aggregate head, in event reads, and in the change feed; an append that was not confirmed appears nowhere.
+**Commit of an append** (確定):
+An append becoming established as a record of the aggregate. Only committed appends appear in the aggregate head, in event reads, and in the change feed; an append that was not committed appears nowhere.
 _Avoid_: commit (コミット; easily confused with the storage transaction's meaning), persistence (永続化)
 
 **Aggregate head**:
-The record of the latest write position, of which there is exactly one per aggregate. It is created by the first append and does not exist before that. It holds the latest seq_nr and the event envelope confirmed at that seq_nr, and it advances at the same time as an append is confirmed. It is the check point for optimistic locking and also the unit of the change feed.
+The record of the latest write position, of which there is exactly one per aggregate. It is created by the first append and does not exist before that. It holds the latest seq_nr and the event envelope committed at that seq_nr, and it advances at the same time as an append is committed. It is the check point for optimistic locking and also the unit of the change feed.
 _Avoid_: current snapshot (current スナップショット), header (ヘッダ), leading item (先頭項目)
 
 **Head transition**:
