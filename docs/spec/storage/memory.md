@@ -1,83 +1,83 @@
-# メモリ ストレージプロファイル（v5 で確定）
+# Memory storage profile (finalized in v5)
 
-[共通契約](../core-contract.md)を、単一プロセスのメモリ上で実現する。集約ヘッドをスナップショットから分け、seq_nr で追記を照合する。
+Realizes the [common contract](../core-contract.md) in the memory of a single process. It separates the aggregate head from the snapshot, and checks appends by seq_nr.
 
-> 2026-10-05 作成。1 章の MEM-D1〜MEM-D9・MEM-D11・MEM-D12 は、同日に草案での案を採用して合意した。MEM-D10 は、MEM-D9 で最初の版では変更フィードを提供しないと決めたため保留し、提供するときに決める。本文の MEM-1〜MEM-13 は合意した内容を示す。MEM-14・MEM-15 は将来提供するときの候補であり、合意した規則ではない。[実装計画](../../plan/implementation-plan.md)の IP-D4 は、メモリでも適合を宣言する方針の合意である。各言語の実装と適合確認は今後行う。現行実装を変更する指示ではない。用語は [CONTEXT.md](../../../CONTEXT.md) に従う。
+> Created on 2026-10-05. MEM-D1 to MEM-D9, MEM-D11, and MEM-D12 in chapter 1 were agreed on the same day by adopting the proposals in the draft. MEM-D10 is on hold because MEM-D9 decided that the first version does not provide a change feed, and will be decided when it is provided. MEM-1 to MEM-13 in the body show the agreed content. MEM-14 and MEM-15 are candidates for when it is provided in the future, and are not agreed rules. IP-D4 of the [implementation plan](../../plan/implementation-plan.md) is the agreement on the policy of declaring conformance for memory as well. The implementation and conformance verification in each language will be done in the future. This is not an instruction to change the current implementations. Terminology follows [CONTEXT.md](../../../CONTEXT.md).
 
-## 1. 合意した前提と能力
+## 1. Agreed preconditions and capabilities
 
-MEM-D10 を除き、草案での案を採用した。MEM-D10 の候補と、各判断の代案・利点・欠点は、判断の過程の記録として残す。共通契約の規則自体は変更しない。
+Except for MEM-D10, the proposals in the draft were adopted. The candidate for MEM-D10, and the alternatives, advantages, and disadvantages of each decision, are kept as a record of the decision process. The rules of the common contract themselves are not changed.
 
-| 判断 | 採用した案（MEM-D10 は候補） | 主な代案 | 状態 |
+| Decision | Adopted proposal (MEM-D10 is a candidate) | Main alternatives | Status |
 |:--|:--|:--|:--|
-| MEM-D1 | 単一プロセスで使い、保存先の寿命が終わると全記録を失う。永続化しない | 同じ前提で、利用中の明示的な全消去も提供する | 合意（2026-10-05） |
-| MEM-D2 | 新規生成は独立した保存先とする。同じ保存先を明示的に共有するインスタンスだけが記録を共有する | 1 つのインスタンスだけで使い、別インスタンスへの共有を提供しない | 合意（2026-10-05） |
-| MEM-D3 | ストア全体の排他制御の中で照合と全書き込みを行い、まとめて確定する | 集約単位の排他制御で、同じ集約の照合と全書き込みをまとめて確定する | 合意（2026-10-05） |
-| MEM-D4 | イベントの読み取りは、排他制御の中で同じ時点の全件を取得する | 開始時のヘッド h と不変の記録を確保し、排他制御を解いてから h まで読み切る | 合意（2026-10-05） |
-| MEM-D5 | 最新スナップショット封筒とヘッドの seq_nr の組を原子的に読む | 封筒とヘッドを別々に読む。組のずれを R-8 に従って扱う | 合意（2026-10-05） |
-| MEM-D6 | 確定後、書き込みと同じ排他制御の中で履歴を取り除く | 確定後に排他制御を解き、別の保持操作で取り直す | 合意（2026-10-05） |
-| MEM-D7 | 保持の失敗はログで知らせ、次の追記後の保持処理で再試行する | 通知用のコールバックで知らせ、次の保持処理で再試行する | 合意（2026-10-05） |
-| MEM-D8 | 最初の版では期限切れ方式を提供しない | 期限の印と猶予を持ち、各操作時に期限切れの履歴を取り除く方式を提供する | 合意（2026-10-05） |
-| MEM-D9 | 最初の版では変更フィードを提供しない | 任意の変更フィードを提供し、ヘッド遷移を追記と同じ確定に含める | 合意（2026-10-05） |
-| MEM-D10 | フィードを提供するなら、保存先の寿命中は遷移を無期限に保持し、集約内の順序を保って渡す | 有限の保持期間と、順序が入れ替わりうる転送経路を提供する | 保留（MEM-D9 で提供しないため。提供するときに決める） |
-| MEM-D11 | 保存先が不変の設定を持ち、共有するインスタンスはその設定を使う | インスタンスごとに設定を受け取り、共有する保存先の設定と生成時に照合する | 合意（2026-10-05） |
-| MEM-D12 | 同じ保存先への並行呼び出しを実装が保護する。複数スレッドからの利用も対象にする | 呼び出し側が全操作を直列化することを前提にする | 合意（2026-10-05） |
+| MEM-D1 | Used in a single process, and all records are lost when the storage's lifetime ends. Does not persist | Same premise, and also provide an explicit clear-all during use | Agreed (2026-10-05) |
+| MEM-D2 | A new construction is an independent storage. Only instances that explicitly share the same storage share records | Use with only one instance, and do not provide sharing to other instances | Agreed (2026-10-05) |
+| MEM-D3 | Perform the check and all writes within store-wide mutual exclusion, and commit them together | With per-aggregate mutual exclusion, commit the check and all writes of the same aggregate together | Agreed (2026-10-05) |
+| MEM-D4 | An event read obtains all items at the same point in time within the mutual exclusion | Secure the head h at the start and the immutable records, release the mutual exclusion, and then read through to h | Agreed (2026-10-05) |
+| MEM-D5 | Atomically read the pair of the latest snapshot envelope and the head's seq_nr | Read the envelope and the head separately. Handle a mismatch in the pair according to R-8 | Agreed (2026-10-05) |
+| MEM-D6 | After the commit, remove history within the same mutual exclusion as the write | After the commit, release the mutual exclusion and re-acquire it in a separate retention operation | Agreed (2026-10-05) |
+| MEM-D7 | Report a retention failure by a log, and retry in the retention processing after the next append | Report by a callback for notification, and retry in the next retention processing | Agreed (2026-10-05) |
+| MEM-D8 | The first version does not provide an expiry style | Provide a style that holds an expiry mark and a grace period, and removes expired history at each operation | Agreed (2026-10-05) |
+| MEM-D9 | The first version does not provide a change feed | Provide an optional change feed, and include the head transition in the same commit as the append | Agreed (2026-10-05) |
+| MEM-D10 | If a feed is provided, keep transitions indefinitely during the storage's lifetime, and hand them over preserving the order within an aggregate | Provide a finite retention period and a transport path in which the order can be swapped | On hold (because MEM-D9 does not provide it. To be decided when it is provided) |
+| MEM-D11 | The storage holds immutable settings, and the instances that share it use those settings | Each instance receives its own settings, and checks them at construction against the shared storage's settings | Agreed (2026-10-05) |
+| MEM-D12 | The implementation protects concurrent calls to the same storage. Use from multiple threads is also covered | Presuppose that the caller serializes all operations | Agreed (2026-10-05) |
 
-MEM-D1・MEM-D2・MEM-D12 は SP-1 の前提を定める。MEM-D3 は H-1、MEM-D4 は R-5、MEM-D5 は R-8 に対応する。MEM-D6〜MEM-D8 は S-3・S-4、MEM-D9・MEM-D10 は共通契約の 6 章・F-2・F-5 に対応する。MEM-D11 は共通契約の設定エラーと、共有する書き手の設定をそろえる方法を定める。MEM-D10 は変更フィードを提供するときに決めるため、今回は保留した。
+MEM-D1, MEM-D2, and MEM-D12 define the preconditions of SP-1. MEM-D3 corresponds to H-1, MEM-D4 to R-5, and MEM-D5 to R-8. MEM-D6 to MEM-D8 correspond to S-3 and S-4, and MEM-D9 and MEM-D10 correspond to chapter 6, F-2, and F-5 of the common contract. MEM-D11 defines how to align the common contract's configuration errors with the settings of the sharing writers. MEM-D10 is decided when a change feed is provided, so it is on hold this time.
 
-| 判断 | 案 | 利点 | 欠点 |
+| Decision | Proposal | Advantage | Disadvantage |
 |:--|:--|:--|:--|
-| MEM-D1 | 寿命の終了で全記録を失う | 読み書き中の全消去を扱わずに済む | 試験などで空に戻すには、新しい保存先が必要である |
-| MEM-D1 | 明示的な全消去も提供する | 同じ保存先を空に戻せる | 全操作を停止し、旧インスタンスと購読位置を無効にする手順が必要である |
-| MEM-D2 | 保存先を明示的に共有する | 複数の利用者が同じ集約への追記を照合できる | 共有と独立生成を区別する操作が必要である |
-| MEM-D2 | インスタンス間で共有しない | 記録の所有者が明確になる | 利用者は同じインスタンスを渡して使う必要がある |
-| MEM-D3 | ストア全体で排他制御する | 確定と読み取りの境界が単純になる | 無関係の集約への操作も待ち合う |
-| MEM-D3 | 集約単位で排他制御する | 異なる集約を並行して扱える | 設定と全件の再同期には、別に一貫した境界が必要である |
-| MEM-D4 | 同じ時点の全件を取得する | 読み取り途中の追記を含めるか迷わず、全件性を確認しやすい | 件数が多いと排他制御の時間が長くなる |
-| MEM-D4 | h までの不変の記録を確保する | 排他制御の外で結果を組み立てられる | h 以下の記録が欠けず、取得中に変化しないことを保証する必要がある |
-| MEM-D5 | 組を原子的に読む | 封筒の seq_nr がヘッドを上回らない | 2 つの値を同じ読み取り境界に置く必要がある |
-| MEM-D5 | 別々に読む | 個別の記録を独立に読める | 封筒がヘッドより新しくなる場合を利用者が扱う必要がある |
-| MEM-D6 | 確定後も同じ排他制御で保持する | 次の操作の前に通常の保持件数へ戻せる | 履歴が多いと書き込みの待ち時間が延びる |
-| MEM-D6 | 別の保持操作で排他制御を取り直す | 追記の排他制御を早く解ける | その間に増えた履歴も含め、最新の件数を読み直す必要がある |
-| MEM-D7 | ログで知らせる | 追記の返り値と通知を分けやすい | 利用者が保持の失敗を集計するにはログの監視が必要である |
-| MEM-D7 | コールバックで知らせる | 利用者が通知を直接扱える | 通知の失敗や再入を追記から切り離す必要がある |
-| MEM-D8 | 期限切れ方式を提供しない | 時計と期限の管理が不要になる | 遅延削除の挙動をこの保存先では試せない |
-| MEM-D8 | 操作時に期限を確認して取り除く | 猶予を設けた保持を扱える | 時計の管理が増え、操作がなければ物理的な削除が進まない |
-| MEM-D9 | フィードを提供しない | 転送経路と購読位置を管理せずに済む | この保存先では変更フィードを使う利用者の試験ができない |
-| MEM-D9 | 任意のフィードを提供する | 共通契約に沿った購読も試せる | 確定時の遷移保存と再同期の実装が増える |
-| MEM-D10 | 寿命中の無期限保持と順序維持 | 停止期間による遷移の欠落を避けられる | 遷移の保持量が増え続ける |
-| MEM-D10 | 有限保持と順序の入れ替わりを許す | 保持量を抑え、転送経路を独立に構成できる | 重複・欠番処理に加え、期限超過の検出と全件の再同期が必要である |
-| MEM-D11 | 保存先の不変の設定を共有する | 書き手間の設定の食い違いを作らずに済む | 設定を変えるには新しい保存先が必要である |
-| MEM-D11 | 各インスタンスの設定を照合する | 利用者が要求する設定との不一致を検出できる | 全インスタンスで同じ照合項目と規則を保つ必要がある |
-| MEM-D12 | 実装が並行呼び出しを保護する | 利用者が別に排他制御を用意せずに済む | 同期と競合時の動作を実装・検証する必要がある |
-| MEM-D12 | 呼び出し側が直列化する | 実装の同期処理を減らせる | 全共有インスタンスの読み取りと保持も、利用者が同じ制御下に置く必要がある |
+| MEM-D1 | Lose all records at the end of the lifetime | No need to handle clear-all during reads and writes | To return to empty in tests and the like, a new storage is needed |
+| MEM-D1 | Also provide an explicit clear-all | The same storage can be returned to empty | A procedure is needed to stop all operations and invalidate the old instances and subscription positions |
+| MEM-D2 | Explicitly share the storage | Multiple users can check appends to the same aggregate | An operation is needed to distinguish sharing from independent construction |
+| MEM-D2 | Do not share between instances | The owner of the records is clear | Users have to pass around and use the same instance |
+| MEM-D3 | Mutual exclusion for the whole store | The boundary between commits and reads is simple | Operations on unrelated aggregates also wait for each other |
+| MEM-D3 | Mutual exclusion per aggregate | Different aggregates can be handled concurrently | A separate consistent boundary is needed for the settings and the full resynchronization |
+| MEM-D4 | Obtain all items at the same point in time | There is no doubt about whether appends during the read are included, and completeness is easy to confirm | With many items, the time under mutual exclusion gets long |
+| MEM-D4 | Secure immutable records up to h | The result can be assembled outside the mutual exclusion | It must be guaranteed that records at or below h are not missing and do not change during acquisition |
+| MEM-D5 | Atomically read the pair | The envelope's seq_nr does not exceed the head | The two values must be placed at the same read boundary |
+| MEM-D5 | Read separately | Individual records can be read independently | Users must handle the case where the envelope is newer than the head |
+| MEM-D6 | Retain under the same mutual exclusion after the commit | It can be returned to the normal retention count before the next operation | With a lot of history, the wait time of the write gets longer |
+| MEM-D6 | Re-acquire mutual exclusion in a separate retention operation | The mutual exclusion for the append can be released early | The latest count must be re-read, including history that increased in the meantime |
+| MEM-D7 | Report by log | The return value of the append and the notification are easy to separate | To tally retention failures, users need to monitor logs |
+| MEM-D7 | Report by callback | Users can handle notifications directly | Failures and re-entry of the notification must be separated from the append |
+| MEM-D8 | Do not provide an expiry style | The management of clocks and expiry becomes unnecessary | The behavior of lazy deletion cannot be tested in this storage |
+| MEM-D8 | Check expiry at each operation and remove | Retention with a grace period can be handled | Clock management increases, and physical deletion does not progress without operations |
+| MEM-D9 | Do not provide a feed | No need to manage the transport path and subscription positions | Users who use the change feed cannot test it in this storage |
+| MEM-D9 | Provide an optional feed | Subscriptions following the common contract can also be tested | The implementation of saving transitions at commit time and resynchronization increases |
+| MEM-D10 | Indefinite retention during the lifetime and order preservation | Loss of transitions due to a stopped period can be avoided | The retained amount of transitions keeps growing |
+| MEM-D10 | Allow finite retention and swapped order | The retained amount is kept down, and the transport path can be configured independently | In addition to duplicate and missing-number handling, detecting the exceeded period and a full resynchronization are needed |
+| MEM-D11 | Share the storage's immutable settings | No mismatch of settings between writers is created | To change settings, a new storage is needed |
+| MEM-D11 | Check each instance's settings | A mismatch with the settings the user requests can be detected | The same check items and rules must be kept in all instances |
+| MEM-D12 | The implementation protects concurrent calls | Users do not need to prepare separate mutual exclusion | The synchronization and the behavior under contention must be implemented and verified |
+| MEM-D12 | The caller serializes | The synchronization in the implementation can be reduced | Users must also put the reads and retention of all sharing instances under the same control |
 
-## 2. 保存先の寿命・共有・設定を照合する
+## 2. Check the storage's lifetime, sharing, and settings
 
-- **必須 MEM-1**: 単一プロセスのメモリだけを使う。ファイルへの保存、再起動後の回復、プロセス間の共有は範囲外とする。保存先の寿命が終われば、ジャーナル・ヘッド・スナップショット・設定を失う。検出できる範囲外の構成は設定エラーにする（SP-1）。利用中の明示的な全消去は提供しない（MEM-D1）。
-- **必須 MEM-2**: 新しい保存先の生成は空の独立したストアとする。同じ保存先を明示的に共有するインスタンスは、全記録・設定・排他制御を共有する。名前が同じという理由だけで保存先を共有しない。共有範囲は MEM-D2 に従う。
-- **必須 MEM-3**: 生成時に保持件数などの設定を検査する。保持件数 0 と、未提供の期限切れ方式・変更フィードを要求する設定は設定エラーにする。設定を保存先に置き、共有インスタンスに別の設定を持たせない。利用中は変更しない。設定の扱いは MEM-D8・MEM-D9・MEM-D11 に従う。不正な設定値を設定エラーにする分類は共通契約の 4 章・S-1 に従う。
-- **必須 MEM-4**: 実装が同じ保存先への読み取り・書き込み・保持の並行呼び出しを保護する。複数スレッドから同時に呼んでも、確定前の途中状態は読めない。並行呼び出しの保護は MEM-D12 に従う。特定の言語の同期手段は指定しない。
-  - js の注記（2026-10-06 にオーナーが決定）: JavaScript では、普通のオブジェクトをスレッド（Worker）をまたいで共有できない。そのため js の保存先は1つのスレッドの中だけで共有される。js の実装は、同じスレッドの中で非同期の呼び出しが重なっても、確定前の途中状態を読ませないことで MEM-4 を満たす。スレッドをまたいで共有できる保存先は作らない。
+- **MUST MEM-1**: Use only the memory of a single process. Saving to files, recovery after a restart, and sharing between processes are out of scope. When the storage's lifetime ends, the journal, head, snapshot, and settings are lost. A configuration outside the scope that can be detected is made a configuration error (SP-1). An explicit clear-all during use is not provided (MEM-D1).
+- **MUST MEM-2**: Constructing a new storage yields an empty, independent store. Instances that explicitly share the same storage share all records, settings, and mutual exclusion. A storage is not shared merely because the names are the same. The sharing scope follows MEM-D2.
+- **MUST MEM-3**: At construction, check settings such as the retention count. A retention count of 0, and a setting that requests an expiry style or change feed that is not provided, are configuration errors. The settings are placed in the storage, and the sharing instances are not given different settings. They are not changed during use. The handling of settings follows MEM-D8, MEM-D9, and MEM-D11. The classification of making an invalid setting value a configuration error follows chapter 4 and S-1 of the common contract.
+- **MUST MEM-4**: The implementation protects concurrent calls of reads, writes, and retention to the same storage. Even if called simultaneously from multiple threads, intermediate states before the commit cannot be read. The protection of concurrent calls follows MEM-D12. No synchronization means of a particular language is specified.
+  - Note for js (decided by the owner on 2026-10-06): In JavaScript, ordinary objects cannot be shared across threads (Workers). Therefore, js's storage is shared only within one thread. The js implementation satisfies MEM-4 by not letting intermediate states before the commit be read even when asynchronous calls overlap within the same thread. A storage that can be shared across threads is not built.
 
-採用しなかった MEM-D11 の代案では、保持件数・保持方式・フィードの有無と、提供する能力の猶予・保持期間を生成時に照合する。保存先の設定が欠ける場合や不一致の場合は設定エラーにし、自動で上書きしない。
+In the alternative of MEM-D11 that was not adopted, the retention count, retention style, the presence of a feed, and the grace period and retention period of the capabilities provided are checked at construction. If the storage's settings are missing or do not match, it is a configuration error, and they are not overwritten automatically.
 
-## 3. aid の完全一致と seq_nr で記録を分ける
+## 3. Separate records by exact match on aid and by seq_nr
 
-| 記録 | 識別に使う値 | 内容 |
+| Record | Values used for identification | Content |
 |:--|:--|:--|
-| ジャーナル | aid 文字列、seq_nr | イベント封筒 |
-| 集約ヘッド | aid 文字列 | 最新の seq_nr と、その位置のイベント封筒 |
-| 最新スナップショット | aid 文字列 | スナップショット封筒。ない場合もある |
-| スナップショット履歴 | aid 文字列、seq_nr | 保持件数を設定したときの封筒 |
-| 設定 | 保存先 | 保持件数、提供する能力の設定 |
+| Journal | aid string, seq_nr | Event envelope |
+| Aggregate head | aid string | The latest seq_nr and the event envelope at that position |
+| Latest snapshot | aid string | Snapshot envelope. May be absent |
+| Snapshot history | aid string, seq_nr | The envelopes when a retention count is set |
+| Settings | Storage | The retention count and the settings of the capabilities provided |
 
-- **必須 MEM-5**: aid 文字列を T-1 に従って組み立て、完全一致で比較する。aid と seq_nr は別の値として扱う。ハッシュ値だけを識別に使わず、前方一致で別の集約の記録を選ばない（SP-2）。型名・バイト長・整数・時刻の範囲は共通契約どおりに検査する。
-- **必須 MEM-6**: メタデータとペイロードを分けて持つ。利用者の書き込み後の変更や、取得結果への変更が保存済みの値を変えないようにする。ペイロードの型には T-6 を超える独自の要件を課さない。直列化したペイロードを保持し、取得時に復元する方法などを使える。具体的な保存形式は言語の実装に任せる。
+- **MUST MEM-5**: Assemble the aid string according to T-1, and compare by exact match. Treat aid and seq_nr as separate values. Do not use the hash value alone for identification, and do not select records of another aggregate by prefix match (SP-2). Check the type name, byte length, integers, and the range of time as in the common contract.
+- **MUST MEM-6**: Hold metadata and payload separately. Make sure that changes by the user after writing, and changes to the retrieved result, do not change the stored values. No requirement of its own beyond T-6 is imposed on the payload type. A method such as holding the serialized payload and restoring it on retrieval can be used. The concrete storage format is left to each language's implementation.
 
-## 4. 照合と書き込みを同じ排他制御の中で確定する
+## 4. Commit the check and the write within the same mutual exclusion
 
-- **必須 MEM-7**: 入力検査と、失敗しうるペイロードの準備を済ませる。その後、次の処理をストア全体の排他制御の中で行う。確定の方法と排他制御の範囲は MEM-D3 に従う。
+- **MUST MEM-7**: Finish the input checks and the preparation of the payload, which can fail. After that, perform the following processing within store-wide mutual exclusion. The commit method and the scope of mutual exclusion follow MEM-D3.
 
 ```text
 排他制御を始める
@@ -91,81 +91,81 @@ MEM-D1・MEM-D2・MEM-D12 は SP-1 の前提を定める。MEM-D3 は H-1、MEM-
 書き込みの成功を返す
 ```
 
-「まとめて公開する」は、別の操作から途中状態が見えないという意味である。準備中の失敗では、公開する記録を変えない。部分的な変更を残したまま失敗を返す方法は使わない。集約ヘッド・ジャーナル・スナップショットが同じ確定に従う（H-1）。
+"Publish together" means that no intermediate state is visible from other operations. On a failure during preparation, the records to be published are not changed. A method that returns a failure while leaving a partial change is not used. The aggregate head, the journal, and the snapshot follow the same commit (H-1).
 
-照合はヘッドの seq_nr だけに対して行う（H-2）。イベントだけの seq_nr = 1 の追記も新規作成できる（W-3）。ヘッドのない更新は位置 0 とみなし、W-8 の飛び番として拒む。snapshot.seq_nr と event.seq_nr の不一致は W-9 の契約違反にする。エラー分類とメッセージは共通契約の 4 章に従う。
+The check is performed only against the head's seq_nr (H-2). An events-only append with seq_nr = 1 can also create a new aggregate (W-3). An update with no head is regarded as position 0 and rejected as a gap in W-8. A mismatch between snapshot.seq_nr and event.seq_nr is a contract violation of W-9. The error classification and messages follow chapter 4 of the common contract.
 
-## 5. 読み取りごとに同じ時点の値を返す
+## 5. Return values at the same point in time for each read
 
-- **必須 MEM-8**: 最新スナップショット封筒とヘッドの seq_nr は、同じ排他制御の中で原子的に読む。ヘッドがなければ「なし」を返す。ヘッドがあれば、封筒がなくても組を返す（R-1〜R-3・R-8）。組の読み取りは MEM-D5 に従う。
-- **必須 MEM-9**: イベントの読み取りは、同じ排他制御の中で条件に合う全件を取得する。開始時点は、排他制御を取得して記録の参照を始めた時点とする。そこで確定しているイベントをすべて含め、seq_nr が指定値以上の封筒を昇順で返す（R-4〜R-6）。読み取りの境界は MEM-D4 に従う。
+- **MUST MEM-8**: The latest snapshot envelope and the head's seq_nr are read atomically within the same mutual exclusion. If there is no head, return "none". If there is a head, return the pair even if there is no envelope (R-1 to R-3, R-8). The reading of the pair follows MEM-D5.
+- **MUST MEM-9**: An event read obtains all matching items within the same mutual exclusion. The start point is the moment when the mutual exclusion is acquired and the reference to the records begins. It includes all events committed at that point, and returns the envelopes whose seq_nr is at least the specified value in ascending order (R-4 to R-6). The read boundary follows MEM-D4.
 
-読み取りは強整合であり、結果整合の読み直しを必要としない。この整合性は MEM-D4・MEM-D5 の合意に基づく（SP-1）。2 つの公開操作を続けて呼んでも、両操作が同じ時点を読む保証はない。
+Reads are strongly consistent, and do not need a re-read for eventual consistency. This consistency is based on the agreement of MEM-D4 and MEM-D5 (SP-1). Even if two public operations are called one after another, there is no guarantee that both operations read the same point in time.
 
-採用しなかった MEM-D4 の代案では、開始時にヘッド h と h 以下の不変の記録を確保する。排他制御を解いた後も、指定値以上 h 以下を欠けずに返す。MEM-D5 の代案では各値を確定済みの状態から読むが、組は原子的でない。封筒の seq_nr がヘッドを上回る場合も R-8 の範囲内である。
+In the alternative of MEM-D4 that was not adopted, the head h and the immutable records up to h are secured at the start. Even after the mutual exclusion is released, the items from the specified value up to h are returned without gaps. In the alternative of MEM-D5, each value is read from the committed state, but the pair is not atomic. A case where the envelope's seq_nr exceeds the head is also within the scope of R-8.
 
-## 6. 保持の失敗を追記の結果から分ける
+## 6. Separate the retention failure from the result of the append
 
-- **必須 MEM-10**: 保持件数がなければ現在のスナップショットだけを持つ。件数 n を設定した場合は、新しい n 件を残し、超過分を古い順に取り除く（S-1・S-2）。保持は追記の確定後、同じ排他制御の中で行う。イベントだけの追記でも、前回取り残した履歴を片付ける。保持の時機は MEM-D6 に従う。ジャーナルと集約ヘッドは保持処理で取り除かない。
-- **必須 MEM-11**: 保持の失敗は書き込みの成功を変えない。失敗は排他制御を解いた後にログで知らせる。次の追記後の保持処理で、現在の履歴を読み直して取り残しを片付ける（S-4）。通知と再試行は MEM-D7 に従う。通知の失敗も、確定した追記の結果を変えない。
+- **MUST MEM-10**: If there is no retention count, keep only the current snapshot. If a count n is set, keep the newest n and remove the excess from the oldest (S-1, S-2). Retention is performed after the commit of the append, within the same mutual exclusion. Even for an events-only append, it cleans up history left behind last time. The timing of retention follows MEM-D6. The journal and the aggregate head are not removed by retention processing.
+- **MUST MEM-11**: A retention failure does not change the success of the write. The failure is reported by a log after the mutual exclusion is released. In the retention processing after the next append, the current history is re-read and the leftovers are cleaned up (S-4). The notification and retry follow MEM-D7. A failure of the notification also does not change the result of the committed append.
 
-採用しなかった MEM-D6 の代案でも、追記の確定を保持の成否から分ける。排他制御を取り直した時点の履歴から、超過分を古い順に選ぶ。保持の失敗を理由に追記を取り消す案は S-4 に反するため、候補に含めない。
+In the alternative of MEM-D6 that was not adopted, the commit of the append is also separated from the success of retention. The excess is selected from the oldest, from the history at the time the mutual exclusion is re-acquired. A proposal to cancel the append because of a retention failure goes against S-4, so it is not included among the candidates.
 
-- **必須 MEM-12**: 最初の版では S-3 の期限切れ方式を提供しない（MEM-D8）。要求する設定は MEM-3 の設定エラーにする。
+- **MUST MEM-12**: The first version does not provide the expiry style of S-3 (MEM-D8). A setting that requests it is a configuration error of MEM-3.
 
-採用しなかった MEM-D8 の代案では、猶予を設定の正の整数の秒数とする。印を付ける時点のストアの時刻に猶予を加え、秒単位の期限を保存する。occurred_at を期限の時計に使わない。印は 1 回だけ付け、印付きの履歴を件数に数えず、選び直さず、期限を延ばさない。各操作時に期限を確認して取り除くため、削除の遅れに上限はない。現在のスナップショットは期限切れにしない。これは代案の記録であり、合意した規則ではない。
+In the alternative of MEM-D8 that was not adopted, the grace period is a positive integer number of seconds in the settings. The store's time at the moment of marking plus the grace period is stored as an expiry in seconds. occurred_at is not used as the expiry clock. The mark is applied only once, marked history is not counted in the count, is not selected again, and its expiry is not extended. Since expiry is checked and removed at each operation, there is no upper bound on the delay of deletion. The current snapshot is not made to expire. This is a record of the alternative, and is not an agreed rule.
 
-## 7. 最初の版では変更フィードを提供しない
+## 7. The first version does not provide a change feed
 
-- **必須 MEM-13**: 最初の版では変更フィードを提供しない（MEM-D9）。要求する設定は MEM-3 の設定エラーにする。
+- **MUST MEM-13**: The first version does not provide a change feed (MEM-D9). A setting that requests it is a configuration error of MEM-3.
 
-### 将来提供するときの候補
+### Candidates for when it is provided in the future
 
-MEM-D10 は、MEM-D9 で最初の版では提供しないと決めたため保留した。以下は将来、変更フィードを提供するときの候補であり、合意した規則ではない。保持と転送経路の性質、再同期の手順は、提供すると決めたときに確認する。
+MEM-D10 was put on hold because MEM-D9 decided that the first version does not provide it. The following are candidates for when a change feed is provided in the future, and are not agreed rules. The properties of retention and the transport path, and the resynchronization procedure, will be confirmed when it is decided to provide it.
 
-提供する案では、すべての確定した追記のヘッド遷移を、ジャーナル・ヘッドと同じ確定に含める。未確定の遷移を配信しない（H-1・F-1）。利用者の通知処理を、確定の条件にしない。
+In the proposal to provide it, the head transitions of all committed appends are included in the same commit as the journal and head. Uncommitted transitions are not delivered (H-1, F-1). The user's notification processing is not made a condition of the commit.
 
-- **候補 MEM-14**（将来提供する場合）: 同じ集約の遷移を seq_nr の昇順で生成し、転送経路もその順序を保つ。重複はありうる。購読側は F-3・F-4 に従って重複を捨て、欠番をジャーナルから補う。遷移は保存先の寿命中、無期限に保持する（MEM-D10 の候補）。
-- **候補 MEM-15**（将来提供する場合）: 購読位置を保存先の識別と結び付け、別の保存先の位置は再利用しない。初回購読や位置を失った場合は、排他制御の中で全集約の現在の seq_nr と、そこまでの遷移の境界を取得する。境界より後の遷移を保持したまま、購読側の位置と各集約を照合する。不足分をジャーナルから補い、その後、境界より後から購読する（F-5、MEM-D10 の保留に伴う候補）。
+- **Candidate MEM-14** (if provided in the future): Generate the transitions of the same aggregate in ascending order of seq_nr, and the transport path also preserves that order. Duplicates are possible. The subscriber discards duplicates and fills in missing numbers from the journal according to F-3 and F-4. Transitions are kept indefinitely during the storage's lifetime (the candidate of MEM-D10).
+- **Candidate MEM-15** (if provided in the future): Tie the subscription position to the identity of the storage, and do not reuse a position of a different storage. For a first subscription or when the position is lost, obtain, within the mutual exclusion, the current seq_nr of all aggregates and the boundary of transitions up to that point. While keeping the transitions after the boundary, compare the subscriber's position with each aggregate. Fill in the shortfall from the journal, and then subscribe from after the boundary (F-5; a candidate accompanying the hold of MEM-D10).
 
-無期限保持を採用する候補でも、再同期の手順は省略しない。保存先の寿命が終わると、遷移だけでなくジャーナルも失う。新しい保存先から旧記録を補う保証はない。旧位置と混ぜず、新しい保存先として扱う。
+Even in the candidate that adopts indefinite retention, the resynchronization procedure is not omitted. When the storage's lifetime ends, not only the transitions but also the journal is lost. There is no guarantee that old records can be supplemented from the new storage. Do not mix with the old position, and treat it as a new storage.
 
-MEM-D10 の代案では、保持期間を設定の正の整数の秒数とし、転送経路は順序を入れ替えうると明記する。最古の保持位置と購読位置を照合し、期限超過を検出したら MEM-15 の全件の再同期を行う。再同期中に必要な境界以後の遷移を保持できない場合は、その試行を終了し、新しい境界からやり直す。更新後に止まった集約も全件の照合対象に含める。この代案も合意した規則ではない。
+In the alternative of MEM-D10, the retention period is a positive integer number of seconds in the settings, and it is stated that the transport path may swap the order. Compare the oldest retained position with the subscription position, and if an exceeded period is detected, perform the full resynchronization of MEM-15. If the transitions after the boundary needed during resynchronization cannot be retained, end that attempt and start over from a new boundary. Aggregates that stopped after an update are also included in the full comparison. This alternative is also not an agreed rule.
 
-## 8. 現行のメモリ実装との違い
+## 8. Differences from the current memory implementations
 
-2026-10-05 に、各リポジトリの `origin/main` の次のファイルを `git show` で確認した。作業中のファイルと他の保存先の実装は、この比較の対象にしていない。
+On 2026-10-05, the following files of `origin/main` in each repository were checked with `git show`. Files in progress and the implementations of other storages are not covered by this comparison.
 
-| 実装 | 確認した版・ファイル | 現状と、このプロファイルとの差 |
+| Implementation | Version and file checked | Current state and the difference from this profile |
 |:--|:--|:--|
-| [rs](https://github.com/j5ik2o/event-store-adapter-rs/blob/535be125c0168425cd55a4ef377c0ac8432b84ff/lib/src/event_store_for_memory.rs) | `535be125` の `lib/src/event_store_for_memory.rs`。新規作成と保持の経路は同じ版の `lib/src/generic_event_store.rs`・`lib/src/event_store_backend.rs` も確認 | イベント封筒と排他制御を持ち、複製したインスタンスは保存先を共有する。照合はスナップショット封筒の version に依存し、独立したヘッドがない。イベントだけの新規作成は拒む。ペイロードと集約状態に複製の要件を課す。保持件数と期限の設定はあるが、メモリの処理は履歴の間引きや期限処理を行わない |
-| [js](https://github.com/j5ik2o/event-store-adapter-js/blob/377603d01c26b9ce6d9e89930cb2b65c0a53d214/packages/library/src/internal/memory-event-store.ts) | `377603d0` の `packages/library/src/internal/memory-event-store.ts` と `packages/library/src/memory-event-store-input.ts` | 初期値を受け取る独立した保存先である。ドメインのイベントと集約状態を保存し、集約状態の version で照合する。封筒とヘッドの組を返さず、イベントだけの新規作成もできない。イベントの参照を共有するため、保存値の不変性も見直しが必要である |
-| [go](https://github.com/j5ik2o/event-store-adapter-go/blob/b0c598d13ba953e1ff5a8e52b1b29b45f4748797/pkg/event_store_on_memory.go) | `b0c598d1` の `pkg/event_store_on_memory.go` | ドメインのイベントと集約状態を保存し、集約状態の version で照合する。独立したヘッドと内部の排他制御がない。イベントだけの新規作成は停止し、新規作成の重複を照合していない。集約がない更新も共通契約の分類で返す処理が必要である |
+| [rs](https://github.com/j5ik2o/event-store-adapter-rs/blob/535be125c0168425cd55a4ef377c0ac8432b84ff/lib/src/event_store_for_memory.rs) | `lib/src/event_store_for_memory.rs` at `535be125`. For the new-creation and retention paths, `lib/src/generic_event_store.rs` and `lib/src/event_store_backend.rs` of the same version were also checked | Has event envelopes and mutual exclusion, and cloned instances share the storage. The check depends on the version of the snapshot envelope, and there is no independent head. Rejects an events-only new creation. Imposes a copy requirement on the payload and the aggregate state. Has retention count and expiry settings, but the memory processing does not thin out history or process expiry |
+| [js](https://github.com/j5ik2o/event-store-adapter-js/blob/377603d01c26b9ce6d9e89930cb2b65c0a53d214/packages/library/src/internal/memory-event-store.ts) | `packages/library/src/internal/memory-event-store.ts` and `packages/library/src/memory-event-store-input.ts` at `377603d0` | An independent storage that receives initial values. Stores domain events and aggregate state, and checks by the aggregate state's version. Does not return the pair of envelope and head, and cannot do an events-only new creation. Since references to events are shared, the immutability of stored values also needs review |
+| [go](https://github.com/j5ik2o/event-store-adapter-go/blob/b0c598d13ba953e1ff5a8e52b1b29b45f4748797/pkg/event_store_on_memory.go) | `pkg/event_store_on_memory.go` at `b0c598d1` | Stores domain events and aggregate state, and checks by the aggregate state's version. Has no independent head or internal mutual exclusion. An events-only new creation stops, and duplicates of new creation are not checked. An update to a nonexistent aggregate also needs handling that returns it in the common contract's classification |
 
-3 実装とも、確認したメモリの処理には変更フィードがない。MEM-D9 でも、最初の版では提供しないと合意した。現行実装が、このプロファイルや共通契約に適合しているという意味ではない。メモリには永続化済みの旧記録がないため、保存形式の移行ではなく、公開操作と実行中の保存先の扱いを実装段階で確認する。
+None of the three implementations has a change feed in the memory processing that was checked. MEM-D9 also agreed that the first version does not provide it. This does not mean that the current implementations conform to this profile or the common contract. Memory has no persisted old records, so what is checked at the implementation stage is the handling of the public operations and of the running storage, not a migration of the storage format.
 
-## 9. 適合確認で見る事例
+## 9. Cases to look at in conformance verification
 
-合意したプロファイルの実装で確認する事例である。
+These are cases to be checked in an implementation of the agreed profile.
 
-1. 独立して生成した保存先は混ざらず、明示的に共有した保存先は同じ記録と設定を見る。
-2. 同じ集約へ同じ seq_nr を並行して追記すると、1 件だけが確定する。飛び番は契約違反になる。
-3. スナップショットなしで新規作成できる。封筒のない集約もヘッドの seq_nr を返す。
-4. 確定前に失敗を差し込むと、ヘッド・ジャーナル・スナップショットのどれにも変更が現れない。
-5. 読み取りと追記を重ねても、イベントの取得は開始時点まで欠けずに返る。封筒の seq_nr は、原子的に読んだ組のヘッドを上回らない。
-6. 保持の失敗を差し込んでも、確定した追記は成功として返る。別経路で通知され、次の保持処理で古い履歴から片付く。
-7. 保持件数 0 と未提供の能力の要求は設定エラーになる。別の集約の履歴は削除されない。
-8. 書き込みの入力や取得結果を変更しても、保存済みの封筒とペイロードは変わらない。
+1. Independently constructed storages do not get mixed, and explicitly shared storages see the same records and settings.
+2. When the same seq_nr is appended to the same aggregate concurrently, only one is committed. A gap in numbering is a contract violation.
+3. A new aggregate can be created without a snapshot. An aggregate without an envelope also returns the head's seq_nr.
+4. If a failure is injected before the commit, no change appears in any of the head, the journal, or the snapshot.
+5. Even if reads and appends overlap, the retrieval of events is returned without gaps up to the start point. The envelope's seq_nr does not exceed the head of the atomically read pair.
+6. Even if a retention failure is injected, the committed append is returned as a success. It is notified through another path, and is cleaned up from the oldest history in the next retention processing.
+7. A retention count of 0 and a request for a capability that is not provided become configuration errors. The history of other aggregates is not deleted.
+8. Even if the input of a write or the retrieved result is changed, the stored envelope and payload do not change.
 
-将来、変更フィードを提供する場合の確認候補は、再同期中にも追記し、境界以後の遷移が欠けないことである。有限保持を採用する場合は、更新後に止まった集約も再同期で補うことを確かめる。これらは最初の版の適合確認には含めない。
+If a change feed is provided in the future, a candidate for verification is that appends made even during resynchronization do not cause transitions after the boundary to be missing. If finite retention is adopted, confirm that aggregates that stopped after an update are also filled in by resynchronization. These are not included in the conformance verification of the first version.
 
-## 10. 合意状況と実装前の確認事項
+## 10. Agreement status and items to confirm before implementation
 
-2026-10-05 に MEM-D1〜MEM-D9・MEM-D11・MEM-D12 の草案での案を採用して合意した。最初の版では期限切れ方式と変更フィードを提供しない。MEM-D10 は、変更フィードを提供しないため保留し、提供すると決めたときに判断する。7 章の MEM-14・MEM-15 は、そのときの候補として残している。
+On 2026-10-05, MEM-D1 to MEM-D9, MEM-D11, and MEM-D12 were agreed by adopting the proposals in the draft. The first version does not provide the expiry style or the change feed. MEM-D10 is on hold because no change feed is provided, and will be decided when it is decided to provide it. MEM-14 and MEM-15 in chapter 7 are kept as candidates for that time.
 
-各言語のアダプタでの実装と、9 章の事例による適合確認が残っている。今回の合意は、現行実装の適合を宣言するものではない。共通契約の合意済み規則は変更していない。
+The implementation in each language's adapter, and the conformance verification by the cases in chapter 9, remain. This agreement does not declare the conformance of the current implementations. The agreed rules of the common contract have not been changed.
 
-次の進め方は以下の 2 案である。
+The following two options are the way forward.
 
-1. **推奨**: 最初の版の合意内容に沿って各言語の実装と適合確認を進め、MEM-D10 は保留を維持する。
-2. 変更フィードを提供する版を検討する場合は、提供する方針を決めてから MEM-D10 と 7 章の候補を確認する。
+1. **Recommended**: Proceed with the implementation and conformance verification in each language in line with the agreed content of the first version, and keep MEM-D10 on hold.
+2. If considering a version that provides a change feed, decide the policy to provide it first, and then confirm MEM-D10 and the candidates in chapter 7.

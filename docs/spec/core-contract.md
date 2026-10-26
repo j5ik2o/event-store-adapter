@@ -1,176 +1,176 @@
-# 共通契約（v5 で確定）
+# Common contract (finalized in v5)
 
-保存先に依存しない、全実装が満たす意味論を定める。この文書は共通契約 v5 である（[README](README.md) の P-46・P-47）。v5 の文書は、本リポジトリのタグ `contract-v5` で固定して指せる（P-50）。保存先ごとの実現方法はストレージプロファイルに書く。規則の表記は [README](README.md) を参照。
+This document defines the semantics, independent of any storage, that all implementations satisfy. This document is common contract v5 (P-46 and P-47 of the [README](README.md)). The v5 documents can be pinned and referenced with this repository's tag `contract-v5` (P-50). How each storage realizes it is written in the storage profiles. For the notation of rules, see the [README](README.md).
 
-> この文書の規則の合意状況は [README の合意状況](README.md#合意状況) にある。「未合意」と書いた規則は、まだ合意していない。変更するときはオーナーの合意を得る。
+> The agreement status of the rules in this document is in the [README's agreement status](README.md#agreement-status). A rule marked "not agreed" has not been agreed yet. Changing it requires the owner's agreement.
 
-## 1. 値と型
+## 1. Values and types
 
-### 1.1 集約 ID
+### 1.1 Aggregate ID
 
-集約 ID は型名と値の 2 つの文字列からなる。
+An aggregate ID consists of two strings: a type name and a value.
 
-- **必須 T-1**: 保存や比較に使う集約 ID の文字列（以下 aid 文字列）は `${型名}-${値}` とし、ライブラリが組み立てる。利用者の文字列化（`Display`、`asString()` など）には依存しない（[ADR-0003](../adr/0003-fix-storage-value-representations.md)）。
-- **必須 T-11**: 型名は `-` を含まない。値は `-` を含んでよい。aid 文字列の最初の `-` までが型名になるので、異なる集約 ID が同じ aid 文字列になることはない。ライブラリは aid 文字列を組み立てるときに型名を検査し、`-` を含めば契約違反エラーを返す。型名にも値にも `-` を許すと、型名 `order-item`・値 `1` と、型名 `order`・値 `item-1` がどちらも `order-item-1` になり、保存先で別の集約の項目が混ざるからである（2026-10-03 合意、P-23）。
-- **必須 T-12**: aid 文字列は UTF-8 で 1024 バイト以下とする。超える集約 ID は、ライブラリが aid 文字列を組み立てるときに契約違反エラーを返す。どの保存先でもキーの長さの上限（DynamoDB のパーティションキーは 2048 バイト、Bigtable の行キーは 4KiB、Spanner の主キーは 8KiB）に収まるようにするためである（2026-10-03 合意、P-35）。
+- **MUST T-1**: The aggregate ID string used for storage and comparison (hereafter the aid string) is `${type name}-${value}`, assembled by the library. It does not depend on the user's stringification (`Display`, `asString()`, and so on) ([ADR-0003](../adr/0003-fix-storage-value-representations.md)).
+- **MUST T-11**: The type name does not contain `-`. The value may contain `-`. Since everything up to the first `-` of the aid string is the type name, different aggregate IDs never become the same aid string. The library checks the type name when assembling the aid string, and returns a contract violation error if it contains `-`. If both the type name and the value were allowed to contain `-`, type name `order-item` with value `1` and type name `order` with value `item-1` would both become `order-item-1`, and items of different aggregates would get mixed in the storage (agreed 2026-10-03, P-23).
+- **MUST T-12**: The aid string is at most 1024 bytes in UTF-8. For an aggregate ID that exceeds this, the library returns a contract violation error when assembling the aid string. This is so that it fits within the key length limit of any storage (DynamoDB's partition key is 2048 bytes, Bigtable's row key is 4KiB, Spanner's primary key is 8KiB) (agreed 2026-10-03, P-35).
 
-### 1.2 イベント封筒
+### 1.2 Event envelope
 
-イベント封筒は 1 件のイベントを運ぶ。
+An event envelope carries one event.
 
-| 要素 | 内容 |
+| Element | Content |
 |:--|:--|
-| aggregate_id | 集約 ID |
-| seq_nr | 1 以上の整数。ドメインが採番する |
-| occurred_at | ドメインが与えた発生時刻。ナノ秒精度 |
-| manifest | 利用者が付ける自由形式の文字列。省略時は空文字列 |
-| payload | ドメインの中身 |
+| aggregate_id | The aggregate ID |
+| seq_nr | An integer of 1 or more. Numbered by the domain |
+| occurred_at | The occurrence time given by the domain. Nanosecond precision |
+| manifest | A free-form string attached by the user. An empty string if omitted |
+| payload | The domain's content |
 
-- **必須 T-2**: aggregate_id・seq_nr・occurred_at・payload は構築時に必ず与える。manifest だけを省略できる。これらを欠いたまま封筒を構築しようとしたり、欠いた封筒で操作を呼んだりすると、契約違反エラーを返す。言語の型で欠落を表せない場合は、その検査は要らない（T-9 の免除と同じ扱い。2026-10-06 合意、P-42）。
-- **必須 T-3**: ライブラリは occurred_at をストア側の時刻で置き換えない。保存した値が読み取りで同じ値のまま返る。ただし言語の標準時刻型がナノ秒を表せない場合は、その型の精度まで丸めてよい（js の `Date` はミリ秒）。
-- **必須 T-13**: occurred_at は、Unix エポックからのナノ秒が符号付き 64bit 整数に収まる範囲（1677-09-21T00:12:43.145224192Z から 2262-04-11T23:47:16.854775807Z まで）とする。範囲外の occurred_at を持つ封筒を書き込もうとすると、契約違反エラーを返す。言語ごとの標準時刻型の範囲が違っても（Java の `Instant` は 10 億年まで、JavaScript の `Date` は約 27 万年まで、Go の `time.Time` のナノ秒表現はこの範囲まで）、どの言語でも同じ値を読み書きできるようにするためである（2026-10-03 合意、P-34）。
-- **必須 T-4**: ライブラリは manifest と payload を解釈しない。スナップショットの manifest（1.4）も同じである。
-- **推奨 T-5**: 封筒は不変にし、要素の追加が既存の利用コードを壊さない形で公開する。スナップショット封筒（1.4）も同じである。将来メタデータを足すときは、封筒の要素として足す。
+- **MUST T-2**: aggregate_id, seq_nr, occurred_at, and payload must always be given at construction. Only manifest can be omitted. Trying to construct an envelope without them, or calling an operation with an envelope lacking them, returns a contract violation error. If the language's type cannot express the absence, that check is not needed (the same treatment as the exemption in T-9; agreed 2026-10-06, P-42).
+- **MUST T-3**: The library does not replace occurred_at with the store's time. The stored value is returned unchanged on read. However, if the language's standard time type cannot express nanoseconds, it may be rounded to the precision of that type (js's `Date` is in milliseconds).
+- **MUST T-13**: occurred_at is within the range in which nanoseconds from the Unix epoch fit in a signed 64-bit integer (from 1677-09-21T00:12:43.145224192Z to 2262-04-11T23:47:16.854775807Z). Trying to write an envelope whose occurred_at is out of range returns a contract violation error. This is so that every language can read and write the same values even though the ranges of the standard time types differ by language (Java's `Instant` goes to a billion years, JavaScript's `Date` to about 270,000 years, and Go's nanosecond representation of `time.Time` to exactly this range) (agreed 2026-10-03, P-34).
+- **MUST T-4**: The library does not interpret manifest and payload. The same applies to the snapshot's manifest (1.4).
+- **SHOULD T-5**: Envelopes are immutable, and are exposed in a form where adding elements does not break existing user code. The same applies to the snapshot envelope (1.4). When metadata is added in the future, it is added as an element of the envelope.
 
-### 1.3 ペイロード
+### 1.3 Payload
 
-- **必須 T-6**: ライブラリはペイロードの型に、シリアライザで直列化できること以上を要求しない。ドメイン型にライブラリのインターフェイスや trait の実装を求めない。
-- **必須 T-7**: シリアライザが直列化するのはペイロードだけである。aggregate_id・seq_nr・manifest などのメタデータをペイロードに埋め込まない。
-- **推奨 T-8**: 既定のシリアライザは JSON にする。
+- **MUST T-6**: The library requires nothing of the payload type beyond being serializable by the serializer. It does not require domain types to implement the library's interfaces or traits.
+- **MUST T-7**: What the serializer serializes is only the payload. Metadata such as aggregate_id, seq_nr, and manifest is not embedded in the payload.
+- **SHOULD T-8**: The default serializer is JSON.
 
-### 1.4 スナップショット封筒
+### 1.4 Snapshot envelope
 
-スナップショット封筒は 1 件のスナップショットを運ぶ。イベント封筒と同じく、書き込みと読み取りで同じ型を使う。
+A snapshot envelope carries one snapshot. Like the event envelope, the same type is used for writes and reads.
 
-| 要素 | 内容 |
+| Element | Content |
 |:--|:--|
-| aggregate | スナップショットの集約状態 |
-| seq_nr | このスナップショットが反映済みのイベントの seq_nr。リプレイの開始点 |
-| manifest | 利用者が付ける、集約状態の型やスキーマ版を示す自由形式の文字列。省略時は空文字列 |
+| aggregate | The aggregate state of the snapshot |
+| seq_nr | The seq_nr of the event up to which this snapshot has been applied. The starting point of replay |
+| manifest | A free-form string attached by the user that indicates the type or schema version of the aggregate state. An empty string if omitted |
 
-ヘッドの seq_nr は封筒に含めない。それは集約ヘッドの情報であり、スナップショットの情報ではないからである（[ADR-0002](../adr/0002-separate-aggregate-head-from-snapshot.md)）。読み取りでは封筒とは別に返す（3.4）。
+The head's seq_nr is not included in the envelope. This is because it is information of the aggregate head, not of the snapshot ([ADR-0002](../adr/0002-separate-aggregate-head-from-snapshot.md)). On a read, it is returned separately from the envelope (3.4).
 
-- **必須 T-10**: aggregate・seq_nr は構築時に必ず与える。manifest だけを省略できる。欠いたときの扱いは T-2 と同じである（2026-10-06 合意、P-42）。
+- **MUST T-10**: aggregate and seq_nr must always be given at construction. Only manifest can be omitted. The handling of absence is the same as T-2 (agreed 2026-10-06, P-42).
 
-### 1.5 整数の範囲
+### 1.5 Integer range
 
-- **必須 T-9**: seq_nr は 0 以上 2^53−1 以下の整数である（[ADR-0003](../adr/0003-fix-storage-value-representations.md)）。範囲外の seq_nr で操作を呼ぶと、契約違反エラーを返す。言語の型で範囲外の値を表せない場合（符号なしの型で負の値など）は、その値の検査は要らない（2026-10-05 合意、P-41）。
+- **MUST T-9**: seq_nr is an integer from 0 to 2^53−1 inclusive ([ADR-0003](../adr/0003-fix-storage-value-representations.md)). Calling an operation with an out-of-range seq_nr returns a contract violation error. If the language's type cannot express out-of-range values (for example, negative values in an unsigned type), the check for those values is not needed (agreed 2026-10-05, P-41).
 
-## 2. 集約ヘッド
+## 2. Aggregate head
 
-集約ヘッドは集約ごとに 1 件あり、直近の seq_nr と、直前の書き込みで追記したイベント封筒を持つ。ヘッドは最初の追記（seq_nr = 1）で作られ、それまでは存在しない（W-3、R-1）（[ADR-0002](../adr/0002-separate-aggregate-head-from-snapshot.md)）。楽観ロックの照合には、ヘッドの seq_nr を使う（[ADR-0004](../adr/0004-use-seq-nr-for-optimistic-locking.md)）。
+There is one aggregate head per aggregate, and it holds the latest seq_nr and the event envelope appended by the immediately preceding write. The head is created by the first append (seq_nr = 1), and does not exist until then (W-3, R-1) ([ADR-0002](../adr/0002-separate-aggregate-head-from-snapshot.md)). The head's seq_nr is used for the optimistic lock check ([ADR-0004](../adr/0004-use-seq-nr-for-optimistic-locking.md)).
 
-- **必須 H-1**: 追記の確定は、1 つの原子的な操作で決まる。確定した追記は、集約ヘッド・3.5 のイベントの読み取り・変更フィード（6 章、提供する場合）のすべてに現れ、確定しなかった追記はどれにも現れない。スナップショットを伴う書き込みでは、スナップショットも同じ確定に従い、確定しなかった書き込みのスナップショットは 3.4 の読み取りに現れない。確定の仕組み（ジャーナル・ヘッド・スナップショットを 1 つのトランザクションで書くか、ヘッドの条件付き更新を確定点にしてジャーナルを後から書き出すか）は、ストレージプロファイルが定める（[ADR-0005](../adr/0005-define-append-atomicity-by-observable-commit.md)、2026-10-03 合意、P-28）。
-- **必須 H-2**: 楽観ロックの照合はヘッドの seq_nr に対して行う。スナップショットは照合に使わない。
-- **必須 H-3**: 1 回の書き込みで追記するイベントは 1 件である。
-- **必須 H-4**: 集約ヘッドは、直近の seq_nr と、その seq_nr で確定したイベント封筒を持つ。確定点の後にジャーナルを書き出すプロファイルは、まだジャーナルに書き出していないイベントを、ヘッドが持つ封筒から補う（2026-10-03 合意、P-28）。
+- **MUST H-1**: The commit of an append is decided by a single atomic operation. A committed append appears in all of the aggregate head, the event reads in 3.5, and the change feed (chapter 6, if provided), and an append that was not committed appears in none of them. In a write accompanied by a snapshot, the snapshot also follows the same commit, and the snapshot of a write that was not committed does not appear in the read in 3.4. The commit mechanism (whether the journal, head, and snapshot are written in one transaction, or the conditional update of the head is the commit point and the journal is written out afterwards) is defined by the storage profile ([ADR-0005](../adr/0005-define-append-atomicity-by-observable-commit.md), agreed 2026-10-03, P-28).
+- **MUST H-2**: The optimistic lock check is performed against the head's seq_nr. The snapshot is not used for the check.
+- **MUST H-3**: The number of events appended by one write is one.
+- **MUST H-4**: The aggregate head holds the latest seq_nr and the event envelope committed at that seq_nr. A profile that writes the journal out after the commit point supplements events not yet written to the journal from the envelope held by the head (agreed 2026-10-03, P-28).
 
-## 3. 操作
+## 3. Operations
 
-各言語での名前は言語の慣習に従ってよい（`persist_event` / `persistEvent` など）。
+The names in each language may follow the language's conventions (`persist_event` / `persistEvent`, and so on).
 
-照合の期待値は、イベント封筒の seq_nr から決まる。seq_nr が n のイベントは、ヘッドの seq_nr が n−1 のときだけ追記できる。seq_nr が 1 なら、ヘッドがまだないときだけ追記できる。そのため、書き込みの操作は期待値の引数を取らない（[ADR-0004](../adr/0004-use-seq-nr-for-optimistic-locking.md)）。
+The expected value for the check is determined from the seq_nr of the event envelope. An event whose seq_nr is n can be appended only when the head's seq_nr is n−1. If the seq_nr is 1, it can be appended only when the head does not yet exist. Therefore, the write operations take no argument for the expected value ([ADR-0004](../adr/0004-use-seq-nr-for-optimistic-locking.md)).
 
 ### 3.1 persistEvent(event)
 
-イベントだけを追記する。スナップショットは書かない。
+Appends only the event. It does not write a snapshot.
 
 ### 3.2 persistEventAndSnapshot(event, snapshot)
 
-イベントを追記し、同時にスナップショットを書く。event はイベント封筒、snapshot はスナップショット封筒である。
+Appends the event and writes the snapshot at the same time. event is an event envelope, and snapshot is a snapshot envelope.
 
-- **必須 W-9**: `snapshot.seq_nr != event.seq_nr` なら契約違反エラーを返す。スナップショットは、そのイベントを適用した後の状態だからである。
+- **MUST W-9**: If `snapshot.seq_nr != event.seq_nr`, return a contract violation error. This is because the snapshot is the state after applying that event.
 
-### 3.3 両操作に共通の規則
+### 3.3 Rules common to both operations
 
-- **必須 W-3**: `event.seq_nr == 1` なら新規作成として扱い、ジャーナルとヘッドを作成する（3.2 ならスナップショットも作成する）。ヘッドが既に存在すれば楽観ロックエラーを返す。
-- **必須 W-4**: `event.seq_nr > 1` なら更新として扱い、W-8 の照合を行う。
-- **必須 W-6**: `event.seq_nr == 0` なら契約違反エラーを返す。
-- **必須 W-7**: 同じ集約に同じ seq_nr のイベントを 2 件書けない。2 件目は楽観ロックエラーになる。
-- **必須 W-8**: 更新では、`event.seq_nr == ヘッドの seq_nr + 1` のときだけ書き込む。これが楽観ロックの照合である。外れた場合のエラーは外れ方で分ける。`event.seq_nr` がヘッドの seq_nr 以下なら楽観ロックエラーを返す。他の書き込みが先に確定した場合や、結果整合の読み取りでリプレイが古い状態を返し、古い状態から採番した場合であり、読み直せば直る。ヘッドの seq_nr + 2 以上なら、採番の飛びなので契約違反エラーを返す。これにより変更フィードに欠番が生じない。ヘッドがない集約への更新（`event.seq_nr` が 2 以上）は、ヘッドの seq_nr を 0 とみなして同じ規則を当てる。集約は削除されないので、これは採番の飛びであり、契約違反エラーを返す（2026-10-03 合意、P-32）。rs v3 の「連続性を検証しない」という方針を転換する（2026-10-02 合意）。
+- **MUST W-3**: If `event.seq_nr == 1`, treat it as a new creation and create the journal and the head (in 3.2, also create the snapshot). If the head already exists, return an optimistic lock error.
+- **MUST W-4**: If `event.seq_nr > 1`, treat it as an update and perform the check of W-8.
+- **MUST W-6**: If `event.seq_nr == 0`, return a contract violation error.
+- **MUST W-7**: Two events with the same seq_nr cannot be written to the same aggregate. The second one becomes an optimistic lock error.
+- **MUST W-8**: An update writes only when `event.seq_nr == head's seq_nr + 1`. This is the optimistic lock check. The error when it does not match depends on how it deviates. If `event.seq_nr` is less than or equal to the head's seq_nr, return an optimistic lock error. This is the case where another write was committed first, or where replay under an eventually consistent read returned an old state and numbering was done from that old state, and it is fixed by re-reading. If it is the head's seq_nr + 2 or more, it is a gap in numbering, so return a contract violation error. This prevents missing numbers in the change feed. An update to an aggregate that has no head (`event.seq_nr` is 2 or more) applies the same rule, regarding the head's seq_nr as 0. Since aggregates are not deleted, this is a gap in numbering, and a contract violation error is returned (agreed 2026-10-03, P-32). This reverses the policy of rs v3, "do not verify continuity" (agreed 2026-10-02).
 
-W-1・W-2・W-5 は削除した。W-2 と W-5 は version の廃止（ADR-0004）、W-1 はスナップショットを任意にしたこと（R-3）による。適合テストデータとの対応を保つため、番号は再利用しない。
+W-1, W-2, and W-5 have been deleted. W-2 and W-5 are due to the removal of version (ADR-0004), and W-1 is due to making the snapshot optional (R-3). To keep the correspondence with the conformance test data, the numbers are not reused.
 
 ### 3.4 getLatestSnapshotById(aggregateId)
 
-- **必須 R-1**: 集約ヘッドがなければ、集約は存在しないとみなして「なし」を返す。エラーにはしない。スナップショットの有無は集約の存在に関係しない（R-3）。
-- **必須 R-2**: 存在すれば、スナップショット封筒（ない場合もある）と、読み取り時点のヘッドの seq_nr の組を返す。組の表現（構造体、タプルなど）は言語に任せる。
-- **必須 R-3**: スナップショットはなくてもよい。スナップショットは集約状態のキャッシュであり、欠けても集約は読める。ない場合、呼び出し側はジャーナルの seq_nr 1 からリプレイする（2026-10-02 合意）。
-- **推奨 R-7**: 呼び出し側は、リプレイで得た最後の seq_nr が、R-2 で受け取ったヘッドの seq_nr に届いているかを確かめる。届いていなければ結果整合の読み取りが遅れているので、読み直す。
+- **MUST R-1**: If there is no aggregate head, regard the aggregate as non-existent and return "none". It is not an error. The presence or absence of a snapshot is unrelated to the existence of the aggregate (R-3).
+- **MUST R-2**: If it exists, return a pair of the snapshot envelope (which may be absent) and the head's seq_nr at the time of the read. The representation of the pair (struct, tuple, and so on) is left to the language.
+- **MUST R-3**: The snapshot may be absent. The snapshot is a cache of the aggregate state, and the aggregate can be read even if it is missing. When it is absent, the caller replays from seq_nr 1 of the journal (agreed 2026-10-02).
+- **SHOULD R-7**: The caller checks whether the last seq_nr obtained by replay has reached the head's seq_nr received in R-2. If it has not, the eventually consistent read is lagging, so it re-reads.
 
-スナップショットはヘッドより古くてもよいので、封筒の seq_nr はヘッドの seq_nr を下回りうる。
+Since a snapshot may be older than the head, the envelope's seq_nr can be below the head's seq_nr.
 
-- **必須 R-8**: ストレージプロファイルは、R-2 の組を原子的に読むかどうかを明記する。原子的に読まない保存先では、読み取りが書き込みと重なると、スナップショット封筒の seq_nr がヘッドの seq_nr を上回ることがある。そのときはスナップショットの方が新しく、呼び出し側はスナップショットの seq_nr + 1 からリプレイし、そこから採番してよい。古い状態から採番した場合は W-8 で楽観ロックになるので、どちらにずれても整合性は崩れない（2026-10-03 合意、P-25）。
+- **MUST R-8**: The storage profile states whether it reads the pair of R-2 atomically. In a storage that does not read atomically, when a read overlaps with a write, the snapshot envelope's seq_nr may exceed the head's seq_nr. In that case the snapshot is newer, and the caller may replay from the snapshot's seq_nr + 1 and number from there. If numbering was done from an old state, it becomes an optimistic lock by W-8, so consistency does not break whichever way it deviates (agreed 2026-10-03, P-25).
 
 ### 3.5 getEventsByIdSinceSeqNr(aggregateId, seqNr)
 
-- **必須 R-4**: seq_nr が seqNr **以上**のイベント封筒を、seq_nr の昇順で返す。スナップショットからリプレイする呼び出し側は、スナップショット封筒の seq_nr + 1 を渡す。スナップショットがなければ 1 を渡す。
-- **必須 R-5**: 条件に合うイベントを**すべて**返す。保存先が 1 回の応答で返す量に上限を持つ場合は、続きを読み切ってから返す。「すべて」には、読み取りを始めた時点で確定していたイベントを含む。結果整合の読み取りしか持たない保存先では、ストレージプロファイルがこれを満たす方法を定める（2026-10-03 合意、P-26）。
-- **必須 R-6**: 返すのは封筒であり、ペイロードだけの列ではない。
+- **MUST R-4**: Return the event envelopes whose seq_nr is **greater than or equal to** seqNr, in ascending order of seq_nr. A caller replaying from a snapshot passes the snapshot envelope's seq_nr + 1. If there is no snapshot, it passes 1.
+- **MUST R-5**: Return **all** the events that match the condition. If the storage has an upper limit on the amount returned in one response, read through the continuation before returning. "All" includes the events that were committed at the time the read started. For a storage that has only eventually consistent reads, the storage profile defines how to satisfy this (agreed 2026-10-03, P-26).
+- **MUST R-6**: What is returned is envelopes, not a sequence of payloads alone.
 
-## 4. エラー分類
+## 4. Error classification
 
-エラーの返し方（Result 型、例外、error 値）は言語に任せる。仕様が定めるのは分類である。
+How errors are returned (Result type, exception, error value) is left to the language. What the specification defines is the classification.
 
-| 分類 | 発生する場面 |
+| Classification | Situations in which it occurs |
 |:--|:--|
-| 楽観ロック | 既存集約への新規作成、seq_nr の重複、ヘッドの seq_nr 以下の seq_nr での追記（W-8） |
-| 契約違反 | T-2・T-10（必須要素の欠落）・W-6・W-9・T-9・T-11・T-12・T-13 に反する呼び出し、W-8 の飛び番 |
-| 直列化 | ペイロードの直列化・復元の失敗 |
-| 設定 | 生成時の不正な設定値（保持件数が 0 など）、保存先に記録された設定との食い違い |
-| 保存先 | 保存先との通信・保存先が返した失敗、読み取ったデータの欠損 |
+| Optimistic lock | Creating an already existing aggregate, a duplicate seq_nr, appending with a seq_nr less than or equal to the head's seq_nr (W-8) |
+| Contract violation | Calls that violate T-2, T-10 (absence of required elements), W-6, W-9, T-9, T-11, T-12, T-13, and a gap in numbering under W-8 |
+| Serialization | Failure to serialize or restore the payload |
+| Configuration | An invalid setting value at construction (for example, a retention count of 0), a mismatch with the settings recorded in the storage |
+| Storage | Communication with the storage, a failure returned by the storage, missing data that was read |
 
-- **必須 E-1**: 呼び出し側が分類を型（または判別できる値）で区別できる。
-- **必須 E-2**: 楽観ロックのメッセージに含めるのは aid 文字列・追記しようとした seq_nr・（分かれば）ヘッドの seq_nr だけである。接続文字列や資格情報、保存先 SDK の生のエラー文を含めない。
-- **必須 E-3**: 契約違反のメッセージには、違反した規則の番号と、関係する seq_nr があればその値を含める。seq_nr そのものが欠けた場合（T-2・T-10）のように、関係する seq_nr がなければ規則の番号だけでよい（2026-10-06 合意、P-42）。
+- **MUST E-1**: The caller can distinguish the classification by type (or by a distinguishable value).
+- **MUST E-2**: The message of an optimistic lock contains only the aid string, the seq_nr that was attempted to be appended, and (if known) the head's seq_nr. It does not contain connection strings, credentials, or the raw error text of the storage SDK.
+- **MUST E-3**: The message of a contract violation contains the number of the rule that was violated and, if there is a relevant seq_nr, its value. When there is no relevant seq_nr, as when the seq_nr itself is missing (T-2, T-10), the rule number alone suffices (agreed 2026-10-06, P-42).
 
-## 5. スナップショット保持
+## 5. Snapshot retention
 
-既定では現在のスナップショットだけを持つ。保持件数を設定すると、書き込みごとにスナップショットの履歴も残す。
+By default, only the current snapshot is kept. If a retention count is set, the snapshot history is also kept with each write.
 
-- **必須 S-1**: 保持件数は「なし」か 1 以上の整数で設定する。0 は設定エラーにする。
-- **必須 S-2**: 保持件数 n を超えた履歴は、**古いものから**取り除き、新しい n 件を残す。
-- **任意 S-3**: 取り除く代わりに、保存先の期限切れの仕組みで後から取り除く方式を選べる。この方式では、期限切れの印を付けた履歴を保持件数に数えず、次に印を付ける対象にも選ばない。印は 1 つの履歴に 1 回だけ付き、期限は先送りされない（2026-10-02 合意）。期限の仕組み（項目ごとの期限、テーブルや列ファミリの単位の規則など）、猶予の置き場所（ライブラリの設定か、保存先の定義か）と精度、取り除かれるまでの遅れは、ストレージプロファイルが定める。仕組みを持たない保存先のプロファイルは、この方式を提供しなくてよい（2026-10-03 合意、P-30）。
-- **必須 S-4**: 保持処理の失敗は、追記の結果を変えない。保持処理が失敗しても、追記が確定していれば書き込みは成功として返す（保持処理をいつ、どの操作で行うかはストレージプロファイルが定める。2026-10-03 合意、P-30）。保持の失敗はログや通知用のコールバックなど、別の経路で知らせる。取り残した履歴は、次に保持処理が行われたときに片付く。現行の rs と js は書き込み失敗として返しており、呼び出し側が再試行すると楽観ロックエラーになるので、これを改める（2026-10-02 合意）。
+- **MUST S-1**: The retention count is set as "none" or an integer of 1 or more. 0 is a configuration error.
+- **MUST S-2**: History exceeding the retention count n is removed **from the oldest**, and the newest n are kept.
+- **MAY S-3**: Instead of removing, a style can be chosen in which history is removed later by the storage's expiry mechanism. In this style, history marked as expired is not counted in the retention count, and is not selected as the next target for marking. The mark is applied only once per history item, and the expiry is not postponed (agreed 2026-10-02). The expiry mechanism (per-item expiry, rules at the level of tables or column families, and so on), where the grace period is placed (in the library's settings or in the storage's definition) and its precision, and the delay until removal are defined by the storage profile. The profile of a storage with no such mechanism need not provide this style (agreed 2026-10-03, P-30).
+- **MUST S-4**: A failure of retention processing does not change the result of the append. Even if retention processing fails, if the append is committed, the write is returned as a success (when and in which operation retention processing is performed is defined by the storage profile; agreed 2026-10-03, P-30). A retention failure is reported through another path, such as a log or a callback for notification. History left behind is cleaned up the next time retention processing runs. The current rs and js return it as a write failure, and a retry by the caller then becomes an optimistic lock error, so this is changed (agreed 2026-10-02).
 
-## 6. 変更フィード（任意の能力）
+## 6. Change feed (optional capability)
 
-変更フィードは、集約ごとに seq_nr 順で並んだヘッド遷移の列である。各ストレージプロファイルは、この能力を提供するかどうかと、転送経路の性質を明記する。
+A change feed is a sequence of head transitions ordered by seq_nr for each aggregate. Each storage profile states whether it provides this capability, and the properties of the transport path.
 
-ヘッド遷移は、集約 ID・遷移後の seq_nr・その書き込みで追記したイベント封筒の列からなる。
+A head transition consists of the aggregate ID, the seq_nr after the transition, and the sequence of event envelopes appended by that write.
 
-- **必須 F-1**（提供する場合）: 確定した追記はすべてヘッド遷移として現れる。
-- **必須 F-2**（提供する場合）: 同じ集約のヘッド遷移は seq_nr の昇順で生成される。転送経路が順序を入れ替えうる場合は、プロファイルにそう書く。
-- **必須 F-3**（購読側の義務）: 購読側は (aid 文字列, seq_nr) で重複を捨てる。
-- **必須 F-4**（購読側の義務）: 購読側は受け取った seq_nr が直前 + 1 でなければ欠番とみなし、3.5 の操作でジャーナルから補う。
-- **必須 F-5**（購読側の義務）: 転送経路の保持期間を超えて購読が止まると、その間に更新され、その後は更新されていない集約の取りこぼしは、F-4 では検出できない。この場合、購読側はストレージプロファイルが定める再同期の手順で、全集約の現在の seq_nr を自分の位置と照合し、足りない分を 3.5 の操作で補う。各ストレージプロファイルは、変更フィードを提供するなら、この手順を定める（2026-10-03 合意、P-27）。
+- **MUST F-1** (if provided): Every committed append appears as a head transition.
+- **MUST F-2** (if provided): The head transitions of the same aggregate are generated in ascending order of seq_nr. If the transport path may reorder them, the profile says so.
+- **MUST F-3** (obligation of the subscriber): The subscriber discards duplicates by (aid string, seq_nr).
+- **MUST F-4** (obligation of the subscriber): If the received seq_nr is not the previous one + 1, the subscriber regards it as a missing number and fills it in from the journal with the operation in 3.5.
+- **MUST F-5** (obligation of the subscriber): If the subscription stops beyond the retention period of the transport path, a miss of an aggregate that was updated in the meantime and has not been updated since cannot be detected by F-4. In this case, the subscriber compares the current seq_nr of all aggregates with its own position by the resynchronization procedure defined by the storage profile, and fills in the missing part with the operation in 3.5. Each storage profile, if it provides a change feed, defines this procedure (agreed 2026-10-03, P-27).
 
-## 7. ストレージプロファイルへの要求
+## 7. Requirements on storage profiles
 
-各ストレージプロファイルは、共通契約を保存先でどう満たすかを定める。次の 2 つは、どのプロファイルにも求める。
+Each storage profile defines how it satisfies the common contract in its storage. The following two are required of every profile.
 
-- **必須 SP-1**: プロファイルは、規則が成り立つ前提を明記する。少なくとも、読み取りの整合性の種類と、書き込みの経路の構成（単一のリージョン、単一のクラスタへのルーティングなど）を書く。前提を外れる構成は範囲外とし、検出できるなら設定エラーで拒む（2026-10-03 合意、P-31）。
-- **必須 SP-2**: プロファイルのキーの組み立ては単射にする。ある集約の読み取りや保持処理が、別の集約の項目に当たってはならない。前方一致の範囲読みを使うなら、範囲の境界が別の集約と重ならない符号化を定める（2026-10-03 合意、P-33）。
+- **MUST SP-1**: The profile states the preconditions under which its rules hold. It writes at least the kind of read consistency and the composition of the write path (a single region, routing to a single cluster, and so on). A configuration that deviates from the preconditions is out of scope, and if it can be detected, it is rejected with a configuration error (agreed 2026-10-03, P-31).
+- **MUST SP-2**: The profile's key construction is injective. A read or retention processing of one aggregate must not hit the items of another aggregate. If a prefix-match range read is used, it defines an encoding in which the range boundaries do not overlap with another aggregate (agreed 2026-10-03, P-33).
 
-ほかの章では、次のことをプロファイルに委ねている。
+In other chapters, the following are delegated to the profile.
 
-| 委ねたこと | 規則 |
+| What is delegated | Rule |
 |:--|:--|
-| 確定の仕組み | H-1 |
-| 結果整合の読み取りしか持たない場合に、確定済みのイベントをすべて返す方法 | R-5 |
-| 最新スナップショットとヘッドの組を原子的に読むかどうか | R-8 |
-| 変更フィードを提供するか、転送経路の順序の性質、保持期間を超えたときの再同期 | 6 章、F-2、F-5 |
-| 期限切れで取り除く方式の仕組み・猶予・遅れ、保持処理を行う時機 | S-3、S-4 |
+| The commit mechanism | H-1 |
+| How to return all committed events when only eventually consistent reads exist | R-5 |
+| Whether to read the pair of the latest snapshot and the head atomically | R-8 |
+| Whether to provide a change feed, the ordering properties of the transport path, and resynchronization when the retention period is exceeded | chapter 6, F-2, F-5 |
+| The mechanism, grace period, and delay of the expire-and-remove style, and when retention processing is performed | S-3, S-4 |
 
-## 8. 言語に任せること
+## 8. What is left to the language
 
-次の点は仕様で定めない。
+The following are not defined by the specification.
 
-- 操作・型・エラーの名前と、エラーの返し方
-- 封筒の構築方法（コンストラクタ、ビルダー、ファクトリなど）
-- 非同期の表現（async/await、Future、コールバックなど）
-- 整数・時刻の言語上の型（T-3 と T-9 の範囲を満たせばよい）
+- The names of operations, types, and errors, and how errors are returned
+- How to construct envelopes (constructor, builder, factory, and so on)
+- The expression of asynchrony (async/await, Future, callbacks, and so on)
+- The language-level types for integers and time (it suffices to satisfy the ranges of T-3 and T-9)
 
-## 9. 未決事項
+## 9. Open items
 
-なし（2026-10-03 時点）。
+None (as of 2026-10-03).

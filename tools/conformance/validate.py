@@ -138,8 +138,8 @@ def specification_rules(spec_root):
     spanner = (spec_root / "storage" / "spanner.md").read_text(encoding="utf-8")
     bigtable = (spec_root / "storage" / "bigtable.md").read_text(encoding="utf-8")
     texts = "\n".join([core, dynamo, memory, hash_spec, sqlite, spanner, bigtable])
-    # defined は 7 つの仕様の文書が定義の行で定める規則。判断番号 D-n・MEM-D・SQ-D・SPN-D・BT-D と草案の規則は含めない。
-    defined = set(re.findall(r"^- \*\*(?:必須|推奨|任意) ([A-Z]+-\d+)\*\*", texts, re.M))
+    # defined は 7 つの仕様の文書が定義の行で定める規則（区分は日本語の必須・推奨・任意と英語の MUST・SHOULD・MAY）。判断番号 D-n・MEM-D・SQ-D・SPN-D・BT-D と草案の規則は含めない。
+    defined = set(re.findall(r"^- \*\*(?:必須|推奨|任意|MUST|SHOULD|MAY) ([A-Z]+-\d+)\*\*", texts, re.M))
     # 判断番号のうち、DynamoDB の D-n と Bigtable の BT-D6a（封筒の値の表の rules）だけは網羅の対象にする。
     active = (defined | set(re.findall(r"^\| (D-\d+) \|", dynamo, re.M))
               | set(re.findall(r"^\| (BT-D6a) \|", bigtable, re.M)))

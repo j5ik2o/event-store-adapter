@@ -3,6 +3,7 @@
 import copy
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -533,6 +534,65 @@ class ConformanceToolsTests(unittest.TestCase):
         coverage = (manifest.DEFAULT_ROOT / "COVERAGE.md").read_text(encoding="utf-8")
         self.assertNotIn("| SPN-15 |", coverage)
         self.assertNotIn("| BT-15 |", coverage)
+
+    # ---- 仕様の英語版（正本）と日本語版（補助）の対応 ----
+
+    SPECIFICATION_FILES = ["core-contract", "storage/dynamodb", "storage/memory", "storage/hash",
+                           "storage/sqlite", "storage/spanner", "storage/bigtable"]
+    CATEGORY_PAIRS = {"必須": "MUST", "推奨": "SHOULD", "任意": "MAY"}
+
+    def japanese_specification(self):
+        """日本語版（X.ja.md）を X.md として一時ディレクトリへ写し、その仕様の根を返す。"""
+        root = Path(self.temporary.name) / "spec-ja"
+        for name in self.SPECIFICATION_FILES:
+            target = root / f"{name}.md"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(validate.DEFAULT_SPEC_ROOT / f"{name}.ja.md", target)
+        return root
+
+    def definition_categories(self, spec_root):
+        texts = "\n".join((spec_root / f"{name}.md").read_text(encoding="utf-8")
+                          for name in self.SPECIFICATION_FILES)
+        return dict((rule, category) for category, rule in re.findall(
+            r"^- \*\*(\S+) ([A-Z]+-\d+)\*\*", texts, re.M)
+            if category in {*self.CATEGORY_PAIRS, *self.CATEGORY_PAIRS.values()})
+
+    def test_english_and_japanese_specifications_give_the_same_rule_sets_and_categories(self):
+        english, japanese = validate.DEFAULT_SPEC_ROOT, self.japanese_specification()
+        self.assertEqual(validate.specification_rules(english), validate.specification_rules(japanese))
+        english_categories = self.definition_categories(english)
+        self.assertTrue(english_categories)
+        self.assertLessEqual(set(english_categories.values()), set(self.CATEGORY_PAIRS.values()))
+        self.assertEqual(english_categories,
+                         {rule: self.CATEGORY_PAIRS[category]
+                          for rule, category in self.definition_categories(japanese).items()})
+
+    def test_unknown_category_is_not_a_defined_rule(self):
+        root = Path(self.temporary.name) / "spec-unknown"
+        shutil.copytree(validate.DEFAULT_SPEC_ROOT, root)
+        hash_spec = root / "storage" / "hash.md"
+        text = hash_spec.read_text(encoding="utf-8")
+        self.assertIn("- **MUST K-1**", text)
+        hash_spec.write_text(text.replace("- **MUST K-1**", "- **Must K-1**"), encoding="utf-8")
+        active, mentioned, defined = validate.specification_rules(root)
+        self.assertNotIn("K-1", defined)
+        self.assertNotIn("K-1", active)
+        self.assertIn("K-1", mentioned)
+
+    def test_conformance_data_and_missing_coverage_checks_work_with_both_specification_languages(self):
+        for spec_root in [validate.DEFAULT_SPEC_ROOT, self.japanese_specification()]:
+            with self.subTest(spec_root=spec_root.name):
+                validate.validate(self.root, spec_root, check_manifest=False)
+                self.restore("coverage.json")
+                self.mutate("coverage.json", lambda doc: doc["required_rules"].append("D-8"))
+                with self.rejected("未網羅"):
+                    validate.validate(self.root, spec_root, check_manifest=False)
+                self.restore("coverage.json")
+                self.mutate("coverage.json", lambda doc: doc.update(
+                    exclusions=[x for x in doc["exclusions"] if x["rule"] != "T-6"]))
+                with self.rejected("未網羅"):
+                    validate.validate(self.root, spec_root, check_manifest=False)
+                self.restore("coverage.json")
 
     def test_bt_d6a_is_listed_after_bt_17_defined_in_the_coverage_table(self):
         self.assertEqual(sorted(["BT-D6a", "BT-17", "BT-2", "BT-1"], key=validate.rule_sort),
