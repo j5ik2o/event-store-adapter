@@ -1,98 +1,105 @@
-# 各言語の実装計画
+<a id="各言語の実装計画"></a>
+# Implementation Plan for Each Language
 
-[仕様](../spec/README.md)に各言語の実装を適合させる計画を定める。対象は Orca に登録している 6 リポジトリ（rs・js・java・kotlin・scala・go）である。用語は [CONTEXT.md](../../CONTEXT.md) に従う。
+This plan defines how to bring the implementation of each language into conformance with the [specification](../spec/README.md). The targets are the six repositories registered in Orca (rs, js, java, kotlin, scala, go). Terminology follows [CONTEXT.md](../../CONTEXT.md).
 
-> 1 章の判断 IP-D1〜IP-D8 は、2026-10-05 にオーナーと一つずつ合意した。判断を変えるときや足すときも、オーナーの合意を一つずつ得て、状態の欄を書き換える。10 章の項目は、言語ごとの設計段階で決める。仕様（共通契約・ストレージプロファイル）の規則は、この文書では変えない。
+> The decisions IP-D1 to IP-D8 in chapter 1 were agreed with the owner one by one on 2026-10-05. When changing or adding a decision, obtain the owner's agreement one by one and rewrite the status column. The items in chapter 10 are decided in the per-language design stage. This document does not change the rules of the specification (the common contract and the storage profiles).
 
-## 1. この計画で決める判断
+<a id="1-この計画で決める判断"></a>
+## 1. Decisions Made by This Plan
 
-| # | 判断 | 採った案 | 主な代案 | 状態 |
+| # | Decision | Option adopted | Main alternative | Status |
 |:--|:--|:--|:--|:--|
-| IP-D1 | 移行中のブランチと自動リリース | main で進める。現行メジャーの修正を先に出し、その後に版上げの定期実行を外す。メジャーは受け入れ条件を満たしてから手動で出す（3 章） | 統合ブランチで進め、完成後に main へ入れる | 合意（2026-10-05） |
-| IP-D2 | 現行メジャーで直す不具合 | イベントを読み落とす、新しい履歴を消す、確定した書き込みを失敗として返す不具合だけを直す（8 章） | 直さない、見つかった不具合をすべて直す | 合意（2026-10-05） |
-| IP-D3 | 最初のメジャーに含める保存先 | 中核と DynamoDB・メモリだけにする。rs の Bigtable・SQLite と js の Spanner は廃止せず、プロファイルの実現方法を確かめてから同じメジャーのマイナー版で出し直す（4 章） | 既存の保存先をすべてそろえてから出す | 合意（2026-10-05） |
-| IP-D4 | メモリのプロファイル | 短いプロファイルを足して合意し、メモリでも適合を宣言する。プロファイルの中身は、段階 0 で別に一つずつ合意する | プロファイルを作らず試験用として扱う | 合意（2026-10-05） |
-| IP-D5 | java 系のメモリ実装 | java にメモリ実装を足し、kotlin・scala からも使えるようにする | 足さない | 合意（2026-10-05） |
-| IP-D6 | 適合テストデータを作る時機 | 各言語の実装より先に、本リポジトリで作る（段階 0） | 1 言語の実装を進めながら抽出する | 合意（2026-10-05） |
-| IP-D7 | 適合テストデータの配り方 | takt のテンプレートと同じく、版付きで各リポジトリに写し、版とハッシュを CI で照合する（6 章） | git submodule、試験の実行時に固定コミットから取得する | 合意（2026-10-05） |
-| IP-D8 | 旧データの移行の提供方法 | 仕様に手順がある移行には、ライブラリに移行ツールを付ける。仕様の範囲外の移行には、手順書だけを用意する（7 章） | 手順書だけにする、範囲外の移行も仕様に足してツールを作る | 合意（2026-10-05） |
+| IP-D1 | Branch during migration and automatic release | Proceed on main. Release the fix for the current major first, then remove the scheduled run of the version bump. Release the major manually after the acceptance criteria are met (chapter 3) | Proceed on an integration branch and merge into main after completion | Agreed (2026-10-05) |
+| IP-D2 | Defects to fix in the current major | Fix only defects that drop events when reading, delete the new history, or return a committed write as a failure (chapter 8) | Do not fix any; fix all defects found | Agreed (2026-10-05) |
+| IP-D3 | Storage backends included in the first major | Only the core, DynamoDB, and memory. rs's Bigtable and SQLite and js's Spanner are not discontinued; after confirming how to realize the profiles, they are re-released in a minor version of the same major (chapter 4) | Release after aligning all existing storage backends | Agreed (2026-10-05) |
+| IP-D4 | Memory profile | Add a short profile, agree on it, and declare conformance for memory as well. The content of the profile is agreed separately, one item at a time, in stage 0 | Treat memory as for testing without creating a profile | Agreed (2026-10-05) |
+| IP-D5 | Memory implementation for the java family | Add a memory implementation to java and make it usable from kotlin and scala as well | Do not add | Agreed (2026-10-05) |
+| IP-D6 | When to create the conformance test data | Create it in this repository before the implementation of each language (stage 0) | Extract it while advancing the implementation of one language | Agreed (2026-10-05) |
+| IP-D7 | How to distribute the conformance test data | As with takt's templates, copy it with a version to each repository and verify the version and hash in CI (chapter 6) | git submodule; fetch from a pinned commit when running tests | Agreed (2026-10-05) |
+| IP-D8 | How to provide migration of old data | For migrations whose procedure is in the specification, attach a migration tool to the library. For migrations outside the specification's scope, provide only a procedure document (chapter 7) | Only a procedure document; add out-of-scope migrations to the specification and build tools | Agreed (2026-10-05) |
 
-## 2. 現状（2026-10-05 時点）
+<a id="2-現状2026-10-05-時点"></a>
+## 2. Current State (as of 2026-10-05)
 
-6 リポジトリの main を調べた結果である。どの実装も仕様に適合していない。rs 以外は封筒モデルを持たず、6 つとも version による照合と論理シャードのキーを使う。仕様との差は大きく、rs を含めて実質的な書き直しになる。
+This is the result of examining main of the six repositories. No implementation conforms to the specification. Except for rs, none has the envelope model, and all six use version-based checking and logical shard keys. The gap from the specification is large, and including rs it amounts to a substantial rewrite.
 
-| 実装 | 現行の版 | 自動リリース | 保存先 | 規模（試験を除く） |
+| Implementation | Current version | Automatic release | Storage backends | Size (excluding tests) |
 |:--|:--|:--|:--|:--|
-| [rs](https://github.com/j5ik2o/event-store-adapter-rs) | v3.0.5 | 毎日の定期実行で版を上げ、タグから crates.io に公開 | DynamoDB・Bigtable・SQLite・メモリ | 約 3,500 行 |
-| [js](https://github.com/j5ik2o/event-store-adapter-js) | v4.0.0（2026-10-03） | 版上げは手動。main の CI 成功後に Snapshot を npm に公開 | DynamoDB・Spanner・メモリ | 約 2,400 行 |
-| [java](https://github.com/j5ik2o/event-store-adapter-java) | v1.2.90 | 毎日の定期実行で版を上げ、Maven Central に公開。main から Snapshot も公開 | DynamoDB | 約 2,100 行 |
-| [kotlin](https://github.com/j5ik2o/event-store-adapter-kotlin) | v1.0.510 | java と同じ | java 1.2.88 の DynamoDB を包む | 約 460 行 |
-| [scala](https://github.com/j5ik2o/event-store-adapter-scala) | v1.0.340 | java と同じ（Central Portal に公開） | java 1.2.88 の DynamoDB を包む | 約 530 行 |
-| [go](https://github.com/j5ik2o/event-store-adapter-go) | v1.0.196 | 毎日の定期実行でタグを打つ（公開先の登録はない） | DynamoDB・メモリ | 約 1,240 行 |
+| [rs](https://github.com/j5ik2o/event-store-adapter-rs) | v3.0.5 | Bumps the version with a daily scheduled run and publishes to crates.io from the tag | DynamoDB, Bigtable, SQLite, memory | About 3,500 lines |
+| [js](https://github.com/j5ik2o/event-store-adapter-js) | v4.0.0 (2026-10-03) | Version bump is manual. Publishes a Snapshot to npm after CI succeeds on main | DynamoDB, Spanner, memory | About 2,400 lines |
+| [java](https://github.com/j5ik2o/event-store-adapter-java) | v1.2.90 | Bumps the version with a daily scheduled run and publishes to Maven Central. Also publishes a Snapshot from main | DynamoDB | About 2,100 lines |
+| [kotlin](https://github.com/j5ik2o/event-store-adapter-kotlin) | v1.0.510 | Same as java | Wraps java 1.2.88's DynamoDB | About 460 lines |
+| [scala](https://github.com/j5ik2o/event-store-adapter-scala) | v1.0.340 | Same as java (publishes to Central Portal) | Wraps java 1.2.88's DynamoDB | About 530 lines |
+| [go](https://github.com/j5ik2o/event-store-adapter-go) | v1.0.196 | Tags with a daily scheduled run (no publishing destination is registered) | DynamoDB, memory | About 1,240 lines |
 
-### 2.1 共通する乖離
+<a id="21-共通する乖離"></a>
+### 2.1 Common Gaps
 
-- **封筒**: rs はイベント封筒を持つ。ただし、スナップショット封筒は manifest を持たず、version を持つ。他の 5 つは旧来の契約のままで、ドメイン型にライブラリのインターフェイスを実装させる（T-6）。js・go の既定のシリアライザは、メタデータをペイロードに埋め込む（T-7）。
-- **照合**: 6 つとも、スナップショットの version で照合する。集約ヘッドはどこにもない（H-1〜H-4）。飛び番を契約違反として区別する実装もない（W-8）。
-- **キー**: 6 つとも `${型名}-${シャード番号}` の論理シャードで、ハッシュは 4 通りある（rs は `DefaultHasher`、java は `Math.abs(hashCode)`、js は 31 倍の文字列ハッシュ、go は FNV-1a）。aid 文字列は利用者の文字列化に頼る（T-1）。
-- **読み取り**: イベントを GSI の 1 回の Query で読み、続きを読まない。1MB を超える分を黙って落とす（R-5）。強整合の読み取りもしない。
-- **保持**: 保持処理が失敗すると、書き込みの失敗として返す（S-4）。rs の DynamoDB・java・go は、古い履歴ではなく新しい履歴を消す（S-2）。イベントだけを書き込んだ後にも保持処理を行う（D-9）。
-- **時刻と範囲**: js・java は occurred_at をミリ秒で保存する。go は単位を決めていない。rs は occurred_at の範囲外を拒むが、契約違反ではなく「その他」のエラーで返す。seq_nr の範囲（T-9）、型名の `-`（T-11）、aid の長さ（T-12）、occurred_at の範囲（T-13）を、契約違反として検査する実装はない。
-- **エラー**: 「設定」の分類は js にしかなく、「契約違反」は rs にしかない（共通契約 4 章、E-1）。
-- **試験**: java・kotlin・scala・go の試験は、正常系の 4〜5 件だけである。DynamoDB の試験は LocalStack で行う。版は 5 つが 2.1.0 で、scala だけが docker-controller-scala の既定の 1.0.3 である。
+- **Envelope**: rs has the event envelope. However, its snapshot envelope has no manifest and has a version. The other five remain in the old contract and make domain types implement a library interface (T-6). The default serializers of js and go embed metadata in the payload (T-7).
+- **Checking**: All six check by the snapshot's version. The aggregate head exists nowhere (H-1 to H-4). No implementation distinguishes a skipped number as a contract violation (W-8).
+- **Keys**: All six use the logical shard `${type name}-${shard number}`, and there are four kinds of hashes (rs `DefaultHasher`, java `Math.abs(hashCode)`, js a string hash with a multiplier of 31, go FNV-1a). The aid string depends on the user's stringification (T-1).
+- **Reading**: Events are read with a single Query on the GSI, and reading does not continue. The part beyond 1MB is silently dropped (R-5). No strongly consistent read is done either.
+- **Retention**: When the retention process fails, it is returned as a write failure (S-4). rs's DynamoDB, java, and go delete the new history rather than the old (S-2). The retention process is also run after writing only events (D-9).
+- **Time and range**: js and java store occurred_at in milliseconds. go has not decided the unit. rs rejects an occurred_at outside the range, but returns an "other" error rather than a contract violation. No implementation checks as contract violations the range of seq_nr (T-9), `-` in the type name (T-11), the length of aid (T-12), or the range of occurred_at (T-13).
+- **Errors**: The "configuration" category exists only in js, and "contract violation" only in rs (chapter 4 of the common contract, E-1).
+- **Tests**: The tests of java, kotlin, scala, and go are only 4–5 cases of the normal path. The DynamoDB tests use LocalStack. Five use version 2.1.0, and only scala uses docker-controller-scala's default 1.0.3.
 
-### 2.2 現行メジャーで見つかった不具合
+<a id="22-現行メジャーで見つかった不具合"></a>
+### 2.2 Defects Found in the Current Major
 
-調査はコードを読んだだけで、実行による再現はしていない。
+The investigation only read the code; it did not reproduce the defects by running them.
 
-| 実装 | 内容 | 影響 |
+| Implementation | Content | Impact |
 |:--|:--|:--|
-| rs・js・java・go | イベントの読み取りが 1 回の応答（1MB）で打ち切られる | イベントの多い集約のリプレイで、イベントを読み落とす |
-| rs（DynamoDB）・java・go | 保持処理が古い履歴ではなく新しい履歴を消す | 残すべき新しい履歴を失う |
-| go | 履歴が保持件数より少ないと `uint32` の桁あふれで Query の `Limit` が不正になる | 保持件数 2 以上で、確定した書き込みが失敗として返る |
-| java | TTL 方式の絞り込み条件が予約語 `ttl` をそのまま使う。期限もエポック秒ではなく猶予の秒数と比べる | 保持処理が検証エラーになる。超過分が出た後は、イベントだけの書き込みも含めて、確定した書き込みが毎回失敗として返る |
-| rs（Bigtable） | スナップショット行の照合の後に、別の書き込みでイベントを書く（[bigtable.md](../spec/storage/bigtable.md) 10 章） | イベントの書き込みに失敗すると欠番が残る |
-| java | `:seq_nr` という名前の属性を誤って書く。非同期の経路では、楽観ロックの失敗が読み取りエラーとして返る | 不要な属性が残る。呼び出し側が再試行を判断できない |
-| go | 応答が想定外のとき panic する。メモリ実装に排他制御がない | プロセスが落ちる。並行して使うと壊れる |
+| rs, js, java, go | Reading events is cut off at one response (1MB) | Events are dropped when replaying an aggregate with many events |
+| rs (DynamoDB), java, go | The retention process deletes the new history instead of the old | The new history that should be kept is lost |
+| go | When the history is shorter than the retention count, a `uint32` overflow makes the Query `Limit` invalid | With a retention count of 2 or more, a committed write is returned as a failure |
+| java | The filter condition of the TTL method uses the reserved word `ttl` as is. It also compares the expiry against the grace seconds rather than epoch seconds | The retention process gets a validation error. After excess entries appear, committed writes are returned as failures every time, including writes of only events |
+| rs (Bigtable) | After checking the snapshot row, events are written in a separate write ([bigtable.md](../spec/storage/bigtable.md) chapter 10) | If writing events fails, a missing number is left behind |
+| java | Wrongly writes an attribute named `:seq_nr`. In the asynchronous path, an optimistic-lock failure is returned as a read error | An unnecessary attribute remains. The caller cannot decide whether to retry |
+| go | Panics when a response is unexpected. The memory implementation has no mutual exclusion | The process crashes. Concurrent use corrupts it |
 
-確定した書き込みを失敗として返す不具合では、呼び出し側が再試行すると楽観ロックのエラーになる。
+For a defect that returns a committed write as a failure, if the caller retries, an optimistic-lock error occurs.
 
-## 3. 移行中のブランチと自動リリース（IP-D1、2026-10-05 合意）
+<a id="3-移行中のブランチと自動リリースip-d12026-10-05-合意"></a>
+## 3. Branch During Migration and Automatic Release (IP-D1, Agreed 2026-10-05)
 
-rs・java・kotlin・scala・go は、毎日 00:00 UTC の定期実行で、main に入った変更から版を上げてタグを打つ。版の判定には 2 つの問題がある。
+rs, java, kotlin, scala, and go bump the version and create a tag from the changes that entered main, with a scheduled run every day at 00:00 UTC. The version decision has two problems.
 
-- scala 以外の 4 つは、コミットの件名を `(\(.*\))?:` の形で絞り込んでから判定する。`feat!:` の件名は、この絞り込みで落ちる。判定のスクリプト（`.github/semver-level.py`）も件名しか見ないので、本文の `BREAKING CHANGE` を拾わない。今の workflow では、手動で起動しても `feat!:` からメジャーを作れない。
-- 同じスクリプトは、`perf:` の件名が 1 件あるだけでメジャーを上げる。新契約の変更を main に少しずつ入れると、`perf:` が混ざった時点で、未完成の API が予定外のメジャーとして 24 時間以内に出てしまう。
+- The four other than scala filter commit subjects by the form `(\(.*\))?:` before deciding. A subject like `feat!:` is dropped by this filter. The decision script (`.github/semver-level.py`) also looks only at subjects, so it does not pick up `BREAKING CHANGE` in the body. With the current workflow, even a manual start cannot create a major from `feat!:`.
+- The same script raises the major with just one `perf:` subject. If changes of the new contract are merged into main little by little, once a `perf:` is mixed in, an unfinished API would be released as an unplanned major within 24 hours.
 
-scala は `mathieudutour/github-tag-action` で版を上げるので、判定の規則は別に確かめる。
+scala bumps the version with `mathieudutour/github-tag-action`, so its decision rules are checked separately.
 
-次の順に進める（IP-D1、2026-10-05 合意）。
+Proceed in the following order (IP-D1, agreed 2026-10-05).
 
-1. 現行メジャーの修正（IP-D2）を先に出す。自動リリースは今のまま使う。java の修正版を出したら、kotlin・scala の java への依存（いまは 1.2.88 に固定）を上げて、それぞれ出す。
-2. 版上げの workflow を直す。定期実行を外し、手動の起動だけを残す。判定は `!` 付きの件名と本文の `BREAKING CHANGE` を検出し、`perf:` をパッチに扱う。手動の起動で上げる段階を指定できる入力も足す。リポジトリの設定で workflow を止める方法は、git に残らずレビューできないので使わない。
-3. 新契約の変更を、main に PR ごとに squash マージする。main の Snapshot は、次のメジャーの版（java の `2.0.0-SNAPSHOT` など）で公開されるようにする。kotlin・scala は、この Snapshot で java の新 API を参照する。
-4. メジャーは、5 章の受け入れ条件を満たした後、オーナーの承認を得て手動で出す。出した後に定期実行を戻す。
+1. Release the fix for the current major (IP-D2) first. Keep using the automatic release as it is. After releasing the fixed version of java, raise the dependency of kotlin and scala on java (currently pinned to 1.2.88) and release each.
+2. Fix the version bump workflow. Remove the scheduled run and keep only manual starts. The decision detects subjects with `!` and `BREAKING CHANGE` in the body, and treats `perf:` as a patch. Also add an input that lets a manual start specify the stage to bump. Do not use the method of stopping the workflow in the repository settings, because it is not kept in git and cannot be reviewed.
+3. Merge changes of the new contract into main with a squash merge per PR. Make main's Snapshot be published at the next major's version (such as java's `2.0.0-SNAPSHOT`). kotlin and scala refer to java's new API through this Snapshot.
+4. Release the major manually, with the owner's approval, after meeting the acceptance criteria in chapter 5. After releasing, restore the scheduled run.
 
-移行の間に、手順 1 の後でも現行メジャーの修正が必要になったら、最後のタグから保守ブランチ（`release/1.x` など）を切り、そこからパッチを出す。そのためには次の変更が要るので、必要になった時点で行う。
+If, during the migration, a fix to the current major is still needed after step 1, cut a maintenance branch (such as `release/1.x`) from the last tag and release a patch from there. That requires the following changes, so make them when the need arises.
 
-- CI が main 向けの PR でしか走らないので、保守ブランチ向けの PR でも走るようにする。
-- 版上げの workflow が main への push を前提にしているので、保守ブランチに対応させる。
-- 保守ブランチを保護する。運用方針の 2 章は main だけを対象にしているので、方針の変更としてオーナーの合意を得る。
-- js は公開に `--tag` を付けていない。新しいメジャーの後に 4.x を出すと npm の `latest` が 4.x に戻るので、保守の版は別のタグで公開する。
-- java の修正を kotlin・scala の利用者に届けるには、kotlin・scala の保守の版も出す。
+- CI runs only on PRs to main, so make it run on PRs to the maintenance branch as well.
+- The version bump workflow assumes a push to main, so make it support the maintenance branch.
+- Protect the maintenance branch. Chapter 2 of the repository policy covers only main, so obtain the owner's agreement as a change of policy.
+- js does not attach `--tag` when publishing. If 4.x is released after the new major, npm's `latest` goes back to 4.x, so publish maintenance versions with a different tag.
+- To deliver the java fix to users of kotlin and scala, also release maintenance versions of kotlin and scala.
 
-代案は、長期の統合ブランチ（`next` など）で進め、完成後に main へ 1 回で入れる方式である。main の自動リリースを変えずに済み、移行の間も現行メジャーの修正を main から出せる。ただし、次の手間がかかる。
+The alternative is to proceed on a long-lived integration branch (such as `next`) and merge it into main once after completion. It does not change main's automatic release, and fixes to the current major can still be released from main during the migration. However, it costs the following effort.
 
-- CI と保護を統合ブランチにも広げる（運用方針の変更）。
-- main に入る Renovate の更新を、統合ブランチへ取り込み続ける。
-- kotlin・scala が java の新 API を参照するには、統合ブランチから java の pre-release（`2.0.0-RC.1` など）をタグで出す。運用方針の 1 章は、タグからの公開を main の先頭という条件から外しているので、この公開は方針の範囲内である。
-- 最後に、統合ブランチの全変更を 1 つの大きな PR で main に入れる。
+- Extend CI and protection to the integration branch too (a change of the repository policy).
+- Keep taking Renovate updates that enter main into the integration branch.
+- For kotlin and scala to refer to java's new API, release a java pre-release (such as `2.0.0-RC.1`) by tag from the integration branch. Chapter 1 of the repository policy excludes publishing from tags from the condition of being the head of main, so this publishing is within the policy.
+- Finally, merge all changes of the integration branch into main in one big PR.
 
-### 結果（2026-10-05）
+<a id="結果2026-10-05"></a>
+### Result (2026-10-05)
 
-手順 1 のパッチ版（8 章）を出した後に、手順 2 を全リポジトリで行った。rs・java・kotlin・scala・go の版上げの workflow から定期実行を外し、手動の起動に段階を選ぶ入力 `level`（auto・patch・minor・major）を足した。判定は、`!` 付きの件名と本文の `BREAKING CHANGE:`（`BREAKING-CHANGE:`）を major、`feat`・`revert` を minor、`perf` を含むそれ以外を patch にする。判定の対象がないときは失敗で終える。判定の単体試験と actionlint を各リポジトリの CI に足し、`CI Success` の依存に含めた。js は定期実行がないので、判定の修正と `level` の入力だけを入れた。scala は `mathieudutour/github-tag-action` の設定で同じ規則にした。ワークフロー側で `!` 付きの件名と本文の `BREAKING CHANGE:`・`BREAKING-CHANGE:` を検出して major を指定し、それ以外は action の conventionalcommits の規則（perf は patch）に、revert を minor にする追加の規則を足した。
+After releasing the patch versions of step 1 (chapter 8), we did step 2 in all repositories. We removed the scheduled run from the version bump workflows of rs, java, kotlin, scala, and go, and added the input `level` (auto, patch, minor, major) for choosing the stage at manual start. The decision is: major for a subject with `!` and `BREAKING CHANGE:` (`BREAKING-CHANGE:`) in the body, minor for `feat` and `revert`, and patch for everything else including `perf`. When there is nothing to decide from, it ends with a failure. We added a unit test of the decision and actionlint to each repository's CI and included them in the dependencies of `CI Success`. js has no scheduled run, so only the fix of the decision and the input `level` were put in. scala got the same rules through the configuration of `mathieudutour/github-tag-action`. On the workflow side, a subject with `!` and `BREAKING CHANGE:` or `BREAKING-CHANGE:` in the body is detected and major is specified; for the rest, the action's conventionalcommits rules apply (perf is patch), with an additional rule that makes revert minor.
 
-| 実装 | PR |
+| Implementation | PR |
 |:--|:--|
 | rs | [#244](https://github.com/j5ik2o/event-store-adapter-rs/pull/244) |
 | js | [#1000](https://github.com/j5ik2o/event-store-adapter-js/pull/1000) |
@@ -101,317 +108,338 @@ scala は `mathieudutour/github-tag-action` で版を上げるので、判定の
 | scala | [#860](https://github.com/j5ik2o/event-store-adapter-scala/pull/860) |
 | go | [#387](https://github.com/j5ik2o/event-store-adapter-go/pull/387) |
 
-これで、main に入れた変更が自動で公開されることはない。次のメジャーは、5 章の受け入れ条件を満たした後に、オーナーの承認を得て手動で出す。
+With this, a change merged into main is never published automatically. The next major is released manually, with the owner's approval, after meeting the acceptance criteria in chapter 5.
 
-2026-10-13 に、最初のメジャーを全言語で 5.0.0 にそろえると決めた（P-48）。`level` を major にすると最後のタグから次のメジャーを計算するので（rs 4.0.0、java 3.0.0、kotlin・scala・go 2.0.0 になる）、版上げの workflow に、版を直接指定する入力 `version` を足して 5.0.0 を出す。番号を飛ばすのはこの一度だけで、以後は `level` で上げる。java は、この決定の前に `level` を major にして 2.0.0 を出していた（中身は 5.0.0 と同じ）。
+On 2026-10-13, we decided to align the first major to 5.0.0 in all languages (P-48). Setting `level` to major computes the next major from the last tag (it would become rs 4.0.0, java 3.0.0, and kotlin, scala, and go 2.0.0), so we add to the version bump workflow an input `version` that specifies the version directly, and release 5.0.0. Skipping numbers happens only this once, and from then on versions are bumped with `level`. java had set `level` to major and released 2.0.0 before this decision (its content is the same as 5.0.0).
 
-## 4. 進め方
+<a id="4-進め方"></a>
+## 4. How to Proceed
 
-段階ごとに進める。同じ段階の中のリポジトリは並行して進める。段階 0 と段階 1 は、2026-10-05 にマイルストーン M1 として完了した（8 章・3 章・4.1・6 章の結果を参照）。適合テストデータの実行器は、場面を実行する相手（新しい API）が段階 2 でできるので、段階 2 に移した。
+We proceed stage by stage. Repositories in the same stage proceed in parallel. Stage 0 and stage 1 were completed on 2026-10-05 as milestone M1 (see the results in chapters 8, 3, 4.1, and 6). The runner of the conformance test data was moved to stage 2, because the counterpart that executes the scenarios (the new API) is made in stage 2.
 
-| 段階 | 場所 | 内容 | 前提 |
+| Stage | Where | Content | Prerequisite |
 |:--|:--|:--|:--|
-| 0 | 本リポジトリ | 適合テストデータ（6 章）。メモリのプロファイルの草案の作成と合意（IP-D4） | IP-D4・IP-D6・IP-D7 の合意 |
-| 1 | 各リポジトリ | 現行メジャーの修正（8 章）→ リリース制御の変更（3 章）。並行して、試験基盤の確認（4.1）と、適合テストデータを写して CI で照合する（6 章） | 修正とリリース制御は IP-D1・IP-D2 の合意だけで始められ、段階 0 と並行して進める。データの配布は段階 0 の後 |
-| 2 | rs・js・go・java | 適合テストデータの実行器 → 中核（封筒・照合・検査・エラー分類）→ メモリ → DynamoDB → 文書。rs は v3 からの移行ツールも | 段階 1 |
-| 3 | kotlin・scala | java の Snapshot を参照し、包む層を新 API に作り直す | java の段階 2 |
-| 4 | 各リポジトリ | 受け入れ条件（5 章）を満たしたものから、オーナーの承認を得てメジャーを出す。java を先に出し、kotlin・scala は java への依存を Snapshot から正式版に差し替えてから出す | 段階 2・3 |
-| 5 | rs・js | rs の SQLite・Bigtable と js の Spanner を、新契約で出し直す（IP-D3）。旧配置からの移行ツールも | 各プロファイルの実現方法の確認 |
+| 0 | This repository | Conformance test data (chapter 6). Drafting and agreeing on the memory profile (IP-D4) | Agreement on IP-D4, IP-D6, and IP-D7 |
+| 1 | Each repository | Fix the current major (chapter 8) → change release control (chapter 3). In parallel, confirm the test infrastructure (4.1) and copy the conformance test data and verify it in CI (chapter 6) | The fixes and release control can start with only the agreement on IP-D1 and IP-D2, and proceed in parallel with stage 0. Distribution of the data comes after stage 0 |
+| 2 | rs, js, go, java | Runner of the conformance test data → core (envelope, checking, validation, error classification) → memory → DynamoDB → documentation. For rs, also the migration tool from v3 | Stage 1 |
+| 3 | kotlin, scala | Refer to java's Snapshot and rebuild the wrapping layer on the new API | java's stage 2 |
+| 4 | Each repository | Release the major, with the owner's approval, starting with those that meet the acceptance criteria (chapter 5). Release java first; kotlin and scala release after switching their dependency on java from the Snapshot to the official version | Stages 2 and 3 |
+| 5 | rs, js | Re-release rs's SQLite and Bigtable and js's Spanner under the new contract (IP-D3). Also migration tools from the old layout | Confirming how to realize each profile |
 
-IP-D3（2026-10-05 合意）で 3 つの保存先をいったん外す理由は次のとおりである。Spanner・Bigtable・SQLite のプロファイルでは、主要判断は合意済みだが、規則の具体的な実現方法は草案のままである。最初のメジャーにこれらを含めると、その確認が済むまで、どの言語もリリースできない。これは保存先の廃止ではない（[ADR-0005](../adr/0005-define-append-atomicity-by-observable-commit.md) は Bigtable を対象から外す案を採らなかった）。新しいメジャーで出し直すまで、利用者は旧メジャー（rs v3、js v4）で使い続けられる。
+The reason for temporarily removing the three storage backends in IP-D3 (agreed 2026-10-05) is as follows. For the Spanner, Bigtable, and SQLite profiles, the main decisions are agreed, but the concrete way to realize the rules remains a draft. If these were included in the first major, no language could release until that confirmation is done. This is not a discontinuation of the storage backends ([ADR-0005](../adr/0005-define-append-atomicity-by-observable-commit.md) did not adopt the option of excluding Bigtable from the scope). Until they are re-released in the new major, users can keep using the old major (rs v3, js v4).
 
-### 4.1 試験基盤の確認
+<a id="41-試験基盤の確認"></a>
+### 4.1 Confirming the Test Infrastructure
 
-仕様は、トランザクションの取り消し理由に旧項目を載せる `ReturnValuesOnConditionCheckFailure`（D-5）と、head テーブルの Streams（DY-12）を前提にする。これらが試験環境で再現できるかを、2026-10-05 に下の 3 案で確かめた。
+The specification presumes `ReturnValuesOnConditionCheckFailure` (D-5), which puts the old item in the transaction's cancellation reasons, and Streams of the head table (DY-12). On 2026-10-05 we checked, with the three options below, whether these can be reproduced in the test environment.
 
-また、Docker Hub の LocalStack のイメージは、2026-03-23 から利用者のアカウントと認証トークン（`LOCALSTACK_AUTH_TOKEN`）がないと動かない（[LocalStack の告知](https://blog.localstack.cloud/2026-upcoming-pricing-changes/)）。オープンソースのプロジェクトと CI には無料の枠がある。今の試験が固定している版（5 つは 2.1.0、scala は 1.0.3）が今後もトークンなしで動くかは、次の比較で確かめる。
+Also, the LocalStack image on Docker Hub has not run without a user account and an auth token (`LOCALSTACK_AUTH_TOKEN`) since 2026-03-23 ([LocalStack's announcement](https://blog.localstack.cloud/2026-upcoming-pricing-changes/)). There is a free tier for open-source projects and CI. Whether the versions that the current tests pin (2.1.0 for five, 1.0.3 for scala) will keep running without a token is to be checked in the next comparison.
 
-段階 1 の最初に、1 つのリポジトリで次の 3 案を比べ、全言語の試験環境を決める。
+At the start of stage 1, compare the following three options in one repository and decide the test environment for all languages.
 
-- LocalStack の最新版を、オープンソース向けの枠のトークンで使う。トークンは Secret になるので、オーナーが用意する（運用方針の 7 章）。
-- LocalStack の古い版に固定したまま使う。
-- AWS が配布する DynamoDB Local に切り替える。
+- Use the latest LocalStack with a token of the open-source tier. The token becomes a Secret, so the owner prepares it (chapter 7 of the repository policy).
+- Keep using an old version of LocalStack, pinned.
+- Switch to DynamoDB Local distributed by AWS.
 
-どの案でも再現できない規則があっても、本番の実サービスでは確かめない（2026-10-15 にオーナーが決定。5 章）。比べた結果、3 案とも全項目を再現できた（下の結果）。
+Even if there are rules that no option can reproduce, we do not check them on the real production service (the owner decided this on 2026-10-15; chapter 5). As a result of the comparison, all three options could reproduce all items (the result below).
 
-#### 比べた結果と決定（2026-10-05）
+<a id="比べた結果と決定2026-10-05"></a>
+#### Comparison Result and Decision (2026-10-05)
 
-LocalStack 2.1.0、トークンなしで動く LocalStack の最新の正式版 4.14.0、DynamoDB Local 3.3.1 の 3 つで、次の 6 項目を実際に動かして確かめた。比較のスクリプトと実測の記録は [tools/spikes/dynamodb-emulators/](../../tools/spikes/dynamodb-emulators/README.md) にある。
+With three environments, LocalStack 2.1.0, LocalStack 4.14.0 (the latest official version that runs without a token), and DynamoDB Local 3.3.1, we actually ran and checked the following six items. The comparison scripts and the measurement records are in [tools/spikes/dynamodb-emulators/](../../tools/spikes/dynamodb-emulators/README.md).
 
-- 条件付きの Update と Put を含む TransactWriteItems の取り消しで、CancellationReasons の該当要素に旧項目が載る（D-5）
-- head テーブルの Streams（NEW_IMAGE）で、INSERT と MODIFY を順に読める（DY-12）
-- 1 つのパーティションで 1MB を超える強整合の Query を、LastEvaluatedKey で読み切れる（DY-11）
-- BatchGetItem の強整合読み取り（DY-8・DY-9）
-- 疎な KEYS_ONLY の GSI（D-3）
-- 属性 ttl の TTL を有効にできる（DY-2）
+- When a TransactWriteItems containing a conditional Update and Put is cancelled, the old item appears in the relevant element of CancellationReasons (D-5)
+- With Streams of the head table (NEW_IMAGE), INSERT and MODIFY can be read in order (DY-12)
+- A strongly consistent Query exceeding 1MB in one partition can be read through with LastEvaluatedKey (DY-11)
+- Strongly consistent reads of BatchGetItem (DY-8, DY-9)
+- A sparse KEYS_ONLY GSI (D-3)
+- TTL can be enabled on the attribute ttl (DY-2)
 
-3 つとも 6 項目すべてが成功した。そこで、各言語の試験環境は **DynamoDB Local 3.3.1 に統一し、イメージを digest（`sha256:ff89bd48ff32cd8d9be5fee8873b65b8854dc408f1afe881be6eb00247bc0dab`）で固定する**。AWS 公式のイメージで、トークンが要らず、LocalStack が独自に実装する Streams にも頼らないからである。LocalStack の DynamoDB は内部で DynamoDB Local を使うので、D-5 の結果は同梱の DynamoDB Local の版で決まる。
+All three succeeded on all six items. So we **unify the test environment of each language to DynamoDB Local 3.3.1 and pin the image by digest (`sha256:ff89bd48ff32cd8d9be5fee8873b65b8854dc408f1afe881be6eb00247bc0dab`)**. This is because it is an official AWS image, needs no token, and does not rely on the Streams that LocalStack implements on its own. LocalStack's DynamoDB uses DynamoDB Local internally, so the result of D-5 is determined by the version of the bundled DynamoDB Local.
 
-トークンが要る LocalStack の最新版は動かしていない。トークンなしの 2 案で全項目を再現できたので、Secret を用意してまで比べる必要がないと判断した。試験を書くときは次に注意する。
+We did not run the latest LocalStack, which needs a token. Since the two token-free options reproduced all items, we judged that it is not necessary to prepare a Secret just to compare. When writing tests, note the following.
 
-- DynamoDB Local の Streams の ARN はリージョンが `ddblocal` になる。ARN から AWS のリージョンを推測せず、Streams のクライアントにも endpoint を明示する。
-- LocalStack を使い続ける場合は、テーブルが ACTIVE になった後も、Streams が ENABLED になり iterator を取れるまで待つ。
+- The region of a DynamoDB Local Streams ARN is `ddblocal`. Do not infer the AWS region from the ARN, and specify the endpoint explicitly for the Streams client too.
+- If LocalStack keeps being used, after the table becomes ACTIVE, also wait until Streams is ENABLED and an iterator can be obtained.
 
-今のリポジトリの試験（LocalStack 2.1.0 など）は、段階 2 で試験を書き直すときに DynamoDB Local へ移す。
+The current tests of the repositories (LocalStack 2.1.0 and so on) will be moved to DynamoDB Local when the tests are rewritten in stage 2.
 
-### 4.2 言語ごとの主な作業
+<a id="42-言語ごとの主な作業"></a>
+### 4.2 Main Work per Language
 
-- **rs**: スナップショット封筒に manifest を足し、version を外す。`persist_event_and_snapshot` がスナップショット封筒を受け取り、読み取りがヘッドの seq_nr を返すようにする。aid 文字列をライブラリが組み立て、`KeyResolver` とシャード数を廃止する。保持処理の時機と失敗の扱いを `GenericEventStore` で改める。DynamoDB は 3 テーブルと設定項目に作り直す。ヘッドの条件付き書き込みで照合し（dynamodb.md 6.1 章、W-8）、外れ方を旧項目で判別する（D-5）。読み取りのページ送り、疎な GSI、項目サイズの事前検査（D-7）も入れる。dynamodb.md 11 章の移行ツールを作る。SQLite・Bigtable は、段階 5 まで新しいメジャーから外す。CHANGELOG と AGENTS.md の誤りも直す。
-- **js**: 4.0.0 に続けて、短い間隔で 2 度目のメジャー（5.0.0）を出すことになる。公開 API を封筒に置き換え、`version`・`expectedVersion`・`isCreated` を外す。契約違反の分類を足し、読み取りと生成の失敗も分類して返す。シリアライザがペイロードだけを扱うようにする。DynamoDB とメモリを作り直す。Spanner を出し直す段階 5 までに、Spanner を任意の依存にするエントリポイントの分け方を決める（2026-10-19 にオーナーが決定。同じパッケージの別の入口 `event-store-adapter-js/spanner` とし、`@google-cloud/spanner` を任意の peer 依存にする。元の入口は Spanner の SDK を読み込まない。10 章）。使っていない依存（`aws-sdk` v2・`moment`・`winston`）を外す。
-- **java**: 公開 API（同期・非同期）、エラー分類（契約違反・設定を追加）、`Class<T>` に頼るシリアライザ、DynamoDB を作り直す。メモリ実装を足す（IP-D5）。試験はほぼ一から書く。試験用ライブラリ（Testcontainers）の版の混在も直す。
-- **kotlin**: `api(...)` で java の新 API に依存し、`kotlinx.coroutines` の `await` を使う。POM の名前と URL、README の groupId の誤りを直す。
-- **scala**: java の新 API を包み直す。Snapshot を参照するリゾルバを足す。sbt-dynver で次のメジャーの Snapshot 版を作る方法を決める。README の groupId の誤りを直す。
-- **go**: モジュールのパスを `/v2` にする（パスを変えないと、v2 のタグを Go のツールチェーンが受け付けない）。`context.Context` を受け取る API にする。panic をやめて分類したエラーを返し、エラーには `Unwrap` を持たせる。試験用の `pkg/common` を試験の側へ移す。メモリ実装に排他制御を足す。
+- **rs**: Add a manifest to the snapshot envelope and remove version. `persist_event_and_snapshot` receives the snapshot envelope, and reading returns the head's seq_nr. The library builds the aid string, and `KeyResolver` and the shard count are abolished. Revise the timing and failure handling of the retention process in `GenericEventStore`. Rebuild DynamoDB with three tables and the configuration item. Check with a conditional write to the head (dynamodb.md 6.1, W-8) and distinguish the way it failed with the old item (D-5). Also add paging of reads, the sparse GSI, and the pre-check of item size (D-7). Build the migration tool in dynamodb.md chapter 11. SQLite and Bigtable are removed from the new major until stage 5. Also fix the mistakes in the CHANGELOG and AGENTS.md.
+- **js**: Following 4.0.0, a second major (5.0.0) will be released after a short interval. Replace the public API with the envelope and remove `version`, `expectedVersion`, and `isCreated`. Add the contract violation classification, and also classify and return failures of reading and creation. Make the serializer handle only the payload. Rebuild DynamoDB and memory. By stage 5, when Spanner is re-released, decide how to split the entry point so that Spanner is an optional dependency (the owner decided this on 2026-10-19: a separate entry `event-store-adapter-js/spanner` of the same package, with `@google-cloud/spanner` as an optional peer dependency. The original entry does not load the Spanner SDK. Chapter 10). Remove unused dependencies (`aws-sdk` v2, `moment`, `winston`).
+- **java**: Rebuild the public API (synchronous and asynchronous), the error classification (add contract violation and configuration), the serializer that relies on `Class<T>`, and DynamoDB. Add the memory implementation (IP-D5). Write the tests almost from scratch. Also fix the mixed versions of the test library (Testcontainers).
+- **kotlin**: Depend on java's new API with `api(...)` and use `kotlinx.coroutines`'s `await`. Fix the mistakes in the POM's name and URL and in the README's groupId.
+- **scala**: Re-wrap java's new API. Add a resolver that refers to the Snapshot. Decide how to create the next major's Snapshot version with sbt-dynver. Fix the mistake in the README's groupId.
+- **go**: Make the module path `/v2` (without changing the path, the Go toolchain does not accept a v2 tag). Make an API that receives `context.Context`. Stop panicking and return classified errors, and give the errors `Unwrap`. Move `pkg/common`, which is for tests, to the test side. Add mutual exclusion to the memory implementation.
 
-## 5. 受け入れ条件（最初のメジャー）
+<a id="5-受け入れ条件最初のメジャー"></a>
+## 5. Acceptance Criteria (First Major)
 
-言語ごとに、次をすべて満たしたらメジャーを出せる。
+A major can be released for a language when it satisfies all of the following.
 
-1. 適合テストデータの全ケースを、DynamoDB（4.1 で決めた試験環境）とメモリで通す（IP-D4）。全ケースとは、その版で出す保存先にかかわるケースである。ハッシュを使う保存先のための FNV-1a 64 の 4 件（hash.md の K-1）は、最初のメジャーではハッシュを使う保存先がないので、理由を付けて対象外と報告し、成功にも失敗にも数えない。段階 5 でハッシュを使う保存先を出すときに実行する（2026-10-06 にオーナーが決定）。障害を差し込む場面（S-4 など）も両方で行う。障害を差し込めない保存先があれば、代わりの確かめ方を設計段階で決め、コーディネーターのレビューを受ける。CI は、ケースを規則番号ごとに報告する。
-2. DynamoDB に書いた項目の形（属性の名前と型）が、適合テストデータの期待と一致する。
-3. main の `CI Success` が成功している。
-4. 公開 API の形を、設計段階のレビューと、CI での照合（[公開 API の形](../../api-surface/README.md)）で確認している（共通契約 8 章の範囲で、言語の慣習に従う）。CI での照合は、6 言語が 5.0.0 を出した後の 2026-10-14 に加えた（10 章）。5.0.0 は設計段階のレビューだけで確かめた。照合を入れたときの 6 言語の main にも、形のずれはなかった。
-5. README・スキーマの文書・移行ガイドを、新契約に合わせている。
-6. 現行メジャーからの移行の案内がある（IP-D8）。
+1. Pass all cases of the conformance test data with DynamoDB (the test environment decided in 4.1) and memory (IP-D4). All cases means the cases that concern the storage backends released in that version. The four FNV-1a 64 cases for storage backends that use a hash (K-1 in hash.md) are reported as not applicable with a reason, because the first major has no storage backend that uses a hash, and are counted as neither success nor failure. They are run when a storage backend that uses a hash is released in stage 5 (the owner decided this on 2026-10-06). Scenarios that inject failures (such as S-4) are also run on both. If there is a storage backend into which failures cannot be injected, decide an alternative way of checking in the design stage and have the coordinator review it. CI reports the cases per rule ID.
+2. The shape of the items written to DynamoDB (attribute names and types) matches the expectation of the conformance test data.
+3. `CI Success` on main is green.
+4. The shape of the public API is confirmed by the design-stage review and by verification in CI ([the shape of the public API](../../api-surface/README.md)) (within the scope of chapter 8 of the common contract, following the idioms of each language). Verification in CI was added on 2026-10-14, after the six languages released 5.0.0 (chapter 10). 5.0.0 was checked only by the design-stage review. There was no shape discrepancy in the main of the six languages when the verification was introduced either.
+5. The README, the schema documents, and the migration guide match the new contract.
+6. There is guidance for migrating from the current major (IP-D8).
 
-全言語のメジャーがそろったら、ある言語が書いたテーブルを別の言語で読み書きする試験を、本リポジトリで一度行う。テーブルを共有できないことが、仕様を作った動機の一つだからである（[ADR-0001](../adr/0001-language-neutral-spec-based-on-envelope-model.md)）。
+When the majors of all languages are ready, run once, in this repository, a test in which a table written by one language is read and written by another language. This is because the inability to share tables was one of the motivations for creating the specification ([ADR-0001](../adr/0001-language-neutral-spec-based-on-envelope-model.md)).
 
-2026-10-15 に、公開した版（rs 5.0.2、js・java・kotlin・scala・go 5.0.1。java は Maven Central の jar）で、この試験を DynamoDB Local に対して行った（[#50](https://github.com/j5ik2o/event-store-adapter/pull/50)、`tools/interop/`）。書き手 6 × 読み手 6 の 36 組の読み書き、6 言語が順に同じ集約へ追記して全言語で読むこと、二重書き込みの楽観ロック、時刻の精度（js はミリ秒、ほかはナノ秒）、ページ送り、journal・snapshot・head の属性の名前と型が、すべて通った。それまでの実行（[#19](https://github.com/j5ik2o/event-store-adapter/pull/19)、2026-10-12）は、公開前のコミットに対するものだった。
+On 2026-10-15, we ran this test against DynamoDB Local with the published versions (rs 5.0.2; js, java, kotlin, scala, and go 5.0.1; java is the jar on Maven Central) ([#50](https://github.com/j5ik2o/event-store-adapter/pull/50), `tools/interop/`). The reads and writes of the 36 pairs of 6 writers × 6 readers, the six languages appending in turn to the same aggregate and all languages reading it, the optimistic lock on double writes, time precision (js is milliseconds, the others nanoseconds), paging, and the attribute names and types of journal, snapshot, and head all passed. The earlier run ([#19](https://github.com/j5ik2o/event-store-adapter/pull/19), 2026-10-12) was against pre-release commits.
 
-本番の実サービスでは確かめない。保存先の試験は、ローカルのエミュレーション環境で行う。DynamoDB は 4.1 で決めた DynamoDB Local での試験で受け入れを判断し、それで十分とする。2026-10-13 にオーナーが「実サービスの DynamoDB での確認は最初のメジャーの前には行わない」と決め、2026-10-15 に、保存先を問わず本番では確かめないと改めた（10 章）。段階 5 の Spanner・Bigtable もそれぞれのエミュレーターで、SQLite はローカルのファイルで試験する。Spanner・Bigtable のプロファイルには、実サービスでの検証が残っているという記述があるが、この決まりで置き換わる。プロファイルの文は、草案の規則を確定するとき（[#44](https://github.com/j5ik2o/event-store-adapter/issues/44)・[#45](https://github.com/j5ik2o/event-store-adapter/issues/45)）に直す。
+We do not check on the real production service. Tests of storage backends are done in local emulation environments. For DynamoDB, acceptance is judged by the tests with DynamoDB Local decided in 4.1, and that is sufficient. On 2026-10-13 the owner decided "we will not check with the real DynamoDB service before the first major", and on 2026-10-15 revised it to not checking in production regardless of the storage backend (chapter 10). Spanner and Bigtable in stage 5 are also tested with their respective emulators, and SQLite with a local file. The Spanner and Bigtable profiles have a statement that verification on the real service remains, but this rule replaces it. The profile text will be fixed when the draft rules are finalized ([#44](https://github.com/j5ik2o/event-store-adapter/issues/44), [#45](https://github.com/j5ik2o/event-store-adapter/issues/45)).
 
-## 6. 適合テストデータ（IP-D6・IP-D7）
+<a id="6-適合テストデータip-d6ip-d7"></a>
+## 6. Conformance Test Data (IP-D6, IP-D7)
 
-規則番号を参照する、言語に依存しない JSON である。本リポジトリの `conformance/` に置く。各言語の書き直しより先に、段階 0 で作る（IP-D6、2026-10-05 合意）。
+It is language-independent JSON that references rule IDs. It is placed in `conformance/` of this repository. It is created in stage 0, before the rewrite of each language (IP-D6, agreed 2026-10-05).
 
-- **値の表**: aid 文字列の組み立てと T-11・T-12 の境界、T-13 の両端、T-9 の上限。
-- **操作の場面**: 書き込みと読み取りの列と、期待する結果（返る値、エラーの分類、エラーのメッセージに含む規則番号）。共通契約の W-3〜W-9、R-1〜R-8、S-1〜S-3、E-1〜E-3 を中心にする。保存先の障害を必要とする場面（S-4 など）も、DynamoDB とメモリの両方で行う。DynamoDB では、SDK のクライアントに差し込む仕組み（インターセプターやミドルウェア）で、保持処理の要求だけを失敗させる。
-- **DynamoDB の場面**: 設定項目の照合（DY-8）、外れ方の判別（D-5）、競合の分類（D-6）、項目サイズの事前検査（D-7）、ページ送りを伴う読み取り（DY-11）、保持処理（dynamodb.md 8 章）。journal・snapshot・head と設定項目の、属性の名前と型の期待値も持つ。
-- **段階 5 の値の表**: hash.md の FNV-1a 64 は、hash.md が収録を求めているので v1 に入れた（K-1）。ADR-0008 の封筒の固定バイナリ形式は、最初のメジャーの DynamoDB とメモリでは使わないので、段階 5 の前に足す。
-- **配り方（IP-D7、2026-10-05 合意）**: [運用方針](../operations/repository-policy.md) 8 章の takt のテンプレートと同じく、各リポジトリに同じ内容を写す。写した版とハッシュを CI で照合する。本リポジトリのデータを変えたら、コーディネーターが全リポジトリに配る。
+- **Value tables**: the construction of the aid string and the boundaries of T-11 and T-12, both ends of T-13, and the upper limit of T-9.
+- **Operation scenarios**: sequences of writes and reads, and the expected results (returned values, error classification, and the rule ID included in the error message). They center on W-3 to W-9, R-1 to R-8, S-1 to S-3, and E-1 to E-3 of the common contract. Scenarios that need a storage backend failure (such as S-4) are also run on both DynamoDB and memory. For DynamoDB, only the retention process's request is made to fail with a mechanism that plugs into the SDK client (an interceptor or middleware).
+- **DynamoDB scenarios**: checking the configuration item (DY-8), distinguishing the way it failed (D-5), classifying conflicts (D-6), the pre-check of item size (D-7), reads with paging (DY-11), and the retention process (dynamodb.md chapter 8). It also has the expected values of the attribute names and types of journal, snapshot, head, and the configuration item.
+- **Value tables for stage 5**: the FNV-1a 64 of hash.md was included in v1 because hash.md asks for it (K-1). The fixed binary format of the envelope in ADR-0008 is not used by the first major's DynamoDB and memory, so it will be added before stage 5.
+- **How to distribute (IP-D7, agreed 2026-10-05)**: As with the takt templates in chapter 8 of the [repository policy](../operations/repository-policy.md), copy the same content to each repository. Verify the copied version and hash in CI. When the data of this repository is changed, the coordinator distributes it to all repositories.
 
-v1.0.0 を 2026-10-05 に [conformance/](../../conformance/README.md) に置いた。値の表 30 件、操作の場面 85 件（共通契約 42 件、DynamoDB 43 件）、配置 1 件で、54 の規則を網羅する。対象外は、削除した W-5 と、呼び出し側の推奨である R-7 である。`tools/conformance/` の検証の道具は、スキーマ・参照・規則番号・manifest に加えて、書き込みと読み取りの場面を状態機械で再生する参照モデルで期待値を確かめる。S-3（期限切れ方式）の場面は DynamoDB だけを対象にしており、メモリのプロファイルの合意（期限切れ方式と変更フィードを提供しない）と合っている。
+v1.0.0 was placed in [conformance/](../../conformance/README.md) on 2026-10-05. It has 30 value-table cases, 85 operation scenarios (42 for the common contract, 43 for DynamoDB), and 1 layout case, covering 54 rules. The not-applicable ones are the deleted W-5 and R-7, which is a recommendation for the caller. In addition to the schema, references, rule IDs, and manifest, the verification tool in `tools/conformance/` checks the expected values with a reference model that replays write and read scenarios as a state machine. The S-3 (expiry method) scenarios target only DynamoDB, which is consistent with the agreement on the memory profile (it does not provide the expiry method and the change feed).
 
-v1.1.0 を 2026-10-14 に置いた（オーナーが範囲を決めた）。1.0.0 のケースは変えずに、次を足した。
+v1.1.0 was placed on 2026-10-14 (the owner decided the scope). Without changing the cases of 1.0.0, we added the following.
 
-- DY-19（Scan を使わず、1 つの集約に絞った要求だけを使う）の DynamoDB の場面 2 件。新しい観測 `request_scope` で、操作の間の要求の種類と、読み書きする項目の aid を実行器が確かめる。
-- メモリが提供しない期限切れ方式と変更フィードを求める設定が、生成時に設定エラーになる場面 2 件（MEM-3・MEM-12・MEM-13）。設定の API でその要求を表せない言語は、理由を付けて「表現不能」と報告する。
-- 4 つの仕様の文書が定義する 73 の規則のすべてが、ケースか対象外の理由を持つことを、検証の道具で確かめる。メモリのプロファイルも規則の定義元に加えた。
+- Two DynamoDB scenarios for DY-19 (do not use Scan; use only requests narrowed to a single aggregate). With the new observation `request_scope`, the runner checks the kinds of requests between operations and the aid of the items read and written.
+- Two scenarios in which a configuration that asks for the expiry method and change feed that memory does not provide becomes a configuration error at creation (MEM-3, MEM-12, MEM-13). A language that cannot express that request in its configuration API reports "not representable" with a reason.
+- The verification tool checks that all 73 rules defined by the four specification documents have either a case or a reason for being not applicable. The memory profile was also added as a source of rule definitions.
 
-値の表 30 件、操作の場面 89 件（共通契約 42 件、DynamoDB 45 件、メモリ 2 件）、配置 1 件で、58 の規則を扱う。2026-10-15 に 6 言語へ配り、新しい 4 件は 6 言語で成功か理由付きの表現不能になった（[運用方針](../operations/repository-policy.md) の適合状況）。
+It covers 30 value-table cases, 89 operation scenarios (42 common contract, 45 DynamoDB, 2 memory), and 1 layout case, with 58 rules. It was distributed to the six languages on 2026-10-15, and the four new cases became success or not representable with a reason in the six languages (conformance status in the [repository policy](../operations/repository-policy.md)).
 
-v1.2.0 を 2026-10-15 に置いた（[#51](https://github.com/j5ik2o/event-store-adapter/pull/51)。オーナーが範囲を MEM-2・MEM-6 に絞った）。1.0.0・1.1.0 のケースは変えずに、次を足した。
+v1.2.0 was placed on 2026-10-15 ([#51](https://github.com/j5ik2o/event-store-adapter/pull/51). The owner narrowed the scope to MEM-2 and MEM-6). Without changing the cases of 1.0.0 and 1.1.0, we added the following.
 
-- MEM-2 の場面 2 件（`memory/stores.json`）。場面の途中で 2 つ目のストアを生成する操作 `createStore` を使い、新しく生成したストアは空で独立していること、明示的に共有したストアは記録と楽観ロックを共有することを確かめる。
-- MEM-6 の場面 2 件（`memory/payload-isolation.json`）。書き込んだペイロードを書き換える `mutateWrittenPayload` と、取得した結果を書き換える `mutateReadPayload` の後に読み直しても、書き込んだときの値が返ることを確かめる。書き換えを言語の型や API で表せない実装は、この 2 件に限り、理由を付けて「表現不能」と報告してよい。
-- 検証の道具は、書き込んだペイロードにない位置を書き換えるケース、同じ値への書き換え（空振り）、先に書かずに新しいストアを読むだけのケースを、データの誤りとして拒否する。
+- Two MEM-2 scenarios (`memory/stores.json`). Using the operation `createStore`, which creates a second store midway through a scenario, they check that a newly created store is empty and independent, and that an explicitly shared store shares records and the optimistic lock.
+- Two MEM-6 scenarios (`memory/payload-isolation.json`). They check that after `mutateWrittenPayload`, which modifies the written payload, and `mutateReadPayload`, which modifies the retrieved result, a re-read returns the value as it was when written. An implementation that cannot express the modification in its language's types or API may report "not representable" with a reason for these two only.
+- The verification tool rejects as data errors a case that modifies a position not in the written payload, a modification to the same value (a no-op), and a case that only reads a new store without writing first.
 
-値の表 30 件、操作の場面 93 件（共通契約 42 件、DynamoDB 45 件、メモリ 6 件）、配置 1 件で、60 の規則を扱う。2026-10-15 に 6 言語へ配り、新しい 4 件は 6 言語ともメモリで成功した（[運用方針](../operations/repository-policy.md) の適合状況）。MEM-6 の書き換えは 6 言語とも表せたので、「表現不能」と報告した言語はない。
+It covers 30 value-table cases, 93 operation scenarios (42 common contract, 45 DynamoDB, 6 memory), and 1 layout case, with 60 rules. It was distributed to the six languages on 2026-10-15, and the four new cases succeeded on memory in all six languages (conformance status in the [repository policy](../operations/repository-policy.md)). The MEM-6 modifications could be expressed in all six languages, so no language reported "not representable".
 
-v1.3.0 を 2026-10-17 に置いた（[#61](https://github.com/j5ik2o/event-store-adapter/pull/61)・[#62](https://github.com/j5ik2o/event-store-adapter/pull/62)。範囲は [#47](https://github.com/j5ik2o/event-store-adapter/issues/47) でオーナーと合意した）。段階 5 の 3 つの保存先を 1 つの版にまとめた。1.0.0〜1.2.0 のケースは、共通契約の場面の `backends` のほかは変えずに、次を足した。
+v1.3.0 was placed on 2026-10-17 ([#61](https://github.com/j5ik2o/event-store-adapter/pull/61) and [#62](https://github.com/j5ik2o/event-store-adapter/pull/62). The scope was agreed with the owner in [#47](https://github.com/j5ik2o/event-store-adapter/issues/47)). It bundled the three storage backends of stage 5 into one version. Without changing the cases of 1.0.0 to 1.2.0 except for `backends` in the common contract scenarios, we added the following.
 
-- 共通契約の 42 場面の `backends` に、`sqlite`・`spanner`・`bigtable` を足した。
-- 各保存先の設定エラーの場面。提供しない能力を求める設定と、保存先に記録した設定との食い違いである。食い違いは、プロファイルの config の項目名で書く論理的な設定の種まき（`seed.configuration`）で作る。
-- 論理的な段階への差し込みで書ける障害の場面。SQLite では別の接続が書き込みのロックを持ち続ける操作（SQ-7）、Spanner では中断のやり直しとその上限（SPN-7）とコミットの応答の消失（SPN-8）、Bigtable では journal の書き出しの失敗と条件付き更新の応答の消失（BT-7）である。
-- Bigtable で、ストア単位の上限を超える封筒の追記を、書き込みの前に契約違反で拒否する場面（BT-16）。障害は差し込まない。
-- 同じ保存先を共有した 2 つ目のストアの場面（`scenarios/stores/shared.json`）。
-- Bigtable の封筒の固定バイナリ形式の値の表 10 件（`values/bigtable-envelope.json`、BT-D6a）。
-- メモリで、共有したストアが設定も共有することを確かめる場面 1 件（MEM-2。1.2.0 の後に js#1071 で指摘された点）。
-- SQLite・Spanner・Bigtable のプロファイルを規則の定義元に加えた。生の行や SDK の応答の形に寄るもの、本当に同時に走る競合、SQLite と Spanner のテーブルの形は、`coverage.json` に理由を書いて各言語の試験に任せる。
+- Added `sqlite`, `spanner`, and `bigtable` to `backends` of the 42 common contract scenarios.
+- Configuration error scenarios for each storage backend: a configuration that asks for a capability that is not provided, and a mismatch with the configuration recorded in the storage backend. The mismatch is created by a logical configuration seeding (`seed.configuration`) written with the profile's config item names.
+- Failure scenarios that can be written by injection at logical stages. For SQLite, an operation in which another connection holds the write lock (SQ-7); for Spanner, retry on abort and its limit (SPN-7) and loss of the commit response (SPN-8); for Bigtable, failure to write the journal and loss of the conditional update's response (BT-7).
+- For Bigtable, a scenario that rejects with a contract violation, before writing, an append of an envelope that exceeds the per-store limit (BT-16). No failure is injected.
+- A scenario of a second store that shares the same storage backend (`scenarios/stores/shared.json`).
+- 10 cases of the value table of Bigtable's fixed binary format of the envelope (`values/bigtable-envelope.json`, BT-D6a).
+- For memory, one scenario that checks that a shared store also shares its configuration (MEM-2. The point raised in js#1071 after 1.2.0).
+- Added the SQLite, Spanner, and Bigtable profiles as sources of rule definitions. Items that depend on raw rows or SDK response shapes, truly concurrent conflicts, and the table shapes of SQLite and Spanner are left to each language's tests, with the reasons written in `coverage.json`.
 
-値の表 40 件、操作の場面 128 件（共通契約 42 件、DynamoDB 45 件、メモリ 7 件、SQLite 7 件、Spanner 14 件、Bigtable 12 件、3 つの保存先に共通の共有 1 件）、配置 1 件で、75 の規則を扱う。7 つの仕様の文書が定義する 124 の規則は、すべてがケースか対象外の理由を持つ。2026-10-19 に 6 言語へ配り、メモリの設定の共有の場面は 6 言語とも成功した。SQLite・Spanner・Bigtable の場面は、6 言語ともその保存先を提供しないので、理由付きの対象外と報告している（[運用方針](../operations/repository-policy.md) の適合状況）。
+It covers 40 value-table cases, 128 operation scenarios (42 common contract, 45 DynamoDB, 7 memory, 7 SQLite, 14 Spanner, 12 Bigtable, and 1 shared scenario common to the three storage backends), and 1 layout case, with 75 rules. All of the 124 rules defined by the seven specification documents have either a case or a reason for being not applicable. It was distributed to the six languages on 2026-10-19, and the scenario of sharing memory configuration succeeded in all six languages. The SQLite, Spanner, and Bigtable scenarios are reported as not applicable with a reason in all six languages because they do not provide those storage backends (conformance status in the [repository policy](../operations/repository-policy.md)).
 
-各リポジトリには `conformance/`（`.gitattributes` で改行の変換を止める）と `tools/conformance/manifest.py` を写し、CI で `manifest.py verify` と、`conformance/manifest.json` の SHA-256（v1.0.0 は `61c26614dbbfba88eebce72cc1d2b0220218839e74dcfb64c19268f7ee2302ce`、v1.1.0 は `0e4dfe44dec0a912ed9d6b28f0634af9fd0dc840895734790e87cf96772e1d50`、v1.2.0 は `432241f3a9e45fc169b3fcdead480b505832af1eed9f4f48357210daccce84eb`、v1.3.0 は `0157c012042afa9a19f0bff509a433a4bd5ddc5b674de864a41bec453c460691`）の照合を行う。データを配り直すときは、この値も更新する。
+Each repository copies `conformance/` (conversion of line endings is stopped with `.gitattributes`) and `tools/conformance/manifest.py`, and CI runs `manifest.py verify` and compares the SHA-256 of `conformance/manifest.json` (v1.0.0 is `61c26614dbbfba88eebce72cc1d2b0220218839e74dcfb64c19268f7ee2302ce`, v1.1.0 is `0e4dfe44dec0a912ed9d6b28f0634af9fd0dc840895734790e87cf96772e1d50`, v1.2.0 is `432241f3a9e45fc169b3fcdead480b505832af1eed9f4f48357210daccce84eb`, v1.3.0 is `0157c012042afa9a19f0bff509a433a4bd5ddc5b674de864a41bec453c460691`). When the data is redistributed, update these values too.
 
-## 7. 旧データの移行（IP-D8、2026-10-05 合意）
+<a id="7-旧データの移行ip-d82026-10-05-合意"></a>
+## 7. Migration of Old Data (IP-D8, Agreed 2026-10-05)
 
-| 移行元 | 仕様の手順 | 提供方法 |
+| Migration source | Procedure in the specification | How it is provided |
 |:--|:--|:--|
-| rs v3 の DynamoDB | [dynamodb.md](../spec/storage/dynamodb.md) 11 章 | rs の新しいメジャーに移行ツールを付ける（段階 2） |
-| rs の Bigtable・SQLite、js の Spanner | 各プロファイルの移行の章 | 保存先を出し直すときに移行ツールを付ける（段階 5） |
-| js・java・go（kotlin・scala を含む）の旧来の DynamoDB 配置 | 範囲外（dynamodb.md 11 章の末尾） | 手順書だけを用意する。旧 API で読み、新 API で書き直す流れを示す |
+| rs v3's DynamoDB | [dynamodb.md](../spec/storage/dynamodb.md) chapter 11 | Attach a migration tool to rs's new major (stage 2) |
+| rs's Bigtable and SQLite, js's Spanner | The migration chapter of each profile | Attach a migration tool when the storage backend is re-released (stage 5) |
+| The old DynamoDB layout of js, java, and go (including kotlin and scala) | Out of scope (end of dynamodb.md chapter 11) | Provide only a procedure document. It shows the flow of reading with the old API and rewriting with the new API |
 
-旧来の配置には、メタデータを埋め込んだペイロード、利用者の文字列化に頼る aid、ミリ秒の時刻がある。失われた精度や型の情報を、推測で補うことはしない。
+The old layout has payloads with embedded metadata, aids that depend on the user's stringification, and millisecond times. We do not fill in lost precision or type information by guessing.
 
-## 8. 現行メジャーで直す不具合（IP-D2、2026-10-05 合意）
+<a id="8-現行メジャーで直す不具合ip-d22026-10-05-合意"></a>
+## 8. Defects to Fix in the Current Major (IP-D2, Agreed 2026-10-05)
 
-2.2 の表のうち、次の 3 種類の不具合を直してパッチを出す（IP-D2、2026-10-05 合意）。どれもコードを読んで見つけたものなので、直す前に試験で再現する。
+From the table in 2.2, we fix the following three kinds of defects and release patches (IP-D2, agreed 2026-10-05). All were found by reading code, so we reproduce them with tests before fixing.
 
-- イベントを読み落とす（読み取りの打ち切り。rs・js・java・go）
-- 残すべき新しい履歴を消す（rs の DynamoDB・java・go）
-- 確定した書き込みを失敗として返す（go の桁あふれ、java の TTL 方式）
+- Events are dropped (the read being cut off. rs, js, java, go)
+- The new history that should be kept is deleted (rs's DynamoDB, java, go)
+- A committed write is returned as a failure (go's overflow, java's TTL method)
 
-あわせて、次の 2 つを行う。
+In addition, we do the following two.
 
-- java の修正版を出したら、kotlin・scala の java への依存（いまは 1.2.88 に固定）を上げて、それぞれ出す。
-- rs v3 の Bigtable の欠番は、今の配置のままでは直せない。README で注意を促し、段階 5 の新しい配置で解消する。
+- After releasing the fixed version of java, raise the dependency of kotlin and scala on java (currently pinned to 1.2.88) and release each.
+- rs v3's Bigtable missing numbers cannot be fixed with the current layout. We will call attention to it in the README and resolve it with the new layout in stage 5.
 
-出すのは、3 章の手順 1（版上げの定期実行を外す前）である。rs の試験は、新しい履歴が残らない誤った挙動を正しいものとして確かめているので、直すときは試験も改める。2.2 の表のそれ以外の不具合は、新しいメジャーで解消する。
+We release them in step 1 of chapter 3 (before removing the scheduled run of the version bump). rs's tests confirm as correct a wrong behavior in which the new history is not kept, so when fixing it the tests are also revised. The other defects in the table in 2.2 are resolved in the new major.
 
-### 結果（2026-10-05）
+<a id="結果2026-10-05-1"></a>
+### Result (2026-10-05)
 
-各不具合を、直す前に LocalStack の試験で再現してから直し、次のパッチ版を公開した。
+We reproduced each defect with a LocalStack test before fixing it, and published the following patch versions.
 
-| 実装 | 版 | PR |
+| Implementation | Version | PR |
 |:--|:--|:--|
-| rs | 3.0.6（crates.io） | [#243](https://github.com/j5ik2o/event-store-adapter-rs/pull/243) |
-| js | 4.0.1（npm） | [#999](https://github.com/j5ik2o/event-store-adapter-js/pull/999) |
-| java | 1.2.91（Maven Central） | [#690](https://github.com/j5ik2o/event-store-adapter-java/pull/690) |
-| kotlin | 1.0.511（java 1.2.91 に依存） | [#825](https://github.com/j5ik2o/event-store-adapter-kotlin/pull/825) |
-| scala | 1.0.341（java 1.2.91 に依存） | [#859](https://github.com/j5ik2o/event-store-adapter-scala/pull/859) |
+| rs | 3.0.6 (crates.io) | [#243](https://github.com/j5ik2o/event-store-adapter-rs/pull/243) |
+| js | 4.0.1 (npm) | [#999](https://github.com/j5ik2o/event-store-adapter-js/pull/999) |
+| java | 1.2.91 (Maven Central) | [#690](https://github.com/j5ik2o/event-store-adapter-java/pull/690) |
+| kotlin | 1.0.511 (depends on java 1.2.91) | [#825](https://github.com/j5ik2o/event-store-adapter-kotlin/pull/825) |
+| scala | 1.0.341 (depends on java 1.2.91) | [#859](https://github.com/j5ik2o/event-store-adapter-scala/pull/859) |
 | go | v1.0.197 | [#386](https://github.com/j5ik2o/event-store-adapter-go/pull/386) |
 
-レビュー（CodeRabbit）で、TTL 方式の保持が「期限の印を付け済みの履歴」まで件数に数えることが分かった。旧版が新しい履歴に印を付けた状態から書くと、残すべき履歴にまで印が付く。残すべき新しい履歴を失う不具合なので、rs・java・go で、印のない履歴だけを数えて古い順に選び、印を付け済みの履歴の期限を延ばさないように直した（共通契約 S-3 の性質に合う）。js は 1 ページで読み終えるかの判定に、空の `LastEvaluatedKey` も含めた。rs の `docs/DATABASE_SCHEMA` の、旧来の保持の説明も直した。
+In review (CodeRabbit), we found that TTL-method retention also counts, as part of the count, the history already marked with an expiry. If writing starts from a state in which the old version marked the new history, the history that should be kept also gets marked. Since this is a defect that loses the new history that should be kept, in rs, java, and go we fixed it to count only the history without a mark, select it from the oldest, and not extend the expiry of history that is already marked (consistent with the nature of S-3 of the common contract). In js, the decision of whether reading finishes in one page now also includes an empty `LastEvaluatedKey`. We also fixed the description of the old-style retention in rs's `docs/DATABASE_SCHEMA`.
 
-範囲外として報告を受け、直さなかったものは次のとおりで、新しいメジャーで解消する。java の `:seq_nr` 属性の誤り、java・go の BatchWriteItem の 25 件の上限への未分割、go の staticcheck の既存の警告 8 件。
+What was reported as out of scope and not fixed is as follows, to be resolved in the new major: the mistake of java's `:seq_nr` attribute, java's and go's lack of splitting for the 25-item limit of BatchWriteItem, and the 8 existing warnings of go's staticcheck.
 
-## 9. 実行体制
+<a id="9-実行体制"></a>
+## 9. Execution Structure
 
-- 各リポジトリへの変更は、コーディネーター（本リポジトリのセッション）が Orca の orchestration で worker に指示して行う。worker は PR の作成までを行い、マージはコーディネーターが行う（[運用方針](../operations/repository-policy.md) 6 章）。
-- コーディネーターは Opus 5.5 で動かし、worker には Opus 以外のモデルとハーネス（Sonnet 5.5、GPT-6.1-Sol、Ollama Cloud・OpenCode Go）を使う（運用方針 6 章）。実作業は、Orca の orchestration で行っても、takt で行ってもよい。
-- takt を使う場合の役割の分担は、運用方針の 8 章に従う。aidlc は使わない。
-- PR は 4 章の段階の作業ごとに分け、1 つの PR が 1 つの規則群に対応するようにする。
+- Changes to each repository are made by the coordinator (the session of this repository) instructing workers through Orca's orchestration. Workers go as far as creating a PR, and the coordinator merges ([repository policy](../operations/repository-policy.md) chapter 6).
+- The coordinator runs on Opus 5.5, and for workers we use models and harnesses other than Opus (Sonnet 5.5, GPT-6.1-Sol, Ollama Cloud and OpenCode Go) (chapter 6 of the repository policy). Actual work may be done through Orca's orchestration or through takt.
+- When using takt, the division of roles follows chapter 8 of the repository policy. aidlc is not used.
+- PRs are divided by the work of each stage in chapter 4, so that one PR corresponds to one group of rules.
 
-## 10. 設計段階で決めること
+<a id="10-設計段階で決めること"></a>
+## 10. What to Decide in the Design Stage
 
-次の点は、言語ごとの設計段階で決め、コーディネーターがレビューする。判断が要るものだけをオーナーに上げる。
+The following points are decided in the design stage of each language, and the coordinator reviews them. Only what needs a decision is escalated to the owner.
 
-- kotlin・scala が、java の封筒の型をそのまま公開するか、言語の慣習に合う型を自前で持つか（2026-10-13 に決定。下の「決めたこと（2026-10-13）」を参照）。
-- rs の移行ツールの形（ワークスペースの実行ファイルか、ライブラリの関数か）。
-- 変更フィードの扱い。head テーブルの Streams のレコードからヘッド遷移を組み立てる関数と、再同期（DY-15）の補助を、最初のメジャーに含めるか。
-- js の読み取りの失敗を `Result` で返すか、例外で返すか。
-- java の同期・非同期の API の分け方と、シリアライザの API。
-- go のパッケージ名（現在は `pkg`）。
+- Whether kotlin and scala expose java's envelope types as they are, or have their own types that fit the language's idioms (decided on 2026-10-13. See "Decisions (2026-10-13)" below).
+- The form of rs's migration tool (a workspace executable, or a library function).
+- Handling of the change feed. Whether to include in the first major a function that builds head transitions from Streams records of the head table, and a helper for resynchronization (DY-15).
+- Whether js returns read failures as a `Result` or as exceptions.
+- How to split java's synchronous and asynchronous APIs, and the serializer API.
+- go's package name (currently `pkg`).
 
-### 決めたこと（2026-10-06）
+<a id="決めたこと2026-10-06"></a>
+### Decisions (2026-10-06)
 
-rs・js・go・java の設計文書（各リポジトリの `docs/design/next-major.md`）をコーディネーターがレビューし、次の点をオーナーが決めた。
+The coordinator reviewed the design documents of rs, js, go, and java (`docs/design/next-major.md` in each repository), and the owner decided the following points.
 
-| 項目 | 決定 |
+| Item | Decision |
 |:--|:--|
-| 変更フィード | 最初のメジャーに、ヘッド遷移を組み立てる関数も、再同期（DY-15）の補助も含めない。書き込みは仕様どおり head テーブルの Streams に記録を残すので、利用者は自分で読める。適合テストデータに変更フィードの場面を足すときに改めて決める |
-| rs の移行ツール | 移行の本体をライブラリの関数として作り、それを呼ぶ薄い実行ファイルも付ける |
-| js の失敗の返し方 | 書き込み・読み取り・生成のすべての操作で、失敗を `Result` の値として返す |
-| java の公開 API | 同期と非同期を別のインターフェイスにする。シリアライザは、ストアの生成時に型を決める形にする（呼ぶたびに `Class<T>` を渡す形をやめる）。例外は 5 分類とも非検査例外にそろえる |
-| go のパッケージ | モジュールのルート（`eventstore`）に封筒・エラー・操作の型を置き、保存先ごとに `memory` と `dynamodb` のパッケージに分ける |
-| 適合テストデータの FNV-1a 64 | 5 章の受け入れ条件 1 のとおり、最初のメジャーでは対象外と報告する |
-| js のメモリの MEM-4 | [memory.md](../spec/storage/memory.md) の MEM-4 の js の注記のとおり、同じスレッドの中の非同期の重なりを保護して満たす |
+| Change feed | The first major includes neither a function that builds head transitions nor a helper for resynchronization (DY-15). Writes leave a record in the head table's Streams as specified, so users can read it themselves. It will be decided again when a change feed scenario is added to the conformance test data |
+| rs's migration tool | Build the body of the migration as a library function, and also attach a thin executable that calls it |
+| How js returns failures | In all operations of write, read, and creation, return failures as a `Result` value |
+| java's public API | Make synchronous and asynchronous separate interfaces. Make the serializer a form in which the type is decided when the store is created (stop passing `Class<T>` on every call). Make all five categories of exceptions unchecked exceptions |
+| go's packages | Place the envelope, error, and operation types at the module root (`eventstore`), and split by storage backend into the `memory` and `dynamodb` packages |
+| FNV-1a 64 of the conformance test data | As in criterion 1 of the acceptance criteria in chapter 5, report it as not applicable in the first major |
+| js's memory MEM-4 | As in the js note of MEM-4 in [memory.md](../spec/storage/memory.md), satisfy it by protecting asynchronous overlap within the same thread |
 
-次の点は、仕様と合意済みの規則から決まるので、コーディネーターが決めた。go の payload の型はジェネリクスにする。rs の SQLite・Bigtable は新しいメジャーから削除する（IP-D3。旧メジャーには残る）。保持処理の失敗の通知は S-4 と MEM-D7 のとおりログを必須にする。メモリの設定は MEM-3 と MEM-D11 のとおり保存先が持つ。
+The following points follow from the specification and the already agreed rules, so the coordinator decided them. go's payload type is a generic. rs's SQLite and Bigtable are removed from the new major (IP-D3. They remain in the old major). Notification of retention process failures requires logging, as in S-4 and MEM-D7. The memory configuration is held by the storage backend, as in MEM-3 and MEM-D11.
 
-設計文書の 10 章に残った仕様の疑問のうち、仕様の本文を変える次の 4 点をオーナーが決めた（[仕様の合意状況](../spec/README.md) の P-42〜P-45）。言語どうしで扱いがずれないよう、実装の前に決めた。
+Of the questions about the specification left in chapter 10 of the design documents, the owner decided the following four points, which change the body of the specification (P-42 to P-45 of the [agreement status of the specification](../spec/README.md)). We decided them before implementation so that the languages do not diverge in how they handle them.
 
-| 項目 | 決定 |
+| Item | Decision |
 |:--|:--|
-| 封筒の必須要素の欠落 | 契約違反にする（T-2・T-10）。言語の型で欠落を表せない場合は検査しなくてよい。適合テストデータは変えず、欠落を表せる言語の単体試験で確かめる |
-| DynamoDB の取り消し理由が複数あるとき | `TransactionConflict` を最初に見て楽観ロックにする。なければ、ヘッドの条件不成立、ジャーナルの条件不成立、その他の順（dynamodb.md 6.2）。適合テストデータの説明と同じ扱いなので、データは配り直さない |
-| DynamoDB の設定項目の作成で `TransactionConflict` | 条件不成立と同じく強整合で読み直す。読み直しても設定項目がなければ、繰り返さずに保存先エラー（DY-8） |
-| rs v3 からの移行の手順 | 新しいテーブルに書く前に、旧 journal を最後まで読んで連続性の検査を済ませてよい（dynamodb.md 11 章） |
+| Missing required elements of the envelope | Make it a contract violation (T-2, T-10). If the language's type cannot express the omission, no check is needed. The conformance test data is not changed, and it is checked by unit tests of the languages that can express the omission |
+| When the DynamoDB cancellation has multiple reasons | Look at `TransactionConflict` first and treat it as an optimistic lock. If there is none, in the order of the head's condition failing, the journal's condition failing, and other (dynamodb.md 6.2). This is the same handling as the description of the conformance test data, so the data is not redistributed |
+| `TransactionConflict` when creating the DynamoDB configuration item | Re-read with strong consistency, as with a condition failure. If the configuration item is still absent after re-reading, do not repeat; return a storage backend error (DY-8) |
+| Procedure for migrating from rs v3 | Before writing to the new table, the old journal may be read to the end and the continuity check completed (dynamodb.md chapter 11) |
 
-次の点は、仕様の本文から読み取れるので、コーディネーターが答えた。必須の設定（シリアライザ・テーブル名など）の欠落は設定エラー（4 章の「生成時の不正な設定値」）。TTL の猶予は 0 を許し、負の値は設定エラー、上限は定めない（適合テストデータのスキーマの最小値は 0）。集約 ID の空の型名・空の値は許す（仕様が禁じておらず、aid 文字列は `-` を含むので空にならない）。
+The following points can be read from the body of the specification, so the coordinator answered them. A missing required setting (the serializer, the table name, and so on) is a configuration error ("invalid configuration values at creation" in chapter 4). A TTL grace of 0 is allowed, a negative value is a configuration error, and no upper limit is defined (the minimum in the conformance test data schema is 0). An empty type name or empty value of an aggregate ID is allowed (the specification does not forbid it, and since the aid string contains `-`, it never becomes empty).
 
-### 決めたこと（2026-10-13）
+<a id="決めたこと2026-10-13"></a>
+### Decisions (2026-10-13)
 
-最初のメジャーの準備で、各言語の受け入れ条件（5 章）の充足を確かめた（[段階 4 の準備状況](stage4-readiness.md)）。その中で次の点を決めた。
+In preparing for the first major, we checked whether each language satisfies the acceptance criteria (chapter 5) ([Stage 4 Readiness](stage4-readiness.md)). In the course of it, we decided the following points.
 
-| 項目 | 決定 | 決めた人 |
+| Item | Decision | Decided by |
 |:--|:--|:--|
-| kotlin・scala の封筒の型 | java の封筒の型（`EventEnvelope`・`SnapshotEnvelope` など）をそのまま公開する。包む層は、言語で違う部分（kotlin の null 許容型とコルーチン、scala の `Try`・`Future`・`Option`）だけを合わせる。封筒は値の型なので、そのまま使っても言語の慣習を大きく外れない。自前の型を持つと、双方向の変換が要り、契約からずれる余地が増える。kotlin には設計文書がないので、この記録をもって設計段階のレビューとする | コーディネーター |
-| scala の Snapshot の版 | sbt-dynver が最後のタグから導く版（`1.0.341-9-<コミット>-SNAPSHOT` の形）のままにする。正式版は、版上げの workflow を入力 `version` に 5.0.0 を指定して起動して `v5.0.0` のタグを打ち、sbt-dynver がそのタグから 5.0.0 を導く（P-48）。4.2 の「次のメジャーの Snapshot 版を作る方法」は、この形で足りるので新しい仕組みは作らない | コーディネーター |
-| 共通契約の版の名前 | 仕様の版を「v5」と呼ぶ（[仕様の合意状況](../spec/README.md) の P-46。同日にいったん「v4」と決めた後に改めた） | オーナー |
-| 各言語の版 | 各言語のメジャーの番号を契約の版にそろえ、最初のメジャーは全言語で 5.0.0 とする（P-48） | オーナー |
-| 実サービスの DynamoDB での確認 | 最初のメジャーの前には行わない（5 章）。2026-10-15 に、保存先を問わず本番では確かめないと改めた | オーナー |
+| Envelope types of kotlin and scala | Expose java's envelope types (`EventEnvelope`, `SnapshotEnvelope`, and so on) as they are. The wrapping layer adapts only the parts that differ by language (kotlin's nullable types and coroutines, scala's `Try`, `Future`, and `Option`). The envelope is a value type, so using it as is does not depart much from the language's idioms. Having its own types would require two-way conversion and increase the room to drift from the contract. kotlin has no design document, so this record serves as its design-stage review | Coordinator |
+| Snapshot version of scala | Keep the version that sbt-dynver derives from the last tag (in the form `1.0.341-9-<commit>-SNAPSHOT`). For the official version, start the version bump workflow with the input `version` set to 5.0.0 to create the tag `v5.0.0`, and sbt-dynver derives 5.0.0 from that tag (P-48). The "way to create the next major's Snapshot version" in 4.2 is sufficiently covered by this form, so we do not build a new mechanism | Coordinator |
+| Name of the common contract version | Call the specification's version "v5" ([agreement status of the specification](../spec/README.md), P-46. On the same day it was decided as "v4" and then revised) | Owner |
+| Version of each language | Align each language's major number to the contract's version, and make the first major 5.0.0 in all languages (P-48) | Owner |
+| Checking with the real DynamoDB service | Not done before the first major (chapter 5). On 2026-10-15 it was revised to not checking in production regardless of the storage backend | Owner |
 
-次の 2 点は、決める必要がないことが分かった。
+We found that the following two points do not need to be decided.
 
-- js の occurred_at がミリ秒であること: 共通契約の T-3 が「言語の標準時刻型がナノ秒を表せない場合は、その型の精度まで丸めてよい（js の `Date` はミリ秒）」と定めており、[ADR-0003](../adr/0003-fix-storage-value-representations.md) も同じ扱いである。js は保存をナノ秒の単位で行い、文書にミリ秒の限界を書いている。
-- payload のルートの JSON の null: java の `PayloadSerializer.deserialize` は `@Nullable` に直っており、適合ケース `core-json-root-values` は、rs ではメモリで、ほかの 5 言語ではメモリと DynamoDB で通っている。rs の DynamoDB は、CI で適合試験を実行していないので未確認である。
+- That js's occurred_at is in milliseconds: T-3 of the common contract says "if the language's standard time type cannot represent nanoseconds, it may be rounded to that type's precision (js's `Date` is milliseconds)", and [ADR-0003](../adr/0003-fix-storage-value-representations.md) takes the same approach. js stores in nanosecond units and documents the millisecond limit.
+- JSON null at the root of the payload: java's `PayloadSerializer.deserialize` has been fixed to `@Nullable`, and the conformance case `core-json-root-values` passes on memory in rs, and on memory and DynamoDB in the other five languages. rs's DynamoDB is unverified because CI does not run the conformance tests.
 
-### 決めたこと（2026-10-14）
+<a id="決めたこと2026-10-14"></a>
+### Decisions (2026-10-14)
 
-| 項目 | 決定 | 決めた人 |
+| Item | Decision | Decided by |
 |:--|:--|:--|
-| 公開 API の形の照合 | 共通契約 v5 が公開 API に求める形を、言語に依存しない JSON（[api-surface/](../../api-surface/README.md)、0.1.0）で書き、各言語の CI で照合する。go で試作して効果を確かめたうえで、段階的に採用する（go → js・java → rs → kotlin・scala）。受け入れ条件（5 章）に入れるかは、6 言語がそろってから決める。IDL からコードを生成する既存の道具は、型の引数と言語ごとの作法を表せないので採らない | オーナー |
-| 照合を受け入れ条件に入れるか | 6 言語がそろったので、入れる。5 章の 4 番を「設計段階のレビューと、CI での照合で確認している」に改めた。照合は 6 言語とも main の必須の検査（`CI Success`）に含まれているので、文書を実態に合わせただけである。形の版を上げる手順は [api-surface/](../../api-surface/README.md) に書いた | オーナー |
+| Verifying the shape of the public API | Write the shape that common contract v5 requires of the public API as language-independent JSON ([api-surface/](../../api-surface/README.md), 0.1.0) and verify it in each language's CI. Prototype in go to confirm the effect, then adopt it in stages (go → js and java → rs → kotlin and scala). Whether to include it in the acceptance criteria (chapter 5) is decided after the six languages are ready. We do not adopt existing tools that generate code from an IDL, because they cannot express type arguments and each language's conventions | Owner |
+| Whether to include the verification in the acceptance criteria | Include it, since the six languages are ready. We revised item 4 of chapter 5 to "confirmed by the design-stage review and by verification in CI". The verification is included in main's required check (`CI Success`) in all six languages, so we only aligned the document with the actual state. The procedure for bumping the shape's version is written in [api-surface/](../../api-surface/README.md) | Owner |
 
-### 決めたこと（2026-10-15）
+<a id="決めたこと2026-10-15"></a>
+### Decisions (2026-10-15)
 
-次のマイルストーンを決める中で、次の点を決めた。作業は課題ごとに issue にした。
+In deciding the next milestone, we decided the following points. The work was made into issues per task.
 
-| 項目 | 決定 | 決めた人 |
+| Item | Decision | Decided by |
 |:--|:--|:--|
-| 本番の実サービスでの確認 | 行わない。保存先の試験は、ローカルのエミュレーション環境で行う。DynamoDB は DynamoDB Local での試験で十分とする（仕様が前提にする 6 項目を再現できることは 4.1 で確かめている）。段階 5 の Spanner・Bigtable はそれぞれのエミュレーターで、SQLite はローカルのファイルで試験する。2026-10-13 の「実サービスの DynamoDB での確認は最初のメジャーの前には行わない」を、期限も保存先も限らない決定に改めた | オーナー |
-| 段階 5 の保存先の範囲 | 各言語が前に持っていた保存先（rs の SQLite・Bigtable、js の Spanner）を戻すだけにする。全言語にはそろえず、必要になった保存先から後で広げる。プロファイルの合意は全言語に共通なので、広げるときにプロファイルを作り直す必要はない。課題は [#44](https://github.com/j5ik2o/event-store-adapter/issues/44)〜[#47](https://github.com/j5ik2o/event-store-adapter/issues/47)、[rs#309](https://github.com/j5ik2o/event-store-adapter-rs/issues/309)・[rs#310](https://github.com/j5ik2o/event-store-adapter-rs/issues/310)、[js#1067](https://github.com/j5ik2o/event-store-adapter-js/issues/1067) | オーナー |
-| 適合テストデータ 1.2.0 の範囲 | メモリの MEM-2・MEM-6 だけにする。段階 5 で要るデータは、段階 5 と一緒に足す（[#41](https://github.com/j5ik2o/event-store-adapter/issues/41)） | オーナー |
-| 必須でない検査の失敗 | main で `CI Success` の外の検査が落ちたときに気づく仕組みを作る（[#43](https://github.com/j5ik2o/event-store-adapter/issues/43)） | オーナー |
-| たまに落ちる試験 | java と go の、DynamoDB を使う既存の試験を、マイルストーンとは別の小さな作業として直す（[java#747](https://github.com/j5ik2o/event-store-adapter-java/issues/747)、[go#446](https://github.com/j5ik2o/event-store-adapter-go/issues/446)） | オーナー |
-| 修正版の公開の承認 | 前もってまとめて承認しない。今までどおり、出す前に毎回オーナーに聞く | オーナー |
+| Checking on the real production service | Not done. Tests of storage backends are done in local emulation environments. For DynamoDB, tests with DynamoDB Local are sufficient (that the six items the specification presumes can be reproduced was confirmed in 4.1). Spanner and Bigtable in stage 5 are tested with their respective emulators, and SQLite with a local file. The 2026-10-13 decision "we will not check with the real DynamoDB service before the first major" was revised into a decision limited neither by period nor by storage backend | Owner |
+| Scope of the storage backends of stage 5 | Only restore the storage backends each language previously had (rs's SQLite and Bigtable, js's Spanner). Do not align them across all languages; broaden later, starting with the storage backends that become necessary. The profile agreement is common to all languages, so there is no need to recreate the profiles when broadening. The issues are [#44](https://github.com/j5ik2o/event-store-adapter/issues/44) to [#47](https://github.com/j5ik2o/event-store-adapter/issues/47), [rs#309](https://github.com/j5ik2o/event-store-adapter-rs/issues/309) and [rs#310](https://github.com/j5ik2o/event-store-adapter-rs/issues/310), and [js#1067](https://github.com/j5ik2o/event-store-adapter-js/issues/1067) | Owner |
+| Scope of conformance test data 1.2.0 | Only MEM-2 and MEM-6 of memory. Data needed for stage 5 is added together with stage 5 ([#41](https://github.com/j5ik2o/event-store-adapter/issues/41)) | Owner |
+| Failures of non-required checks | Build a mechanism to notice when a check outside `CI Success` fails on main ([#43](https://github.com/j5ik2o/event-store-adapter/issues/43)) | Owner |
+| Tests that occasionally fail | Fix the existing DynamoDB-using tests of java and go as small work separate from the milestone ([java#747](https://github.com/j5ik2o/event-store-adapter-java/issues/747), [go#446](https://github.com/j5ik2o/event-store-adapter-go/issues/446)) | Owner |
+| Approval to publish fix versions | Do not approve in bulk in advance. As before, ask the owner every time before releasing | Owner |
 
-5 章の、言語をまたいでテーブルを読み書きする試験は、公開前のコミットでしか行っていないので、公開した版でやり直す（[#42](https://github.com/j5ik2o/event-store-adapter/issues/42)）。
+The test in chapter 5 that reads and writes a table across languages has been done only with pre-release commits, so we will redo it with the published versions ([#42](https://github.com/j5ik2o/event-store-adapter/issues/42)).
 
-### 決めたこと（2026-10-19）
+<a id="決めたこと2026-10-19"></a>
+### Decisions (2026-10-19)
 
-3 つのプロファイルと適合テストデータ 1.3.0 がそろった後、段階 5 の実装の進め方を決めた。
+After the three profiles and conformance test data 1.3.0 were ready, we decided how to proceed with the implementation of stage 5.
 
-| 項目 | 決定 | 決めた人 |
+| Item | Decision | Decided by |
 |:--|:--|:--|
-| 段階 5 の実装の順 | rs の SQLite（[rs#309](https://github.com/j5ik2o/event-store-adapter-rs/issues/309)）と js の Spanner（[js#1067](https://github.com/j5ik2o/event-store-adapter-js/issues/1067)）を並べて始める。rs の Bigtable（[rs#310](https://github.com/j5ik2o/event-store-adapter-rs/issues/310)）は、同じクレートの SQLite の保存先がマージされた後に始める。各保存先は、保存先の実装と適合試験、移行ツールと文書の 2 つに分けて進める | オーナー |
-| js の Spanner の入口 | 同じパッケージの別の入口 `event-store-adapter-js/spanner` とする。`@google-cloud/spanner` は任意の peer 依存にし、元の入口は Spanner の SDK を読み込まない（4.2） | オーナー |
+| Order of implementation of stage 5 | Start rs's SQLite ([rs#309](https://github.com/j5ik2o/event-store-adapter-rs/issues/309)) and js's Spanner ([js#1067](https://github.com/j5ik2o/event-store-adapter-js/issues/1067)) side by side. rs's Bigtable ([rs#310](https://github.com/j5ik2o/event-store-adapter-rs/issues/310)) starts after the SQLite storage backend of the same crate is merged. Each storage backend proceeds in two parts: the implementation of the storage backend and its conformance tests, and the migration tool and documentation | Owner |
+| js's Spanner entry | A separate entry of the same package, `event-store-adapter-js/spanner`. `@google-cloud/spanner` is an optional peer dependency, and the original entry does not load the Spanner SDK (4.2) | Owner |
 
-### 進み具合と決めたこと（2026-10-23）
+<a id="進み具合と決めたこと2026-10-23"></a>
+### Progress and Decisions (2026-10-23)
 
-3 つの保存先とも、保存先の実装と適合試験、移行ツールと文書の両方がそろった（2026-10-22）。js の Spanner の移行ツールは、後半の指示書（[js#1083](https://github.com/j5ik2o/event-store-adapter-js/issues/1083)）にコーディネーターが誤って「移行のツールは作らない」と書いたため一度抜けたが（オーナーの決定ではない）、7 章（IP-D8）に合わせて後から足した。2026-10-22 にオーナーの承認を得て、rs を 5.1.0（crates.io、[リリース](https://github.com/j5ik2o/event-store-adapter-rs/releases/tag/v5.1.0)）、js を 5.1.0（npm、[リリース](https://github.com/j5ik2o/event-store-adapter-js/releases/tag/v5.1.0)）として公開した。どちらも機能を足した版なので、版の 2 番目を上げた。java・kotlin・scala・go は段階 5 の変更がないので、版を出していない。
+For all three storage backends, both the implementation of the storage backend with its conformance tests and the migration tool with documentation are ready (2026-10-22). js's Spanner migration tool was left out once because the coordinator mistakenly wrote "do not build a migration tool" in the instructions for the second half ([js#1083](https://github.com/j5ik2o/event-store-adapter-js/issues/1083)) (not the owner's decision), but it was added afterwards in line with chapter 7 (IP-D8). On 2026-10-22, with the owner's approval, we published rs as 5.1.0 (crates.io, [release](https://github.com/j5ik2o/event-store-adapter-rs/releases/tag/v5.1.0)) and js as 5.1.0 (npm, [release](https://github.com/j5ik2o/event-store-adapter-js/releases/tag/v5.1.0)). Both are versions that add features, so we raised the second number of the version. java, kotlin, scala, and go have no stage 5 changes, so we have not released versions for them.
 
-| 保存先 | 保存先の実装と適合試験 | 移行ツールと文書 |
+| Storage backend | Storage backend implementation and conformance tests | Migration tool and documentation |
 |:--|:--|:--|
-| rs の SQLite | [rs#319](https://github.com/j5ik2o/event-store-adapter-rs/pull/319) | [rs#324](https://github.com/j5ik2o/event-store-adapter-rs/pull/324)（機能 `sqlite-migration` の `migrate_v3_sqlite` と、移行の道具の SQLite の引数） |
-| js の Spanner | [js#1081](https://github.com/j5ik2o/event-store-adapter-js/pull/1081) | [js#1084](https://github.com/j5ik2o/event-store-adapter-js/pull/1084)（スキーマと初期化の文書、v4 からの移行の案内）と [js#1088](https://github.com/j5ik2o/event-store-adapter-js/pull/1088)（入口 `event-store-adapter-js/spanner` の `migrateV4Spanner`。v4 の `aggregate_id` はアプリケーションの `asString()` の結果でキーから戻せないので、型名と値は利用者が渡す復元の関数で戻す） |
-| rs の Bigtable | [rs#321](https://github.com/j5ik2o/event-store-adapter-rs/pull/321) | [rs#328](https://github.com/j5ik2o/event-store-adapter-rs/pull/328)（トークンの取得元を受け取る生成の関数）と [rs#330](https://github.com/j5ik2o/event-store-adapter-rs/pull/330)（機能 `bigtable-migration` の `migrate_v3_bigtable` と、移行の道具の Bigtable の引数） |
+| rs's SQLite | [rs#319](https://github.com/j5ik2o/event-store-adapter-rs/pull/319) | [rs#324](https://github.com/j5ik2o/event-store-adapter-rs/pull/324) (`migrate_v3_sqlite` of the feature `sqlite-migration`, and the SQLite arguments of the migration tool) |
+| js's Spanner | [js#1081](https://github.com/j5ik2o/event-store-adapter-js/pull/1081) | [js#1084](https://github.com/j5ik2o/event-store-adapter-js/pull/1084) (documentation of the schema and initialization, and guidance for migration from v4) and [js#1088](https://github.com/j5ik2o/event-store-adapter-js/pull/1088) (`migrateV4Spanner` of the entry `event-store-adapter-js/spanner`. v4's `aggregate_id` is the result of the application's `asString()` and cannot be restored from the key, so the type name and value are restored by a restoring function that the user passes) |
+| rs's Bigtable | [rs#321](https://github.com/j5ik2o/event-store-adapter-rs/pull/321) | [rs#328](https://github.com/j5ik2o/event-store-adapter-rs/pull/328) (a creation function that receives a token source) and [rs#330](https://github.com/j5ik2o/event-store-adapter-rs/pull/330) (`migrate_v3_bigtable` of the feature `bigtable-migration`, and the Bigtable arguments of the migration tool) |
 
-| 項目 | 決定 | 決めた人 |
+| Item | Decision | Decided by |
 |:--|:--|:--|
-| rs の Bigtable の生成の入力（前半、2026-10-20） | データ用と管理用の 2 つの接続（Rust の gRPC のライブラリ tonic の `Channel`）を受け取る形に限り、認証は扱わない。このままでは本番で使えないので、版を公開する前に認証の扱いを決める | オーナー |
-| rs の Bigtable の認証（2026-10-21） | 利用者が用意する非同期のトークンの取得元も受け取る生成の関数を、もう 1 つ足す。ストアは、データ API と管理 API のすべての要求に `authorization: Bearer <トークン>` を付ける。Google の認証のライブラリは、ライブラリの依存に足さない。今の生成の関数と、接続などの型の項目は変えない | オーナー |
-| rs の移行の道具の Bigtable の認証（2026-10-21） | 公開しない移行の道具だけが Google の認証のライブラリに依存し、Google の既定の認証情報（Application Default Credentials）でトークンを自動で更新する。エミュレーター用の引数では認証を飛ばす | オーナー |
-| rs の移行のエラーの表示（2026-10-20） | DynamoDB と SQLite の移行が共有する `MigrationError` の表示を `migration failed during …` にする。DynamoDB の移行の標準エラーの文言から「DynamoDB」の語が消えるが、項目・終了コード・JSON の報告は変わらない。保存先を見分ける項目を足すと、公開の項目を持つ構造体の組み立てが壊れるため | オーナー |
-| Bigtable の `config` の列ファミリの GC（2026-10-22） | 規則は足さず、プロファイル 2 章に説明を書く（P-60）。`config` に年齢による GC を付けると設定行が消え、確定済みの規則で以後の生成が設定エラーになるので、付けない配置を勧める。はじめは BT-2 の規則として足すことで合意したが、確定した規則を変えるには仕様か適合テストデータの版を上げる決まり（P-47・P-55）があるので、説明にとどめた。rs#330 のレビューで見つかった | オーナー |
+| Input for creating rs's Bigtable (first half, 2026-10-20) | Limited to a form that receives two connections, one for data and one for administration (`Channel` of tonic, the Rust gRPC library), and does not handle authentication. This cannot be used in production as is, so decide how to handle authentication before publishing a version | Owner |
+| Authentication of rs's Bigtable (2026-10-21) | Add one more creation function that also receives an asynchronous token source that the user prepares. The store attaches `authorization: Bearer <token>` to all requests of the data API and the administration API. Google's authentication library is not added to the library's dependencies. The current creation function and the items of types such as the connection are not changed | Owner |
+| Authentication of rs's migration tool for Bigtable (2026-10-21) | Only the migration tool, which is not published, depends on Google's authentication library and refreshes the token automatically with Google's Application Default Credentials. Authentication is skipped with the emulator's arguments | Owner |
+| Display of rs's migration errors (2026-10-20) | Make the display of `MigrationError`, shared by the DynamoDB and SQLite migrations, `migration failed during …`. The word "DynamoDB" disappears from the standard-error wording of the DynamoDB migration, but the items, exit codes, and JSON report are unchanged. Adding an item that distinguishes the storage backend would break constructing a struct that has public items | Owner |
+| GC of Bigtable's `config` column family (2026-10-22) | Do not add a rule; write an explanation in chapter 2 of the profile (P-60). Attaching age-based GC to `config` would remove the configuration row, and with the finalized rules every later creation would become a configuration error, so we recommend a layout without it. At first we agreed to add it as a rule of BT-2, but there is a rule (P-47, P-55) that changing a finalized rule requires raising the version of the specification or the conformance test data, so we kept it to an explanation. Found in the review of rs#330 | Owner |
 
-v3 の SQLite からの移行では、旧ファイルに残っている保持の履歴を、新しいファイルの保持件数に合わせて移す（保持件数が n なら集約ごとに新しい n 件、保持なしなら移さない）。SQLite のプロファイル 6 章の「削除済み・未保持の過去の履歴を補作しない」に合わせた読み方で、rs の移行ガイドに書いてある。
+In migration from v3's SQLite, the retention history remaining in the old file is migrated to match the retention count of the new file (if the retention count is n, the newest n entries per aggregate; with no retention, nothing is migrated). This is a reading that matches "do not fabricate deleted or unretained past history" in chapter 6 of the SQLite profile, and it is written in rs's migration guide.
 
-v3 の Bigtable からの移行でも、同じ考え方で旧の履歴の行を移す。v5 の Bigtable は head の今のスナップショットも履歴の件数に数える（[Bigtable のプロファイル](../spec/storage/bigtable.md)の 7 章）ので、旧の履歴の行の位置と今のスナップショットの位置を合わせた集合から、新しい n 件を移す。保持なしなら移さない。rs の移行ガイドに書いてある。
+In migration from v3's Bigtable too, the rows of the old history are migrated with the same idea. v5's Bigtable also counts head's current snapshot as part of the number of history entries (chapter 7 of the [Bigtable profile](../spec/storage/bigtable.md)), so the newest n entries are migrated from the set that aligns the positions of the old history rows and the position of the current snapshot. With no retention, nothing is migrated. It is written in rs's migration guide.
 
-なお、Bigtable の試験がたまに落ちる問題（[rs#325](https://github.com/j5ik2o/event-store-adapter-rs/issues/325)）は、[rs#333](https://github.com/j5ik2o/event-store-adapter-rs/pull/333) で直した。
+Also, the problem that Bigtable's tests occasionally fail ([rs#325](https://github.com/j5ik2o/event-store-adapter-rs/issues/325)) was fixed in [rs#333](https://github.com/j5ik2o/event-store-adapter-rs/pull/333).
 
-FNV-1a 64 の 4 件（hash.md の K-1）は、5 章のとおり、ハッシュを使う保存先で実行する。js の Spanner の適合試験は、[js#1081](https://github.com/j5ik2o/event-store-adapter-js/pull/1081) から実行して成功している。rs の Bigtable は行キーの接頭辞にこのハッシュを使うが、適合試験の実行器が最初のメジャーの理由のまま対象外と報告していた。2026-10-23 に見つけ、[rs#337](https://github.com/j5ik2o/event-store-adapter-rs/pull/337) で、Bigtable の leg が保存先と同じハッシュの関数で 4 件を実行するようにして成功した。ハッシュの関数は 5.1.0 と同じなので、版の出し直しは要らない。ほかの leg と、ハッシュを使う保存先を提供しない言語では、理由付きの対象外のままである。
+The four FNV-1a 64 cases (K-1 in hash.md) are run on storage backends that use a hash, as in chapter 5. js's Spanner conformance tests have been run and succeed since [js#1081](https://github.com/j5ik2o/event-store-adapter-js/pull/1081). rs's Bigtable uses this hash for the prefix of the row key, but the conformance test runner was still reporting it as not applicable for the reason of the first major. We found this on 2026-10-23, and in [rs#337](https://github.com/j5ik2o/event-store-adapter-rs/pull/337) made Bigtable's leg run the four cases with the same hash function as the storage backend, and they succeeded. The hash function is the same as in 5.1.0, so no re-release of the version is needed. The other legs, and the languages that do not provide a storage backend that uses a hash, remain not applicable with a reason.
 
-### 次のマイルストーン: 文書を整える（2026-10-23）
+<a id="次のマイルストーン-文書を整える2026-10-23"></a>
+### Next Milestone: Tidy the Documentation (2026-10-23)
 
-段階 0〜5 がすべて済んだ後、次のマイルストーンを「文書を整える」とすることを、オーナーと一問ずつ決めた。
+After stages 0 to 5 were all done, the owner and the coordinator decided, one question at a time, to make the next milestone "Tidy the documentation".
 
-| 項目 | 決定 | 決めた人 |
+| Item | Decision | Decided by |
 |:--|:--|:--|
-| 主題 | 文書を整える | オーナー |
-| 文書の言語 | 英語が基本で正本（`X.md`）。日本語の文書は補助（`X.ja.md`）で、英語に合わせる。食い違ったら英語に従う | オーナー |
-| 利用者向けと開発者向け | 分ける。利用者向けを先にし、開発者向けはこのマイルストーンの後半で行う。開発者はこのプロジェクトにコミットする人（今はオーナーだけ）、利用者はライブラリを使う開発者 | オーナー |
-| 利用者向けの文書の組 | 6 言語とも、README、提供する保存先ごとのスキーマの文書、移行ガイドの 3 種。ファイル名・置き場所・節の組み立てをそろえ、違うのは言語に固有のコードと準備の手順だけにする | オーナー |
-| そろえる型 | 本リポジトリに正本を置き、各リポジトリを照合する（[運用方針](../operations/repository-policy.md) 1 章の「利用者向けの文書の照合」） | オーナー |
-| 開発者向けの文書 | 利用者向けと同じ言語の決まりにする。本リポジトリの仕様・計画・運用方針・ADR・用語集と、エージェントへの指示のファイル（CLAUDE.md・AGENTS.md など）を含む。仕様は開発者向けとして扱う | オーナー |
-| 終わった設計の記録 | 各言語の `docs/design/next-major.md` は、開発者向けの文書として、利用者向けとは分けて残す | オーナー |
-| 公開 | 言語ごとに利用者向けの文書をそろえ終えたら、パッチ版の公開をオーナーに聞く（go はパッケージの登録先がなく、pkg.go.dev がタグの付いたコミットを読むので、タグを付ける） | オーナー |
-| 言語を進める順番 | 文書がいちばん多い rs で型を試してから、残りの 5 言語を並べて進める | コーディネーター（オーナーに報告） |
-| 節の組み立ての中身 | 型のファイル（`user-docs/template.json`）そのものを中身とし、その PR でオーナーに見せる | コーディネーター（オーナーに報告） |
-| 完了の条件 | 言語ごとに、型の照合が `CI Success` の依存のジョブで通り、3 種の文書が英語と日本語でそろい、言語に固有のコードと準備の手順を除く本文が 6 言語で対応していることと、日本語が英語と同じ内容であることをコーディネーターのレビューで確かめ（照合の道具は本文を見ないため）、パッチ版を出す（または出さない判断をオーナーから得る）。マイルストーンは、6 言語がそろい、開発者向けの後半が終わったときに完了とする | コーディネーター（オーナーに報告） |
-| 型の外の文書 | rs の 3 系の移行ガイドのような歴史資料は、各リポジトリの設定に挙げれば置いてよい。名前を変えた文書の古いパスには、移った先を示すだけの短いファイルを残し、公開済みの README からのリンクを切らない | コーディネーター（オーナーに報告） |
+| Theme | Tidy the documentation | Owner |
+| Language of documents | English is the default and canonical (`X.md`). Japanese documents are auxiliary (`X.ja.md`) and follow the English. When they differ, follow the English | Owner |
+| User-facing and developer-facing | Separate them. Do user-facing first, and developer-facing in the second half of this milestone. Developers are the people who commit to this project (currently only the owner), and users are developers who use the library | Owner |
+| Set of user-facing documents | For all six languages, three kinds: the README, the schema document for each storage backend provided, and the migration guide. Align the file names, locations, and section structure; only the language-specific code and setup procedures differ | Owner |
+| The template to align to | Place the canonical source in this repository and verify each repository against it ("Verifying the User-Facing Documentation" in chapter 1 of the [repository policy](../operations/repository-policy.md)) | Owner |
+| Developer-facing documents | Same language rules as user-facing. Includes this repository's specification, plan, repository policy, ADRs, and glossary, and the files of instructions to agents (CLAUDE.md, AGENTS.md, and so on). The specification is treated as developer-facing | Owner |
+| Records of finished designs | Each language's `docs/design/next-major.md` is kept as a developer-facing document, separate from user-facing ones | Owner |
+| Publishing | When a language has finished aligning its user-facing documents, ask the owner about a patch release (go has no package registry and pkg.go.dev reads the tagged commit, so a tag is attached) | Owner |
+| Order of languages | Try the template with rs, which has the most documents, and then proceed with the remaining five languages side by side | Coordinator (reported to the owner) |
+| Content of the section structure | The template file itself (`user-docs/template.json`) is the content, and it is shown to the owner in that PR | Coordinator (reported to the owner) |
+| Completion condition | For each language: the template verification passes in a job in the dependencies of `CI Success`, the three kinds of documents are ready in English and Japanese, and the coordinator's review confirms that the body, excluding language-specific code and setup procedures, corresponds across the six languages and that the Japanese has the same content as the English (the verification tool does not look at the body), and a patch version is released (or the owner's judgment not to release is obtained). The milestone is complete when the six languages are ready and the second half for developer-facing is done | Coordinator (reported to the owner) |
+| Documents outside the template | Historical materials such as rs's migration guide for the 3 line may be kept if listed in each repository's configuration. For a document whose name was changed, leave at the old path a short file that only points to where it moved, so that links from published READMEs are not broken | Coordinator (reported to the owner) |
 
-## 11. リスクと対策
+The progress as of 2026-10-26 is as follows. For the user-facing documents, the template verification and content check are done for all six languages. rs has published 5.1.1 ([rs#339](https://github.com/j5ik2o/event-store-adapter-rs/pull/339)). The remaining five languages were merged on 2026-10-25 ([js#1096](https://github.com/j5ik2o/event-store-adapter-js/pull/1096), [java#765](https://github.com/j5ik2o/event-store-adapter-java/pull/765), [kotlin#877](https://github.com/j5ik2o/event-store-adapter-kotlin/pull/877), [scala#898](https://github.com/j5ik2o/event-store-adapter-scala/pull/898), [go#460](https://github.com/j5ik2o/event-store-adapter-go/pull/460)). We published js 5.1.1 and go 5.0.2 and confirmed that the tidied documents are included in the distributed artifacts. For java, kotlin, and scala, the owner chose not to publish a stable version only for documentation. The tidying of developer-facing documents is in progress, and the milestone is not yet complete.
 
-| リスク | 対策 |
+<a id="11-リスクと対策"></a>
+## 11. Risks and Countermeasures
+
+| Risk | Countermeasure |
 |:--|:--|
-| 試験環境が D-5 や Streams を再現しない | 4.1 の比較で先に確かめ、試験環境か確認の手順を変える |
-| LocalStack の新しい版に認証トークンが要る | 4.1 の比較で、トークン・古い版・DynamoDB Local から選ぶ |
-| js の利用者が、短い間隔で 2 度の破壊的変更を受ける | 移行ガイドに 4.0 からの差分をまとめる |
-| 移行の間、main から現行メジャーを出せない | 主な修正は定期実行を外す前に出す。その後に要る修正は、保守ブランチで出す（3 章） |
-| Renovate の更新が、書き直しの PR と衝突する | 段階 2 の間は、メジャー更新の取り込みを書き直しの後に回す |
-| java・go・js の作業量が大きい | 4 章の段階ごとに PR を分け、並行して進める |
-| CodeRabbit の無料枠の上限で、レビューが止まる（2026-10-05 に何度も起きた） | コードの PR は CodeRabbit の結果を待つ。文書の PR は、コーディネーターのレビューと独立したレビュー（Opus 以外のサブエージェント）で進める |
-| Claude Code の作業者が、新しいワークツリーで `.claude/settings.json` の事前許可の確認画面に止まる | 作業者は Codex（GPT-6.1-Sol）で起動する。Sonnet 5.5 を使うなら、この確認を通す方法を先に決める |
+| The test environment does not reproduce D-5 or Streams | Check first with the comparison in 4.1, and change the test environment or the checking procedure |
+| New versions of LocalStack need an auth token | In the comparison in 4.1, choose among the token, an old version, and DynamoDB Local |
+| js users receive two breaking changes in a short interval | Summarize the differences from 4.0 in the migration guide |
+| During the migration, the current major cannot be released from main | Release the main fixes before removing the scheduled run. Fixes needed after that are released on a maintenance branch (chapter 3) |
+| Renovate updates conflict with the rewrite's PRs | During stage 2, defer taking in major updates until after the rewrite |
+| The workload for java, go, and js is large | Split PRs by stage in chapter 4 and proceed in parallel |
+| CodeRabbit's free-tier limit stops reviews (it happened many times on 2026-10-05) | For code PRs, wait for CodeRabbit's result. Documentation PRs proceed with the coordinator's review and an independent review (a non-Opus subagent) |
+| A Claude Code worker stops at the confirmation screen for the pre-approval of `.claude/settings.json` in a new worktree | Start workers with Codex (GPT-6.1-Sol). If Sonnet 5.5 is used, decide first how to get past this confirmation |

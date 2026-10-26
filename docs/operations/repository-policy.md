@@ -1,8 +1,9 @@
-# リポジトリ運用方針
+<a id="リポジトリ運用方針"></a>
+# Repository Operations Policy
 
-event-store-adapter グループの各リポジトリが従う、CI・ブランチ保護・マージ・レビュー・依存更新・エージェント運用の共通方針。2026-10-03 にオーナーと合意した。方針を変えるときは、オーナーの合意を得る。
+The common policy on CI, branch protection, merging, review, dependency updates, and agent operations that each repository of the event-store-adapter group follows. Agreed with the owner on 2026-10-03. To change the policy, obtain the owner's agreement.
 
-対象は Orca に登録している次の 6 リポジトリである。README に載っている php・swift・dotnet は、Orca に登録した時点で対象に加える。
+The policy applies to the following six repositories registered in Orca. php, swift, and dotnet, which are listed in the README, will be added to the scope when they are registered in Orca.
 
 - [event-store-adapter-rs](https://github.com/j5ik2o/event-store-adapter-rs)
 - [event-store-adapter-js](https://github.com/j5ik2o/event-store-adapter-js)
@@ -11,185 +12,203 @@ event-store-adapter グループの各リポジトリが従う、CI・ブラン�
 - [event-store-adapter-kotlin](https://github.com/j5ik2o/event-store-adapter-kotlin)
 - [event-store-adapter-go](https://github.com/j5ik2o/event-store-adapter-go)
 
+<a id="1-ci"></a>
 ## 1. CI
 
-- PR の CI には、対象パスの絞り込み（`paths`・`paths-ignore`）を付けない。絞り込みがあると、対象外のファイルだけを変える PR で CI が走らず、必須チェックが「待ち」のまま止まるからである。
-- CI には、すべてのジョブの結果をまとめる集約ジョブ `CI Success` を置く。`if: always()` で必ず走り、依存先のどれかが成功以外（失敗・キャンセル・スキップ）なら失敗する。GitHub はスキップを合格とみなすので、上流の失敗で下流がスキップになったときも取りこぼさないためである。
-- 外部の状況だけで全 PR が止まるジョブ（脆弱性の監査など）は、`CI Success` の依存に含めない。
-- 各ジョブに `timeout-minutes` を付け、依存の取得などで止まったときに GitHub の既定の 6 時間まで待たないようにする。値は直近の成功した実行時間に余裕を持たせてリポジトリごとに決め、根拠を PR に書く。
+- Do not add path filters (`paths`, `paths-ignore`) to the CI of PRs. With a filter, CI does not run on a PR that changes only files outside the filter, and the required check stays stuck in "pending".
+- CI has an aggregate job, `CI Success`, that collects the results of all jobs. It always runs with `if: always()`, and fails if any of its dependencies ended with anything other than success (failure, cancellation, or skip). GitHub treats a skip as a pass, so this is to avoid missing the case where a downstream job is skipped because of an upstream failure.
+- Do not include in the dependencies of `CI Success` a job that would block every PR purely because of external circumstances (such as a vulnerability audit).
+- Give each job a `timeout-minutes`, so that a job stuck on something like fetching dependencies does not wait for GitHub's default of 6 hours. Decide the value per repository by adding some margin to the recent successful run time, and write the rationale in the PR.
 
-### 公開の workflow
+<a id="公開の-workflow"></a>
+### Publishing Workflow
 
-2026-10-03 にオーナーと合意した。java・kotlin・js の Snapshot の公開で見つかった問題（PR のブランチの公開、古いコミットの公開、公開の前の main への push）を、全リポジトリで繰り返さないためである。
+Agreed with the owner on 2026-10-03. This is so that all repositories avoid repeating the problems found in publishing Snapshots for java, kotlin, and js (publishing a PR's branch, publishing an old commit, and pushing to main before publishing).
 
-- Snapshot など、main の変更のたびに公開する workflow は、PR の CI では公開しない。
-- 公開するのは、main への push か定期実行の CI が成功したコミットで、起動した時点と公開の直前の両方で main の先頭であるものだけにする。checkout はそのコミットの SHA で行う。古い run を再実行したときも、公開の直前の確認で古いコードを公開しない。
-- リリースタグから公開する workflow（既存タグの手動再公開を含む）は、前項の main の先頭と main の CI 成功を求める条件の対象外とする。公開対象のタグを checkout する（[js の Release workflow](https://github.com/j5ik2o/event-store-adapter-js/blob/35de020edcf113191c27fef73aa84707edbcf46e/.github/workflows/release.yml)）。
-- 公開のジョブから main にコミットや push をしない。Snapshot の版は、ジョブの中だけで決める。
-- パッケージの登録先が OIDC の Trusted Publishing に対応しているときは、長く使うトークンではなく OIDC で公開する。対応していない登録先（Maven Central など）のときだけ、トークンを Secrets に置く（7 章）。
+- A workflow that publishes on every change to main, such as a Snapshot, does not publish in the CI of a PR.
+- Publish only a commit for which the CI of a push to main or of a scheduled run succeeded, and which is the head of main both when the run starts and immediately before publishing. Check out by that commit's SHA. Even when an old run is re-run, the check immediately before publishing prevents publishing old code.
+- A workflow that publishes from a release tag (including manual re-publishing of an existing tag) is exempt from the condition in the previous item that requires the head of main and a successful CI on main. It checks out the tag to be published ([the Release workflow of js](https://github.com/j5ik2o/event-store-adapter-js/blob/35de020edcf113191c27fef73aa84707edbcf46e/.github/workflows/release.yml)).
+- The publishing job does not commit or push to main. The Snapshot version is decided only inside the job.
+- When the package registry supports OIDC Trusted Publishing, publish with OIDC rather than a long-lived token. Only when the registry does not support it (such as Maven Central), place the token in Secrets (chapter 7).
 
-### 版上げの workflow
+<a id="版上げの-workflow"></a>
+### Version Bump Workflow
 
-2026-10-05 に、[実装計画](../plan/implementation-plan.md)の IP-D1（新しい共通仕様への書き直しを main で進める）に沿って改めた。
+Revised on 2026-10-05 in line with IP-D1 of the [implementation plan](../plan/implementation-plan.md) (proceed with the rewrite to the new common specification on main).
 
-- 版上げの workflow は手動でだけ起動する。定期実行は置かない。main に入れた書き直しの途中の変更が、自動で公開されないようにするためである。
-- 手動の起動では、上げる段階を入力 `level`（auto・patch・minor・major）で選べる。auto のときは、前のタグ以降のコミットから判定する。
-- 判定は、件名の型の直後に `!` があるか、本文に `BREAKING CHANGE:`・`BREAKING-CHANGE:` で始まる行があれば major、`feat`・`revert` は minor、`perf` を含むそれ以外の型は patch とする。判定の対象のコミットがなければ失敗で終える。
-- 判定のスクリプトの単体試験と、workflow の静的検査（actionlint）を CI に置き、`CI Success` の依存に含める。
+- The version bump workflow is started only manually. No scheduled run is placed. This is so that intermediate changes of the rewrite that have been merged into main are not published automatically.
+- In a manual start, the stage to bump can be chosen with the input `level` (auto, patch, minor, major). With auto, it is decided from the commits since the previous tag.
+- The decision is: major if there is a `!` immediately after the type in the subject, or a line starting with `BREAKING CHANGE:` or `BREAKING-CHANGE:` in the body; minor for `feat` and `revert`; patch for all other types including `perf`. If there are no commits to decide from, it ends with a failure.
+- Place a unit test of the decision script and a static check of the workflow (actionlint) in CI, and include them in the dependencies of `CI Success`.
 
-### リリースノート
+<a id="リリースノート"></a>
+### Release Notes
 
-2026-10-15 にオーナーと合意した。変更の記録が、rs だけ手書きの `CHANGELOG.md` とリリースノートの 2 か所に分かれ、ほかの 5 言語はリリースノートだけで、言語ごとに見る場所が違っていたためである。
+Agreed with the owner on 2026-10-15. This is because the record of changes was split into two places, a handwritten `CHANGELOG.md` and the release notes for rs only, while the other five languages had only release notes, so the place to look differed by language.
 
-- 変更の記録は、版上げの workflow が作る GitHub Release のリリースノートだけとする。`CHANGELOG.md` は置かない。rs の `CHANGELOG.md` は 5.0.1 までの記録として残し、更新しない（rs #305）。
-- リリースノートは、前のタグから新しいタグまでのコミットの件名を、Conventional Commits の型（`feat`・`fix` など）ごとにまとめて、自動で作る。手で書き足したり直したりしない。
-- 作り方は 6 リポジトリで同じにする。本リポジトリの `tools/release-notes/` に正本（見出しを作る `create-release-note-header.py`、本文を作る `create-release-note-body.py`、試験の `test_release_notes.py`）を置く。各リポジトリは、2 つのスクリプトを `.github/` に、試験を版上げの試験と同じディレクトリに、同じ内容で写す。内容は変えない。版上げの workflow は、前のタグからのコミットの件名と本文を `--no-merges --format='%H%x1f%s%x1f%b%x1e'` で本文のスクリプトに渡す。呼び方は [tools/release-notes/README.md](../../tools/release-notes/README.md) にある。
-- 試験は、各リポジトリの版上げの試験と一緒に、`CI Success` の依存に含まれるジョブで走らせる。本リポジトリの正本を変えたら、コーディネーターが 6 リポジトリに配り直す。
-- 3 章のとおりマージは squash だけなので、1 つの PR が main の 1 つのコミットになり、その件名がリリースノートの 1 行になる。コーディネーターは squash でマージするときに、件名を Conventional Commits の形（`fix(deps): ...` など）にし、利用者が読んで分かる言葉で書く。
-- 破壊的な変更は、件名の型の直後の `!` か、本文の `BREAKING CHANGE:`・`BREAKING-CHANGE:` で始まる行で示す。前項の版上げの判定も、これで major にする。
-- 利用者が自分の設定を変える必要があるときの手順は、リリースノートに書き足さず、README などの文書に書く（rs 5.0.2 の DynamoDB の SDK の機能の指定は rs #305）。
+- The record of changes is only the release notes of the GitHub Release that the version bump workflow creates. `CHANGELOG.md` is not kept. rs's `CHANGELOG.md` is kept as the record up to 5.0.1 and is not updated (rs #305).
+- The release notes are created automatically by grouping the commit subjects from the previous tag to the new tag by Conventional Commits type (`feat`, `fix`, and so on). They are not supplemented or corrected by hand.
+- The way of creating them is the same in all six repositories. The canonical sources are placed in `tools/release-notes/` of this repository (`create-release-note-header.py`, which creates the heading; `create-release-note-body.py`, which creates the body; and the test `test_release_notes.py`). Each repository copies the two scripts to `.github/` and the test to the same directory as the version bump tests, with identical content. The content is not changed. The version bump workflow passes the subjects and bodies of the commits since the previous tag to the body script with `--no-merges --format='%H%x1f%s%x1f%b%x1e'`. How to call it is in [tools/release-notes/README.md](../../tools/release-notes/README.md).
+- The test runs, together with the version bump tests of each repository, in a job included in the dependencies of `CI Success`. When the canonical source in this repository is changed, the coordinator redistributes it to the six repositories.
+- Because merging is squash only, as in chapter 3, one PR becomes one commit on main, and its subject becomes one line of the release notes. When merging with squash, the coordinator puts the subject into the Conventional Commits form (such as `fix(deps): ...`) and writes it in words that users can read and understand.
+- A breaking change is indicated by a `!` immediately after the type in the subject, or a line starting with `BREAKING CHANGE:` or `BREAKING-CHANGE:` in the body. The version bump decision in the previous item also uses this to make it major.
+- The procedure for when users need to change their own configuration is not added to the release notes but written in documents such as the README (the DynamoDB SDK feature specification for rs 5.0.2 is rs #305).
 
-### 適合テストデータの照合
+<a id="適合テストデータの照合"></a>
+### Verifying the Conformance Test Data
 
-2026-10-05 に、実装計画の IP-D7 に沿って置いた。
+Placed on 2026-10-05 in line with IP-D7 of the implementation plan.
 
-- 各リポジトリは、本リポジトリの `conformance/` と `tools/conformance/manifest.py` を同じ内容で写す。内容は変えない。
-- CI で `python3 tools/conformance/manifest.py verify` を実行し、`conformance/manifest.json` の SHA-256 を固定値と照合する。この手順は `CI Success` の依存に含まれるジョブに置く。
-- 本リポジトリのデータを変えたら、コーディネーターが全リポジトリに配り直し、固定値も更新する。
+- Each repository copies `conformance/` and `tools/conformance/manifest.py` of this repository with identical content. The content is not changed.
+- CI runs `python3 tools/conformance/manifest.py verify` and compares the SHA-256 of `conformance/manifest.json` with a pinned value. This step is placed in a job included in the dependencies of `CI Success`.
+- When the data of this repository is changed, the coordinator redistributes it to all repositories and also updates the pinned value.
 
-### 公開 API の形の照合
+<a id="公開-api-の形の照合"></a>
+### Verifying the Shape of the Public API
 
-2026-10-14 に、[実装計画](../plan/implementation-plan.md) 5 章の受け入れ条件の 4 番に沿って置いた。オーナーと合意した。
+Placed on 2026-10-14 in line with item 4 of the acceptance criteria in chapter 5 of the [implementation plan](../plan/implementation-plan.md). Agreed with the owner.
 
-- 各リポジトリは、本リポジトリの `api-surface/surface.json` を、同じ内容で `api-surface/surface.json` に写す。内容は変えない。
-- CI で、写しの SHA-256 を固定値と照合する。写しと、各リポジトリが持つ名前の対応表（`api-surface/<言語>.json`）から、公開 API の形を照合する試験を実行する。照合の試験には、形をわざとずらした定義を報告できることを示す否定の試験も含める。どちらも `CI Success` の依存に含まれるジョブに置く。
-- 本リポジトリの `surface.json` を変えたら、コーディネーターが全リポジトリに配り直し、固定値も更新する。同じ PR で変えるものは、[api-surface/README.md](../../api-surface/README.md) の「版を上げるときの手順」にある。
+- Each repository copies `api-surface/surface.json` of this repository to `api-surface/surface.json` with identical content. The content is not changed.
+- CI compares the SHA-256 of the copy with a pinned value. It runs a test that verifies the shape of the public API from the copy and from the name mapping table that each repository holds (`api-surface/<language>.json`). The verification test also includes a negative test showing that it can report a definition whose shape was deliberately shifted. Both are placed in a job included in the dependencies of `CI Success`.
+- When `surface.json` of this repository is changed, the coordinator redistributes it to all repositories and also updates the pinned value. What to change in the same PR is in "Steps when bumping the version" of [api-surface/README.md](../../api-surface/README.md).
 
-### 利用者向けの文書の照合
+<a id="利用者向けの文書の照合"></a>
+### Verifying the User-Facing Documentation
 
-2026-10-23 に決めた（導入中）。オーナーと決めた[次のマイルストーン](../plan/implementation-plan.md)の「文書を整える」による。
+Decided on 2026-10-23 (being introduced). It follows from "Tidy the documentation" in the [next milestone](../plan/implementation-plan.md) decided with the owner.
 
-- 利用者向けの文書の組（README、提供する保存先ごとのスキーマの文書、移行ガイド）と、そのファイル名・置き場所・節の組み立ての正本を、本リポジトリの `user-docs/` に置く。照合の道具は `tools/user-docs/` に置く。
-- 文書は英語の `X.md` が正本で、日本語の `X.ja.md` は補助である。日本語の文書の先頭には、英語版が正本であることを示す定型の一行を置く。
-- 各リポジトリは、正本と照合の道具を同じ内容で写し、文書の起点（js は `packages/library`）と提供する保存先などを書いた設定を持つ。CI では、まず写し（`user-docs/template.json` と `tools/user-docs/check.py`）の SHA-256 を固定値と照合し、正本と同じであることを確かめてから、文書を照合する。どちらの手順も `CI Success` の依存に含まれるジョブに置く。
-- 照合するのは、文書があること、見出しの組み立て、英語と日本語の見出しの対応、相対リンクの行き先、日本語の文書の先頭の一行である。文章の中身は照合しない。
-- 正本を変えたら、コーディネーターが全リポジトリに配り直し、固定値も更新する。
+- The set of user-facing documents (the README, the schema document for each storage backend provided, and the migration guide), and the canonical source of their file names, locations, and section structure, are placed in `user-docs/` of this repository. The verification tool is placed in `tools/user-docs/`.
+- For documents, the English `X.md` is canonical and the Japanese `X.ja.md` is auxiliary. The head of a Japanese document has a fixed line stating that the English version is canonical.
+- Each repository copies the canonical source and the verification tool with identical content, and has a configuration that states the starting point of its documents (for js, `packages/library`) and the storage backends it provides. In CI, it first compares the SHA-256 of the copies (`user-docs/template.json` and `tools/user-docs/check.py`) with pinned values to confirm they are identical to the canonical source, and then verifies the documents. Both steps are placed in a job included in the dependencies of `CI Success`.
+- What is verified is that the documents exist, the heading structure, the correspondence of English and Japanese headings, the destinations of relative links, and the first line of the Japanese documents. The content of the prose is not verified.
+- When the canonical source is changed, the coordinator redistributes it to all repositories and also updates the pinned values.
 
-### main の CI の失敗の知らせ
+<a id="main-の-ci-の失敗の知らせ"></a>
+### Notification of CI Failures on main
 
-2026-10-15 に置いた。オーナーが方式と範囲を決めた。2026-10-14 に rs の脆弱性の監査（`CI Success` の外のジョブ）が main で落ちたとき、どこにも知らせが出ず、たまたま気づくまで残ったからである。
+Placed on 2026-10-15. The owner decided the method and scope. This is because on 2026-10-14, when rs's vulnerability audit (a job outside `CI Success`) failed on main, no notification appeared anywhere and the failure remained until someone happened to notice.
 
-- main への push と定期実行の CI が、失敗・時間切れ（`timed_out`）・起動の失敗（`startup_failure`）で終わったら、そのリポジトリに issue を自動で作る。ラベル `ci-failure-on-main` の付いた issue が開いていれば、新しく作らずにコメントを足す。より新しい main の CI が成功したら、その issue を閉じる。同時に動く数は制限しないので、2 つの失敗がほぼ同時に終わると issue が 2 つできることがある（制限すると、待っている知らせが後の知らせに置き換えられて消えるため）。
-- 範囲は main の CI の失敗すべてとする。`CI Success` の外のジョブ（rs の `audit`）の失敗も、`CI Success` 自体の失敗も含む。
-- 知らせるだけで、マージを止める仕組みではない。`CI Success` の依存やブランチ保護には入れない。外部への通知や Secret は使わず、GitHub の issue とその通知だけを使う。
-- 各リポジトリは、本リポジトリの `tools/ci-failure-notice/main-ci-failure.yml` を `.github/workflows/main-ci-failure.yml` に写す。変えてよいのは、CI のワークフローの名前を書いた 1 か所だけである（rs は `ci`、ほかは `CI`）。正本を変えたら、コーディネーターが 6 リポジトリに配り直す。
-- 写した後は、[tools/ci-failure-notice/README.md](../../tools/ci-failure-notice/README.md) の手順で、過去の失敗した CI の実行の ID を手動の実行に渡し、issue ができることを確かめる。手動の実行は、渡された ID が CI のワークフローのものかを確かめないので、CI 以外のワークフローの実行の ID を渡さない。
+- When the CI of a push to main or of a scheduled run ends with a failure, a timeout (`timed_out`), or a startup failure (`startup_failure`), an issue is created automatically in that repository. If an issue with the label `ci-failure-on-main` is open, a comment is added instead of creating a new one. When a newer CI on main succeeds, the issue is closed. The number of concurrent runs is not limited, so when two failures end at almost the same time, two issues may be created (limiting it would cause a waiting notification to be replaced by a later one and lost).
+- The scope is all CI failures on main. It includes failures of jobs outside `CI Success` (rs's `audit`) and failures of `CI Success` itself.
+- It only notifies; it is not a mechanism to block merging. It is not included in the dependencies of `CI Success` or in branch protection. It does not use external notifications or Secrets, only GitHub issues and their notifications.
+- Each repository copies `tools/ci-failure-notice/main-ci-failure.yml` of this repository to `.github/workflows/main-ci-failure.yml`. The only thing allowed to change is the one place where the name of the CI workflow is written (`ci` for rs, `CI` for the others). When the canonical source is changed, the coordinator redistributes it to the six repositories.
+- After copying, follow the procedure in [tools/ci-failure-notice/README.md](../../tools/ci-failure-notice/README.md): pass the ID of a past failed CI run to a manual run, and confirm that an issue is created. A manual run does not check whether the given ID belongs to the CI workflow, so do not pass the run ID of a workflow other than CI.
 
-## 2. ブランチ保護（main）
+<a id="2-ブランチ保護main"></a>
+## 2. Branch Protection (main)
 
-- 必須のステータスチェックは `CI Success` の 1 つだけにする。matrix のジョブ名を直接必須にすると、matrix を変えたときに名前がずれるからである。
-- 「マージ前にブランチを最新にする」（strict）を有効にする。
-- 「会話の解決を必須」は有効にしない。独自の workflow によるゲートも使わない。bot（Codex など）は Renovate が PR を作り直すたびに指摘を残し、必須にすると CI が通る更新まで止まるからである（2026-10-03 に一度有効にして確認した）。bot の指摘は参考情報として扱う。
-- 人手や worker の PR は、コーディネーターがマージ前に未解決のスレッドをすべて処理する。対応が必要なものは直し、不要なものは理由を返信してから解決にする。
+- The only required status check is `CI Success`. If the job names of a matrix were required directly, the names would drift whenever the matrix changes.
+- Enable "Require branches to be up to date before merging" (strict).
+- Do not enable "Require conversation resolution". Do not use a gate by a custom workflow either. Bots (such as Codex) leave comments every time Renovate recreates a PR, and making this required would block even updates whose CI passes (we enabled it once on 2026-10-03 and confirmed this). Treat bot comments as reference information.
+- For PRs by humans or workers, the coordinator handles all unresolved threads before merging. Fix those that need action, and for those that do not, reply with the reason before resolving.
 
-## 3. マージ
+<a id="3-マージ"></a>
+## 3. Merging
 
-- マージ方法は squash だけを許可する。マージコミットと rebase はリポジトリの設定で無効にする。
-- マージ後はブランチを自動で削除する。
+- Allow only squash as the merge method. Disable merge commits and rebase in the repository settings.
+- Delete the branch automatically after merging.
 
-## 4. AI レビュー
+<a id="4-ai-レビュー"></a>
+## 4. AI Review
 
-- AI レビューは GitHub App（CodeRabbit、Devin Review、Codex など）に一本化する。
-- workflow で動かす AI レビュー（OpenAI Reviewer、PR-Agent など）は置かない。そのための API キーの Secret も置かない。
-- GitGuardian のセキュリティ検査は全リポジトリで有効にしておく。
+- Consolidate AI review into GitHub Apps (CodeRabbit, Devin Review, Codex, and so on).
+- Do not place AI reviews that run as workflows (OpenAI Reviewer, PR-Agent, and so on). Do not place API key Secrets for them either.
+- Keep GitGuardian's security checks enabled in all repositories.
 
-## 5. 依存の更新（Renovate）
+<a id="5-依存の更新renovate"></a>
+## 5. Dependency Updates (Renovate)
 
-- 基本設定は全リポジトリ共通とする。`config:recommended` を土台に、minor・patch・pin・digest と devDependencies は、必須チェックが通れば自動マージする。
-- メジャー更新は自動マージしない。
-- 本リポジトリ（ハブ）には Renovate を入れない。CI もブランチの保護もなく、更新の対象は `tools/` の下で固定した版（適合テストの道具、相互運用の道具、測定の記録）だけだからである。これらは測定の記録として固定しているので、版を上げると記録と食い違う（2026-10-13 にオーナーが決定し、PR #20 を閉じた）。
-- 開いたままの Renovate の PR は、コーディネーターが定期的に棚卸しする。CI が通るものはマージする。通らないものは、worker に修正させるか、対応しない理由を `renovate.json` のブロック設定に `description` 付きで記録する（java の JUnit のメジャー更新のブロックと同じ形）。判断が必要なものだけオーナーに上げる。
+- The base configuration is common to all repositories. Based on `config:recommended`, minor, patch, pin, digest, and devDependencies updates are merged automatically if the required checks pass.
+- Major updates are not merged automatically.
+- Renovate is not installed in this repository (the hub). It has no CI or branch protection, and the only things to update are the versions pinned under `tools/` (the conformance test tool, the interoperability tool, and the measurement records). These are pinned as records of measurements, so bumping a version would make them inconsistent with the records (the owner decided this on 2026-10-13 and closed PR #20).
+- The coordinator periodically takes stock of Renovate PRs that remain open. Merge those whose CI passes. For those that do not, have a worker fix them, or record the reason for not acting in the block setting of `renovate.json` with a `description` (the same form as the block on the JUnit major update in java). Only escalate to the owner what needs a decision.
 
-## 6. エージェントによる運用
+<a id="6-エージェントによる運用"></a>
+## 6. Operation by Agents
 
-- 各リポジトリへの変更は、本リポジトリのセッション（コーディネーター）が Orca の orchestration で worker に指示して行う。オーナーはコーディネーターとだけやりとりする。
-- コーディネーター（司令塔）は Opus 5.5 で動かし、計画・判断・レビューの統括に専念する。実作業は、Opus 以外のモデルとハーネス（Sonnet 5.5、Ollama Cloud・OpenCode Go のモデル）に任せる。例外として、takt の設計（計画・再計画）、レビューの裁定・最終判定、割り当てのない段は Opus 5.5 で動かす（2026-10-06 にユーザーが指示。8 章）。GPT-6.1-Sol は、2026-10-06 から通常の段には割り当てない。2026-10-07 にオーナーが、利用上限での切り替え候補に加えるよう指示した。実作業の手段は、Orca の orchestration でも takt でもよい（2026-10-05 にオーナーが指示）。
-- worker は PR の作成までを行い、マージはしない。マージはコーディネーターが差分とチェック結果を確認してから、この方針に沿って行う。
-- aidlc は使わない。takt は使ってよい。
-- 用済みのワークツリーは破棄する。リポジトリにない未コミットの成果物が残っている場合は、退避してから破棄する。
+- Changes to each repository are made by the session of this repository (the coordinator) instructing workers through Orca's orchestration. The owner interacts only with the coordinator.
+- The coordinator (the command post) runs on Opus 5.5 and concentrates on planning, decisions, and overseeing review. Actual work is delegated to models and harnesses other than Opus (Sonnet 5.5, and models of Ollama Cloud and OpenCode Go). As exceptions, the design of takt (planning and re-planning), the adjudication and final judgment of reviews, and steps with no assignment run on Opus 5.5 (the user instructed this on 2026-10-06; chapter 8). GPT-6.1-Sol is not assigned to regular steps from 2026-10-06. On 2026-10-07 the owner instructed that it be added as a switching candidate for usage limits. The means of actual work may be either Orca's orchestration or takt (the owner instructed this on 2026-10-05).
+- Workers go as far as creating a PR and do not merge. The coordinator merges, after checking the diff and the check results, in line with this policy.
+- Do not use aidlc. takt may be used.
+- Discard worktrees that are no longer needed. If uncommitted artifacts that are not in the repository remain, save them before discarding.
 
-## 7. オーナーが管理するもの
+<a id="7-オーナーが管理するもの"></a>
+## 7. Things the Owner Manages
 
-- Secrets（公開用の GPG 鍵など）と、リポジトリの公開・権限の設定はオーナーが管理する。コーディネーターは必要な名前と手順を調べて伝える。
+- The owner manages Secrets (such as the GPG key for publishing) and the repository's visibility and permission settings. The coordinator investigates the necessary names and procedures and tells the owner.
 
-## 8. takt の配置
+<a id="8-takt-の配置"></a>
+## 8. Layout of takt
 
-2026-10-03、オーナーの不在中に、オーナーが示した方向(参照するスクリプトと設定、役割の分担)に沿って推奨で決め、同日にオーナーが確認した。
+On 2026-10-03, while the owner was away, this was decided as a recommendation in line with the direction the owner had indicated (the scripts and settings to refer to, and the division of roles), and the owner confirmed it the same day.
 
-takt を使うリポジトリは、次の配置にそろえる。テンプレートは本リポジトリの `tools/takt/` にあり、各リポジトリには同じ内容を写す。変えるときは、まずテンプレートを変え、全リポジトリへ配る。
+Repositories that use takt align to the following layout. The templates are in `tools/takt/` of this repository, and each repository copies the same content. To change it, first change the templates and then distribute them to all repositories.
 
-| 置き場所 | 内容 | 出どころ |
+| Location | Content | Source |
 |:--|:--|:--|
-| `.takt/workflows/`、`.takt/steps/`、`.takt/facets/` | takt-workflows の日本語バンドル(flash-default など) | [ideo-plus/takt-workflows](https://github.com/ideo-plus/takt-workflows) のインストーラーを、コミット `1760ce095a0ba4aba0b357b08bdf0e65ef910b92` に固定して実行する |
-| `.takt/.takt-workflows`、`.takt/.gitignore` | 導入したバンドルの言語と版、追跡するファイルの許可リスト | インストーラーが作る |
-| `.takt/runtime.yaml` | プロファイルとステップの割り当て | `tools/takt/runtime.yaml` |
-| `.takt/config.yaml` | 言語、並列数、利用上限での切り替え | `tools/takt/config.yaml` |
-| `.takt/workflows/light-change.yaml` | 小さな変更向けの軽いワークフロー（計画 → 実装 → 3 人の並行レビュー → 修正、上限 17 段）。組み込みの mini-core を手本に、レビュー役を 3 人にした（2026-10-06 にユーザーが指定）。2026-10-05 にユーザーと合意 | `tools/takt/workflows/light-change.yaml` |
-| `.takt/facets/instructions/spec-conformance-review.md` | light-change の 3 人目のレビュー役（仕様との食い違い）の指示 | `tools/takt/facets/instructions/spec-conformance-review.md` |
-| `.claude/settings.json` | takt のステップに `.takt/` の部品を読ませない設定 | インストーラーが既存の設定にマージする |
-| `.takt/bin/run-takt.sh`、`.takt/bin/takt-claude.sh`、`.takt/bin/takt-codex.sh` | takt を起動する入口（`run-takt.sh --claude-account <設定> --codex-account <設定>`）と、takt が claude・codex を起動するときの入口。`TAKT_CONFIG_DIR` をプロジェクトの `.takt/home` に向ける | `tools/takt/bin/`。[ideo-plus/takt-workflows](https://github.com/ideo-plus/takt-workflows) の `scripts/` をコミット `34d5d5be664ba0f8475817fecfca9c52db77ea86`（ideo-plus/takt-workflows#67 のマージ）のまま写す（2026-10-05 にユーザーが指示）。置き場所は、takt-workflows のインストーラー（`use-lang.sh --launchers-only`）に合わせて `.takt/bin/` とし、`.takt/.gitignore` に `!bin/` と `!bin/**` を足す（2026-10-06 にユーザーと合意）。`scripts/` には置かない |
-| `mise.toml` | takt の版の固定(`"npm:takt" = "0.68.0"`) | 各リポジトリ |
+| `.takt/workflows/`, `.takt/steps/`, `.takt/facets/` | The Japanese bundle of takt-workflows (flash-default and others) | Run the installer of [ideo-plus/takt-workflows](https://github.com/ideo-plus/takt-workflows), pinned to commit `1760ce095a0ba4aba0b357b08bdf0e65ef910b92` |
+| `.takt/.takt-workflows`, `.takt/.gitignore` | The language and version of the installed bundle, and the allowlist of tracked files | Created by the installer |
+| `.takt/runtime.yaml` | Assignment of profiles and steps | `tools/takt/runtime.yaml` |
+| `.takt/config.yaml` | Language, parallelism, and switching at usage limits | `tools/takt/config.yaml` |
+| `.takt/workflows/light-change.yaml` | A light workflow for small changes (plan → implement → 3 parallel reviewers → fix, up to 17 steps). Modeled on the built-in mini-core, with three reviewers (the user specified this on 2026-10-06). Agreed with the user on 2026-10-05 | `tools/takt/workflows/light-change.yaml` |
+| `.takt/facets/instructions/spec-conformance-review.md` | The instruction for the third reviewer of light-change (discrepancy with the specification) | `tools/takt/facets/instructions/spec-conformance-review.md` |
+| `.claude/settings.json` | A setting that keeps takt steps from reading the parts under `.takt/` | The installer merges it into the existing settings |
+| `.takt/bin/run-takt.sh`, `.takt/bin/takt-claude.sh`, `.takt/bin/takt-codex.sh` | The entry point that starts takt (`run-takt.sh --claude-account <setting> --codex-account <setting>`) and the entry points used when takt starts claude and codex. They point `TAKT_CONFIG_DIR` to the project's `.takt/home` | `tools/takt/bin/`. Copy `scripts/` of [ideo-plus/takt-workflows](https://github.com/ideo-plus/takt-workflows) as is at commit `34d5d5be664ba0f8475817fecfca9c52db77ea86` (the merge of ideo-plus/takt-workflows#67) (the user instructed this on 2026-10-05). The location is `.takt/bin/` to match takt-workflows' installer (`use-lang.sh --launchers-only`), and `!bin/` and `!bin/**` are added to `.takt/.gitignore` (agreed with the user on 2026-10-06). It is not placed in `scripts/` |
+| `mise.toml` | Pinning of the takt version (`"npm:takt" = "0.68.0"`) | Each repository |
 
-- 役割の分担は、2026-10-06 にユーザーが次のとおり指定した。GPT-6.1-Sol は通常の段には割り当てず、利用上限での切り替え候補として使う（2026-10-07 にユーザーが指定）。設計（計画・再計画）、レビューの裁定・最終判定、割り当てのない段は Opus 5.5。実装（試験・実装・修正）は Sonnet 5.5。並行に動くレビュー役は、3 種類のモデルに 1 役ずつ固定で割り当てる（ladder ではない）。Sonnet 5.5 は仕様との食い違い（light-change）と設計の構造・CQRS とイベントソーシング（flash-default）。DeepSeek V4.1 Flash は AI 特有の問題（light-change）とバックエンド・セキュリティ（flash-default）。GLM 5.3 Flash は監督（light-change）と AI 特有の問題・試験・フロントエンド（flash-default）。DeepSeek と GLM は OpenCode Go 経由で呼ぶ。試験の作成・再実装・修正の段は Sonnet 5.5 で始め、失敗が続いたときの ladder の最後の上げ先は既定（t2）の Opus 5.5 になる。修正を検証して不合格だったときのやり直し（flash-default の `fix-retry`）も、同じ上げ先の扱いで Opus 5.5 で動く。takt-workflows のバンドルの ddd 系のワークフローは、品質の検査のツール（`.takt/tools`）を追跡しないので、このグループでは読み込めず、使わない。レビューと修正のループの判断役も Opus 5.5 にする。利用上限に当たったときは、Sonnet 5.5 → Opus 5.5 → Codex の GPT-6.1-Sol → OpenCode Go の DeepSeek V4.1 Flash → Ollama Cloud の DeepSeek V4.1 Flash → GLM 5.3 → GLM 5.3 Flash の順に切り替える（2026-10-07 にユーザーが、GPT-6.1-Sol と Ollama Cloud の 3 モデルを切り替え候補に加えるよう指定）。これまでの経緯: 2026-10-03 には設計と既定を Opus 5.5 にしていたが、2026-10-05 にオーナーと合意して GPT-6.1-Sol に改め、2026-10-06 に GPT-6.1-Sol をやめた。
-- takt の版は、全リポジトリで同じにする。Renovate では takt を更新しない(各リポジトリの `renovate.json` で、理由を `description` に書いて止める)。新しい版に上げるときは、コーディネーターが上の表の版と全リポジトリの `mise.toml` を同時に上げる。Renovate の自動更新に任せると、リポジトリごとに更新の日がずれて版がばらつくからである(2026-10-03 に 0.67.1 と 0.68.0 が混在した。同日オーナーと合意)。
-- `~/.takt/`(全体の設定)には何も書かず、読ませもしない。全体の設定はすべてのプロジェクトに重ねて読まれるからである。`run-takt.sh` が `TAKT_CONFIG_DIR` をプロジェクトの `.takt/home` に向けるので、takt は `run-takt.sh` から起動する。`.takt/home` は `.takt/.gitignore` で追跡の外にある。
-- 起動の入口は takt-workflows のものをそのまま使い、独自に改変しない（2026-10-05 にユーザーが指示）。直す必要があるときは、takt-workflows に入れてから写す。呼び出し元のシェルに残る環境変数の除去は、2026-10-06 に takt-workflows に入った（ideo-plus/takt-workflows#65）。`takt-claude.sh` は認証・組織・提供元の選択・接続先・モデル・サブエージェントのモデルの変数を、`takt-codex.sh` は認証・トークン・接続先・外部認証の変数を、`run-takt.sh` は takt に渡る API キーを外してから起動する。
-- 実行ログやセッションの状態(`.takt/runs/` など)はコミットしない。インストーラーが作る `.takt/.gitignore` に従う。
-- インストーラーが入れる `.takt/tools/`(DDD 向けワークフロー用の ddd-lint。約 13MB で、プラットフォーム固有のバイナリを含む)はコミットしない。標準のワークフロー flash-default では使わないからである。`.takt/.gitignore` の `tools/` の許可を外す。インストーラーを入れ直したときは、この変更をやり直す。
+- The division of roles was specified by the user on 2026-10-06 as follows. GPT-6.1-Sol is not assigned to regular steps and is used as a switching candidate at usage limits (the user specified this on 2026-10-07). Design (planning and re-planning), the adjudication and final judgment of reviews, and steps with no assignment use Opus 5.5. Implementation (writing tests, implementing, and fixing) uses Sonnet 5.5. For the reviewers that run in parallel, one role each is fixed to three kinds of models (it is not a ladder). Sonnet 5.5 takes discrepancy with the specification (light-change) and the structure of the design and CQRS and event sourcing (flash-default). DeepSeek V4.1 Flash takes AI-specific problems (light-change) and backend and security (flash-default). GLM 5.3 Flash takes supervision (light-change) and AI-specific problems, tests, and frontend (flash-default). DeepSeek and GLM are called through OpenCode Go. The steps of writing tests, re-implementing, and fixing start with Sonnet 5.5, and when failures continue, the last stage up the ladder is the default (t2), Opus 5.5. A redo after a fix failed verification (`fix-retry` of flash-default) is also treated as the same escalation target and runs on Opus 5.5. The ddd-family workflows of the takt-workflows bundle do not track the quality-check tools (`.takt/tools`), so they cannot be loaded in this group and are not used. The judge of the review-and-fix loop is also Opus 5.5. When a usage limit is hit, switch in the order Sonnet 5.5 → Opus 5.5 → Codex's GPT-6.1-Sol → OpenCode Go's DeepSeek V4.1 Flash → Ollama Cloud's DeepSeek V4.1 Flash → GLM 5.3 → GLM 5.3 Flash (on 2026-10-07 the user specified adding GPT-6.1-Sol and the three Ollama Cloud models as switching candidates). History so far: on 2026-10-03, design and defaults were Opus 5.5; on 2026-10-05, by agreement with the owner, this was changed to GPT-6.1-Sol; and on 2026-10-06, GPT-6.1-Sol was dropped.
+- Use the same takt version in all repositories. Renovate does not update takt (block it in each repository's `renovate.json`, writing the reason in `description`). When moving to a new version, the coordinator bumps the version in the table above and `mise.toml` in all repositories at the same time. If left to Renovate's automatic updates, the update day would differ per repository and the versions would diverge (on 2026-10-03, 0.67.1 and 0.68.0 were mixed. Agreed with the owner the same day).
+- Write nothing to `~/.takt/` (the global settings) and do not let it be read. The global settings are read layered over every project. `run-takt.sh` points `TAKT_CONFIG_DIR` to the project's `.takt/home`, so start takt from `run-takt.sh`. `.takt/home` is outside tracking by `.takt/.gitignore`.
+- Use the entry point of takt-workflows as is and do not modify it on your own (the user instructed this on 2026-10-05). When a fix is needed, put it into takt-workflows first and then copy it. Removal of environment variables that remain in the calling shell was added to takt-workflows on 2026-10-06 (ideo-plus/takt-workflows#65). `takt-claude.sh` removes the variables for authentication, organization, provider selection, endpoint, model, and subagent model, `takt-codex.sh` removes the variables for authentication, token, endpoint, and external authentication, and `run-takt.sh` removes the API keys passed to takt, before starting.
+- Do not commit execution logs or session state (`.takt/runs/` and so on). Follow the `.takt/.gitignore` that the installer creates.
+- Do not commit `.takt/tools/` that the installer installs (ddd-lint for the DDD workflows. About 13MB and includes platform-specific binaries). This is because the standard workflow, flash-default, does not use it. Remove the allowance for `tools/` in `.takt/.gitignore`. When the installer is reinstalled, redo this change.
 
-- Ollama Cloud の切り替え候補は、OpenCode の独自の提供元 `ollama` を通じ、`http://localhost:11434/v1` のローカル Ollama サーバーから呼ぶ。マシンでは [Ollama アプリまたはコマンドラインから Cloud にサインイン](https://docs.ollama.com/cloud) し、サーバーを起動しておく。OpenCode には [独自の提供元の設定](https://opencode.ai/docs/providers/) に従い、提供元名 `ollama`、パッケージ `@ai-sdk/openai-compatible`、上記の接続先と、3 つのモデル `deepseek-v4.1-flash:cloud`・`glm-5.3:cloud`・`glm-5.3-flash:cloud` を登録する。`opencode models ollama` で 3 モデルが見えることと、Cloud の利用枠があることを確かめる。OpenCode から Cloud に直接接続する組み込みの提供元 `ollama-cloud` は別の構成であり、そちらを使うマシンでは接続先・認証と `config.yaml` のモデル名を合わせる。認証情報はリポジトリに書かない。
+- The Ollama Cloud switching candidates are called from the local Ollama server at `http://localhost:11434/v1` through OpenCode's custom provider `ollama`. On the machine, [sign in to Cloud from the Ollama app or the command line](https://docs.ollama.com/cloud) and start the server. Following the [custom provider settings](https://opencode.ai/docs/providers/), register in OpenCode the provider name `ollama`, the package `@ai-sdk/openai-compatible`, the endpoint above, and the three models `deepseek-v4.1-flash:cloud`, `glm-5.3:cloud`, and `glm-5.3-flash:cloud`. Confirm that the three models appear in the list from `opencode models`, with names starting with `ollama/` (the form without arguments works in both older OpenCode versions and 2.1.1), and that there is Cloud usage quota.
 
-- 新しい実行マシンでは、Ollama Cloud の 3 モデルの情報を `ollama pull deepseek-v4.1-flash:cloud`、`ollama pull glm-5.3:cloud`、`ollama pull glm-5.3-flash:cloud` で取得し、それぞれ `ollama show <モデル名>` で確認する。OpenCode へのモデル名の登録だけでは、この準備の代わりにならない（[OpenCode の提供元の設定](https://opencode.ai/docs/providers/)）。GPT-6.1-Sol は、対応する Codex コマンドラインと利用可能なアカウント・ワークスペースの設定を用意し、takt と同じアカウント設定で `gpt-6.1-sol` を指定した短い実行が成功することを確かめる（[OpenAI Docs のモデルの説明](https://learn.chatgpt.com/docs/models)）。具体的な起動例は `CLAUDE.md` の「takt の起動と監督」にある。利用できない候補があれば、takt を起動せず指揮役へ報告する。`rate_limit_fallback` は利用上限の検出時に切り替わる設定なので、モデルが見つからない、認証に失敗するといった準備不足を後続候補で埋め合わせる前提にしない。
+- On a new execution machine, fetch the information of the three Ollama Cloud models with `ollama pull deepseek-v4.1-flash:cloud`, `ollama pull glm-5.3:cloud`, and `ollama pull glm-5.3-flash:cloud`, and confirm each with `ollama show <model name>`. Registering the model names in OpenCode is not a substitute for this preparation ([OpenCode provider settings](https://opencode.ai/docs/providers/)). For GPT-6.1-Sol, prepare a corresponding Codex command line and an available account and workspace setting, and confirm that a short run specifying `gpt-6.1-sol` succeeds with the same account setting as takt ([OpenAI Docs model description](https://learn.chatgpt.com/docs/models)). Concrete start-up examples are in "Starting and supervising takt" in `CLAUDE.md`. If any candidate is unavailable, do not start takt and report to the coordinator. `rate_limit_fallback` is a setting that switches when a usage limit is detected, so do not assume it makes up for insufficient preparation, such as a model not being found or authentication failing, with later candidates.
 
-- 初回の環境準備や OpenCode の接続設定を変えたときは、Ollama のモデル情報を取得した後に OpenCode 経由の応答も確認する。`opencode run --model ollama/deepseek-v4.1-flash:cloud 'ツールを使わず準備完了とだけ返答してください'` を実行し、`--model` の値を `ollama/glm-5.3:cloud`、`ollama/glm-5.3-flash:cloud` に替えて残りの 2 モデルも確認する。3 モデルすべてで短い応答が成功してから takt を起動する。モデルの一覧やローカルのモデル情報だけでは、OpenCode の接続先や Cloud のアカウントで応答できることは確認できない。
+- When doing the initial environment preparation or changing OpenCode's connection settings, also confirm a response through OpenCode after fetching Ollama's model information. Run `opencode run --model ollama/deepseek-v4.1-flash:cloud 'ツールを使わず準備完了とだけ返答してください'` ("reply only with 'ready', without using tools"), change the value of `--model` to `ollama/glm-5.3:cloud` and `ollama/glm-5.3-flash:cloud`, and confirm the remaining two models too. Start takt after a short response succeeds with all three models. The model list and local model information alone cannot confirm that a response is possible through OpenCode's endpoint or the Cloud account.
 
-## 適合状況（2026-10-23）
+- In the run on 2026-10-26, when takt used its default v1 connection method against OpenCode 2.1.1, it failed with `OpenCode CLI opencode v2.1.1 is incompatible with TAKT’s v1 transport. Set TAKT_OPENCODE_VERSION=v1 or v2 and TAKT_OPENCODE_PATH to a matching CLI.`. On a machine that uses this version of OpenCode, pass the environment variable `TAKT_OPENCODE_VERSION=v2` and `TAKT_OPENCODE_PATH`, pointing to the OpenCode executable of that version, when starting takt. Do not modify `run-takt.sh`. Decide the executable's path per machine and do not write it in the repository. A machine that uses OpenCode v1 can stay as it is.
 
-2026-10-03 の時点で、1〜4 章と 8 章は、6 リポジトリすべてで適合していた。必須チェックは `CI Success` だけで、strict が有効（会話の解決の必須は無効）、マージは squash のみ、CI の全ジョブに `timeout-minutes` があり、workflow で動く AI レビューと独自のスレッドのゲートはない。同日に足した 1 章の「公開の workflow」には、java・kotlin・js・scala・rs が適合している（scala は #853、js は手動実行の CI を除く #990、rs は #239 も含む）。go はパッケージの登録先に公開しないので対象外。8 章の takt の版は、同日に 6 リポジトリとも 0.68.0 にそろえ、Renovate では更新しない設定にした（rs #240、js #992、java #686、scala #854、kotlin #822、go #383）。
+<a id="適合状況2026-10-23"></a>
+## Conformance Status (2026-10-23)
 
-2026-10-05 に 8 章の役割の分担を改め（設計と既定を Opus 5.5 から GPT-6.1-Sol に）、テンプレートを直して 6 リポジトリの `.takt/` に配った（rs #242、js #998、java #689、scala #857、kotlin #824、go #385）。8 章は、6 リポジトリとも再び適合している。
+As of 2026-10-03, chapters 1–4 and 8 were conformant in all six repositories. The only required check is `CI Success`, strict is enabled (requiring conversation resolution is disabled), merging is squash only, all CI jobs have `timeout-minutes`, and there are no AI reviews run by workflows or custom thread gates. java, kotlin, js, scala, and rs conform to the "Publishing Workflow" in chapter 1, added the same day (scala via #853, js via #990 excluding the manually run CI, and rs including #239). go is out of scope because it does not publish to a package registry. For the takt version in chapter 8, all six repositories were aligned to 0.68.0 the same day, and set not to be updated by Renovate (rs #240, js #992, java #686, scala #854, kotlin #822, go #383).
 
-同日に足した 1 章の「版上げの workflow」と「適合テストデータの照合」には、6 リポジトリとも適合している。版上げの workflow は rs #244、js #1000、java #691、kotlin #827、scala #860、go #387 で、適合テストデータ v1.0.0 の照合は rs #247、js #1003、java #692、kotlin #830、scala #861、go #388 で入れた。
+On 2026-10-05, the division of roles in chapter 8 was revised (design and defaults changed from Opus 5.5 to GPT-6.1-Sol), and the templates were fixed and distributed to `.takt/` of the six repositories (rs #242, js #998, java #689, scala #857, kotlin #824, go #385). Chapter 8 is conformant again in all six repositories.
 
-2026-10-14 に足した 1 章の「公開 API の形の照合」には、6 リポジトリとも適合している。形の 0.1.0 の照合は go #438、java #740、js #1058、rs #298、kotlin #857、scala #879 で入れた。SHA-256 の照合は、go・rs・scala では lint、java では release-tools、js・kotlin では release-checks のジョブにある。照合の試験は、rs では専用の api-surface のジョブ、ほかの 5 リポジトリでは test のジョブで走る。js の test のジョブは、変更が文書（`.md`、`docs/` など）だけのときは走らないが、`api-surface/` の JSON を変えたときは走る。どのジョブも `CI Success` の依存に含まれる。
+The "Version Bump Workflow" and "Verifying the Conformance Test Data" in chapter 1, added the same day, are conformed to by all six repositories. The version bump workflow was introduced in rs #244, js #1000, java #691, kotlin #827, scala #860, and go #387, and the verification of conformance test data v1.0.0 in rs #247, js #1003, java #692, kotlin #830, scala #861, and go #388.
 
-2026-10-15 に、適合テストデータ 1.1.0 を 6 リポジトリに配った（rs #301、js #1060・#1062、java #742、kotlin #859、scala #881、go #442）。6 リポジトリとも、写しと SHA-256 の照合が 1.1.0 で通る。DY-19 の 2 件は DynamoDB Local で、メモリの期限切れ方式を求める 1 件はメモリで、6 言語とも成功した。変更フィードを求める 1 件は、js では想定外の設定として設定エラーになり成功した。ほかの 5 言語は公開設定に変更フィードの項目がないので、理由付きの表現不能と報告している。
+The "Verifying the Shape of the Public API" in chapter 1, added on 2026-10-14, is conformed to by all six repositories. The verification of shape 0.1.0 was introduced in go #438, java #740, js #1058, rs #298, kotlin #857, and scala #879. The SHA-256 verification is in the lint job for go, rs, and scala, in the release-tools job for java, and in the release-checks job for js and kotlin. The verification test runs in a dedicated api-surface job for rs and in the test job for the other five repositories. js's test job does not run when the change is only to documents (`.md`, `docs/`, and so on), but it does run when the JSON under `api-surface/` is changed. Every job is included in the dependencies of `CI Success`.
 
-2026-10-15 に、適合テストデータ 1.2.0 を 6 リポジトリに配った（rs #315、js #1071、java #752、kotlin #868、scala #890、go #450）。6 リポジトリとも、写しと SHA-256 の照合が 1.2.0 で通る。MEM-2 の 2 件と MEM-6 の 2 件は、6 言語ともメモリで成功し、必須のケースに入った。各言語の実行器には、「新しく」生成したのに記録を共有する保存先と、保存した値を複製せずに返す保存先を、失敗と判定する試験がある。既存の必須の判定は変えていない。
+On 2026-10-15, conformance test data 1.1.0 was distributed to the six repositories (rs #301, js #1060 and #1062, java #742, kotlin #859, scala #881, go #442). In all six repositories, the copy and the SHA-256 verification pass with 1.1.0. The two DY-19 cases succeeded with DynamoDB Local, and the one case requiring the memory expiry method succeeded with memory, in all six languages. The one case requiring a change feed succeeded in js as a configuration error for an unexpected setting. The other five languages have no change feed item in their public configuration, so they report it as not representable with a reason.
 
-2026-10-19 に、適合テストデータ 1.3.0 を 6 リポジトリに配った（rs #317、js #1078、java #755、kotlin #870、scala #893、go #453）。6 リポジトリとも、写しと SHA-256 の照合が 1.3.0 で通る。メモリの設定の共有の場面（`memory-store-shared-configuration`、MEM-2）は、6 言語ともメモリで成功し、必須のケースに入った。SQLite・Spanner・Bigtable の場面と Bigtable の封筒の値の表は、6 言語とも、その保存先を提供しないという理由付きの対象外と報告している（段階 5 で実装する言語が、成功へ移す）。各言語の実行器には、共有したインスタンスに保存先の設定を使わせない偽の保存先を、失敗と判定する試験がある。既存の必須の判定は変えていない。
+On 2026-10-15, conformance test data 1.2.0 was distributed to the six repositories (rs #315, js #1071, java #752, kotlin #868, scala #890, go #450). In all six repositories, the copy and the SHA-256 verification pass with 1.2.0. The two MEM-2 cases and the two MEM-6 cases succeeded with memory in all six languages and entered the required cases. The runner of each language has tests that judge as failures a backend that shares records although it was "newly" created, and a backend that returns a saved value without copying it. The existing required judgments are unchanged.
 
-段階 5 の後（2026-10-23）、SQLite と Bigtable の場面は rs で、Spanner の場面は js で、成功に移った（rs 5.1.0、js 5.1.0）。Bigtable の封筒の値の表も rs で成功している。FNV-1a 64 の 4 件（K-1）は、ハッシュを使う保存先の leg（js の Spanner、rs の Bigtable）で成功し、rs の Bigtable の分は [rs #337](https://github.com/j5ik2o/event-store-adapter-rs/pull/337) で実行するようにした。ほかの leg と、その保存先を提供しない言語（java・kotlin・scala・go、js の SQLite・Bigtable、rs の Spanner）では、理由付きの対象外のままである。
+On 2026-10-19, conformance test data 1.3.0 was distributed to the six repositories (rs #317, js #1078, java #755, kotlin #870, scala #893, go #453). In all six repositories, the copy and the SHA-256 verification pass with 1.3.0. The scenario of sharing memory configuration (`memory-store-shared-configuration`, MEM-2) succeeded with memory in all six languages and entered the required cases. The SQLite, Spanner, and Bigtable scenarios and the table of Bigtable envelope values are reported by all six languages as not applicable with the reason that they do not provide those storage backends (a language that implements them in stage 5 will move them to success). The runner of each language has a test that judges as a failure a fake backend that makes a shared instance not use the backend's configuration. The existing required judgments are unchanged.
 
-2026-10-15 に足した 1 章の「リリースノート」には、6 リポジトリとも適合している。rs は `CHANGELOG.md` を 5.0.1 までで止めた（rs #305）。それまでは、rs・js・java・kotlin・go が件名だけを読む Python のスクリプトで、scala が版上げに使う `mathieudutour/github-tag-action` で、リリースノートを作っていた。Python のスクリプトは型の直後の `!` を見分けず、破壊的な変更の節を作らなかった（rs 5.0.0 の `feat!:` の #287 は機能の節に入った）。本リポジトリの正本（#38・#39）を、rs #307・#308、js #1065・#1066、java #745・#746、kotlin #862・#864、scala #883・#885、go #444・#445 で写した。scala はタグを作るのは今のアクションのままで、リリースノートだけを正本のスクリプトで作る。新しいスクリプトは、破壊的な変更の節、スコープ、PR とコミットへのリンクを出す。
+After stage 5 (2026-10-23), the SQLite and Bigtable scenarios moved to success in rs, and the Spanner scenarios in js (rs 5.1.0, js 5.1.0). The table of Bigtable envelope values also succeeds in rs. The four FNV-1a 64 cases (K-1) succeed in the legs of storage backends that use the hash (js's Spanner, rs's Bigtable), and rs's Bigtable portion was made to run in [rs #337](https://github.com/j5ik2o/event-store-adapter-rs/pull/337). The other legs, and the languages that do not provide such a storage backend (java, kotlin, scala, go, js's SQLite and Bigtable, rs's Spanner), remain not applicable with a reason.
 
-2026-10-15 に足した 1 章の「main の CI の失敗の知らせ」には、6 リポジトリとも適合している。本リポジトリの正本（#49・#53）を、rs #313、js #1070、java #750、kotlin #867、scala #888、go #449 で写した。rs では、10/14 の audit の失敗の実行を手動の実行に渡して issue（rs #314）ができ、新しい成功の実行を渡すと閉じることを確かめた。java でも同じく確かめた（java #751）。
+The "Release Notes" in chapter 1, added on 2026-10-15, is conformed to by all six repositories. rs stopped its `CHANGELOG.md` at 5.0.1 (rs #305). Until then, rs, js, java, kotlin, and go created release notes with a Python script that reads only subjects, and scala with `mathieudutour/github-tag-action`, which it uses for version bumps. The Python script did not recognize a `!` right after the type and did not create a section for breaking changes (rs 5.0.0's `feat!:` #287 went into the features section). The canonical source of this repository (#38 and #39) was copied in rs #307 and #308, js #1065 and #1066, java #745 and #746, kotlin #862 and #864, scala #883 and #885, and go #444 and #445. scala still uses the current action to create the tag, and only the release notes are created by the canonical scripts. The new scripts output a section for breaking changes, scopes, and links to PRs and commits.
 
-| 残っている項目 | 対象 | 担当 |
+The "Notification of CI Failures on main" in chapter 1, added on 2026-10-15, is conformed to by all six repositories. The canonical source of this repository (#49 and #53) was copied in rs #313, js #1070, java #750, kotlin #867, scala #888, and go #449. In rs, we passed the failed audit run of 10/14 to a manual run, an issue (rs #314) was created, and we confirmed that passing a new successful run closes it. We confirmed the same in java (java #751).
+
+| Remaining item | Target | Owner |
 |:--|:--|:--|
-| crates.io の API トークン `CARGO_TOKEN`（7 章） | rs ほか | rs は OIDC に移り、GitHub の Secret `CARGO_TOKEN` はオーナーが削除した（2026-10-03）。crates.io 側の同じ名前のトークンは、グループ外の prop-check-rs・oni-comb-rs・fraktor-rs などの公開の workflow も同じ名前の Secret で使っているとみられる。取り消すと、それらの公開が失敗するので、同日オーナーの判断で残すことにした。それらのリポジトリを OIDC に移したあとで取り消す。オーナー |
-| Renovate の PR の棚卸し（5 章） | 全リポジトリ | コーディネーター。初回は 2026-10-03 に実施（Java 11 と両立しないメジャー更新は理由付きでブロック）。同日の 2 回目で、lint で止まっていた js の biome・jest の minor 更新を #978 で通した。js の mise.toml の sbt は、使っておらず conda-forge に 2.0.10 がなく `mise install` が失敗したので、#984 で外した。同日の 3 回目で、js の pnpm 12 を #982 で取り込み、TypeScript 7 は ts-jest と ts-node が直接対応するまで #987 でブロックした。`@google-cloud/spanner` v9 は、公開 API が利用者の `Database` を受け取るため、オーナーの判断で peerDependencies（`^8.7.1 \|\| ^9.0.0`）に移した（#986） |
+| The crates.io API token `CARGO_TOKEN` (chapter 7) | rs and others | rs moved to OIDC, and the owner deleted the GitHub Secret `CARGO_TOKEN` (2026-10-03). The token of the same name on the crates.io side appears to be used, with a Secret of the same name, by publishing workflows of repositories outside the group such as prop-check-rs, oni-comb-rs, and fraktor-rs. Revoking it would make their publishing fail, so the owner decided the same day to keep it. Revoke it after those repositories move to OIDC. Owner |
+| Taking stock of Renovate PRs (chapter 5) | All repositories | Coordinator. The first round was done on 2026-10-03 (major updates incompatible with Java 11 were blocked with reasons). In the second round the same day, the minor updates of biome and jest in js, which had been stuck at lint, were passed in #978. The sbt in js's mise.toml was removed in #984 because it was unused and `mise install` failed since conda-forge does not have 2.0.10. In the third round the same day, js's pnpm 12 was taken in with #982, and TypeScript 7 was blocked in #987 until ts-jest and ts-node support it directly. `@google-cloud/spanner` v9 was moved to peerDependencies (`^8.7.1 \|\| ^9.0.0`) by the owner's decision, because the public API receives the user's `Database` (#986) |
 
-ブロック中のメジャー更新は、Gradle 9 への移行（java #679、kotlin #807）と scala の JDK 25（#848）のあと、2026-10-03 に見直した。java #681・kotlin #815 で Spotless 8（kotlin は ktlint 1.8.0 による整形を含む）と foojay 1.0 のブロックを外し、Gradle を動かす JDK を 25 にした。Gradle 用の JDK の更新は LTS だけを許可する。JUnit 6 と、テスト用の JDK 11 のメジャー更新は、Java 11 でのテストを続ける限りブロックのまま。scala の sbt 2 は、プラグインの対応とビルド定義の移行を待つ理由に書き直して、ブロックを続ける（#850）。scala の `sbt-ci-release` を止める旧形式のルールは、効いていなかったので削除した（#852）。
+The blocked major updates were reviewed on 2026-10-03, after the migration to Gradle 9 (java #679, kotlin #807) and scala's JDK 25 (#848). In java #681 and kotlin #815, the blocks on Spotless 8 (for kotlin, including formatting with ktlint 1.8.0) and foojay 1.0 were lifted, and the JDK that runs Gradle was set to 25. Updates of the JDK for Gradle are allowed only for LTS. The major updates of JUnit 6 and of the JDK 11 for tests remain blocked as long as testing on Java 11 continues. scala's sbt 2 keeps being blocked, with the reason rewritten as waiting for plugin support and migration of the build definition (#850). The old-style rule that stopped scala's `sbt-ci-release` was deleted because it had no effect (#852).
 
-java と kotlin の Snapshot workflow は、PR のブランチで CI が成功したときにも、そのブランチを checkout して Sonatype に公開していた（2023 年から。2026-10-02 には Renovate のブランチが公開され、マージ後に消えたブランチの checkout で失敗した）。2026-10-03 に java #682・#684、kotlin #817・#818・#820 で、main への push と定期実行の CI が成功し、かつ起動した時点と公開の直前の両方で main の先頭であるコミットだけを、その SHA で公開するように直し、main で公開が成功することを確かめた。
+The Snapshot workflows of java and kotlin, when CI succeeded on a PR's branch, also checked out that branch and published it to Sonatype (since 2023. On 2026-10-02, a Renovate branch was published and failed on checking out the branch that was gone after merging). On 2026-10-03, in java #682 and #684 and kotlin #817, #818, and #820, they were fixed to publish, by SHA, only a commit for which the CI of a push to main or of a scheduled run succeeded and which is the head of main both when the run starts and immediately before publishing, and we confirmed that publishing on main succeeds.
 
-js の Snapshot workflow は、公開の前にバージョンを上げるコミットを main に push していた（公開に失敗しても版だけが上がり、push のたびに開いている PR が main より古くなり、provenance も付けられなかった）。同日、オーナーの判断で、版をジョブの中だけで決めて（`X.Y.Z-snapshot.<run_number>.<run_attempt>`）main には push しない形にし、公開の条件を java・kotlin とそろえた（#985）。main で `snapshot` タグに provenance 付きで公開され、`latest` が動かないことを確かめた。
+js's Snapshot workflow pushed a version-bumping commit to main before publishing (even if publishing failed only the version went up, every push made open PRs older than main, and provenance could not be attached). The same day, by the owner's decision, the version is decided only inside the job (`X.Y.Z-snapshot.<run_number>.<run_attempt>`) without pushing to main, and the conditions for publishing were aligned with java and kotlin (#985). We confirmed that it is published to the `snapshot` tag with provenance on main and that `latest` does not move.
 
-js の npm への公開は、2026-09-16 の v3.1.1 の release から、`NPM_TOKEN` での公開が `404 Not Found - PUT` で失敗していた。2026-10-03 に、オーナーの判断で npm の Trusted Publishing（OIDC）に切り替えた。#983 で workflow を整え（`id-token: write`、Snapshot の `--tag snapshot`、既存のタグを手動で公開し直す入口）、オーナーの承認を得て npm の CLI（`npm trust github`）で `release.yml` と `snapshot.yml` を信頼済みの公開元に登録した。v3.1.1 を OIDC で公開し直し、spanner を peer 依存にした変更（#986）を含む 4.0.0 を、オーナーの判断でメジャーとしてリリースした（#989 で移行の注記を追加。`latest` は 4.0.0）。続けてオーナーが `NPM_TOKEN` を削除し、npm の Publishing access をトークンを許さない設定（`mfa=publish`）に切り替えた。workflow からも `NODE_AUTH_TOKEN` を外し（#991）、main でトークンなしに、Snapshot を OIDC と provenance 付きで公開できることを確かめた（`4.0.1-snapshot.5405.1`）。
+js's npm publishing had been failing with `404 Not Found - PUT` when publishing with `NPM_TOKEN`, since the release of v3.1.1 on 2026-09-16. On 2026-10-03, by the owner's decision, it was switched to npm Trusted Publishing (OIDC). The workflow was prepared in #983 (`id-token: write`, the Snapshot's `--tag snapshot`, and an entry to manually re-publish an existing tag), and with the owner's approval `release.yml` and `snapshot.yml` were registered as trusted publishers with npm's CLI (`npm trust github`). v3.1.1 was re-published with OIDC, and 4.0.0, which includes the change that made spanner a peer dependency (#986), was released as a major by the owner's decision (a migration note was added in #989. `latest` is 4.0.0). Next, the owner deleted `NPM_TOKEN` and switched npm's Publishing access to a setting that does not allow tokens (`mfa=publish`). `NODE_AUTH_TOKEN` was also removed from the workflow (#991), and we confirmed that a Snapshot can be published with OIDC and provenance without a token on main (`4.0.1-snapshot.5405.1`).
 
-rs の crates.io への公開は、2026-10-03 にオーナーが crates.io で Trusted Publishing を登録し、#239 で `rust-lang/crates-io-auth-action` が OIDC で得たトークンを使う形に移した。`lib-bump-version` を手動で起動して v3.0.4 を作り、OIDC で公開できることを確かめた（crates.io の版に GitHub の実行の発行元情報が付く）。
+For rs's publishing to crates.io, on 2026-10-03 the owner registered Trusted Publishing on crates.io, and in #239 it was moved to a form that uses the token that `rust-lang/crates-io-auth-action` obtains with OIDC. We started `lib-bump-version` manually to create v3.0.4 and confirmed that it can be published with OIDC (the crates.io version carries the issuer information of the GitHub run).
 
-scala の publish は、2026-10-03 にオーナーが `SONATYPE_USERNAME`・`SONATYPE_PASSWORD` を Central Portal のユーザートークンに更新して直った（同日 12:27 UTC の Snapshot で 2.13 と 3 の公開が通った）。更新の前に Central Portal へのアップロードが HTTP 401 で失敗していたタグ `v1.0.338` の release は、失敗したジョブを再実行して Maven Central に公開した。また、毎日バージョンを上げる workflow が `fix(ci):` のようなスコープ付きのコミットを数えておらず、v1.0.337（2025-04）から v1.0.338 まで約 300 コミットのあいだ、新しい版が作られていなかった。rs と同じ条件に直し（#855）、同日に手動で起動して v1.0.339 を作り、Maven Central に公開されることを確かめた。
+scala's publish was fixed on 2026-10-03 when the owner updated `SONATYPE_USERNAME` and `SONATYPE_PASSWORD` to Central Portal user tokens (the Snapshot of 12:27 UTC the same day succeeded in publishing 2.13 and 3). The release of tag `v1.0.338`, whose upload to Central Portal had failed with HTTP 401 before the update, was published to Maven Central by re-running the failed job. Also, the workflow that bumps the version every day was not counting commits with a scope such as `fix(ci):`, so no new version was created for about 300 commits from v1.0.337 (2025-04) to v1.0.338. It was fixed to the same condition as rs (#855), started manually the same day to create v1.0.339, and we confirmed that it is published to Maven Central.
 
-js の Spanner の emulator テスト（任意で実行するもの）は、最新の emulator イメージに shell がなく起動待ちで失敗していた。直す過程で、書き込みが拒否されたときにトランザクションをロールバックしていない実装のバグが見つかり、spanner v8 では待ち続ける原因になっていたので、ロールバックを足して直した（#988。v8・v9 とも全件成功）。
+js's Spanner emulator test (run optionally) was failing while waiting for startup because the latest emulator image has no shell. In the course of fixing it, we found a bug where the implementation did not roll back the transaction when a write was rejected, which was the cause of waiting forever on spanner v8, so we added the rollback and fixed it (#988. All cases pass on both v8 and v9).
