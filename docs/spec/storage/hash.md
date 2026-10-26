@@ -1,11 +1,11 @@
-# キーの接頭辞に使うハッシュ（ストレージプロファイル共通、v5 で確定）
+# Hash used for key prefixes (common to storage profiles, finalized in v5)
 
-この文書は v5 で確定している（[README](../README.md) の P-49）。最初のメジャーの保存先（DynamoDB とメモリ）はこのハッシュを使わない。Spanner・Bigtable などのハッシュを使う保存先を出すときに、このハッシュを変えずに使う。
+This document is finalized in v5 (P-49 of the [README](../README.md)). The storages of the first major version (DynamoDB and memory) do not use this hash. When Spanner, Bigtable, and other storages that use a hash are released, they will use this hash unchanged.
 
-キーにハッシュを使うストレージプロファイル（Spanner・Bigtable など）は、次のハッシュを使う。目的は、`型名-ULID` のように単調に増える aid 文字列で、新規作成がキー空間の末尾に集中する（ホットスポット）のを避けることである。DynamoDB はパーティションキーを内部でハッシュするので、このハッシュを使わない（[ADR-0006](../../adr/0006-key-by-aggregate-id-instead-of-logical-shards.md)）。
+A storage profile that uses a hash in the key (Spanner, Bigtable, and others) uses the hash below. The purpose is to avoid new creations concentrating at the end of the key space (a hotspot) when the aid string increases monotonically, as in `type name-ULID`. DynamoDB hashes the partition key internally, so it does not use this hash ([ADR-0006](../../adr/0006-key-by-aggregate-id-instead-of-logical-shards.md)).
 
-- **必須 K-1**: ハッシュは FNV-1a 64 とする。入力は aid 文字列（共通契約 T-1）の UTF-8 バイト列、出力は符号なし 64bit 整数である（[ADR-0003](../../adr/0003-fix-storage-value-representations.md)）。
-- **必須 K-2**: ハッシュの値をシャード数で割らない。シャード数という設定を持たないので、その値を変えてキーを見失うことがない（P-29）。キーへの埋め込み方（数値の列にするか、固定幅の 16 進数にするか）は各プロファイルが定める。
+- **MUST K-1**: The hash is FNV-1a 64. The input is the UTF-8 byte sequence of the aid string (common contract T-1), and the output is an unsigned 64-bit integer ([ADR-0003](../../adr/0003-fix-storage-value-representations.md)).
+- **MUST K-2**: Do not divide the hash value by a shard count. Since there is no setting called a shard count, there is no case of losing keys by changing that value (P-29). How to embed it in the key (as a sequence of digits or as a fixed-width hexadecimal number) is defined by each profile.
 
 ```
 h = 0xcbf29ce484222325
@@ -13,13 +13,13 @@ for b in utf8(input):
     h = (h XOR b) * 0x100000001b3   (mod 2^64)
 ```
 
-符号付き 64bit 整数しか持たない言語（Java の `long` など）では、乗算は桁あふれのまま計算すればよい。値を比較したり 10 進数で表したりするときは、符号なしとして扱う（`Long.toUnsignedString` など）。
+In a language that has only signed 64-bit integers (such as Java's `long`), the multiplication can simply be computed with overflow. When comparing the value or representing it in decimal, treat it as unsigned (`Long.toUnsignedString` and the like).
 
-| 入力 | FNV-1a 64 |
+| Input | FNV-1a 64 |
 |:--|:--|
 | `a` | `0xaf63dc4c8601ec8c` |
 | `01H42K4ABWQ5V2XQEP3A48VE0Z` | `0xadb103af5fe2a91a` |
 | `01H42KBHCW1BZG504J4ZXKA2F2` | `0x0aa990285e0388ca` |
 | `ユーザー` | `0x309f20171820053e` |
 
-この表の値は Go の `hash/fnv` と Python の独自実装で一致を確かめた。適合テストデータに収録する。
+The values in this table were confirmed to match between Go's `hash/fnv` and a custom Python implementation. They are included in the conformance test data.

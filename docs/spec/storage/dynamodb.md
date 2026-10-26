@@ -1,234 +1,234 @@
-# DynamoDB ストレージプロファイル（v5 で確定）
+# DynamoDB storage profile (finalized in v5)
 
-[共通契約](../core-contract.md)を DynamoDB で実現する方法を定める。テーブル構成、キーの導出、属性、トランザクション、読み取り、スナップショット保持、Streams による変更フィードを扱う。
+Defines how to realize the [common contract](../core-contract.md) on DynamoDB. It covers the table layout, key derivation, attributes, transactions, reads, snapshot retention, and the change feed via Streams.
 
-> この文書は、合意済みの事項（P-1〜P-40、ADR-0001〜0006）から導いた部分と、この文書で新たに必要になった判断 D-1〜D-9 からなる。D-1〜D-9 は 2026-10-02 に合意した（1 章）。キーは P-29（2026-10-03 合意）で、論理シャードから aid 文字列に改めた。PR #1 のレビューを受けて足した P-17〜P-22 は、2026-10-03 に合意した（[README の合意状況](../README.md#合意状況)）。「未合意」と書いた箇所は、まだ合意していない。変更するときはオーナーの合意を得る。
+> This document consists of parts derived from the agreed items (P-1 to P-40, ADR-0001 to 0006), and the decisions D-1 to D-9 that became newly necessary in this document. D-1 to D-9 were agreed on 2026-10-02 (chapter 1). The keys were changed from logical shards to the aid string by P-29 (agreed 2026-10-03). P-17 to P-22, added following the review of PR #1, were agreed on 2026-10-03 ([the README's agreement status](../README.md#agreement-status)). A place marked "not agreed" has not been agreed yet. Changing it requires the owner's agreement.
 
-## 1. この文書で決めた判断
+## 1. Decisions made in this document
 
-| # | 判断 | 草案での案 | 主な代案 | 状態 |
+| # | Decision | Proposal in the draft | Main alternatives | Status |
 |:--|:--|:--|:--|:--|
-| D-1 | 設定項目の置き場所と形 | 当初案は journal に予約キーで 1 件置く形。現在の配置・生成手順と権限は 4 章に従う | head テーブルに置く、専用テーブルを作る | 合意（2026-10-02）。P-29 で、記録するのを配置の版だけにした。P-40 で、store_id を加えて 3 テーブルすべてに置くようにした |
-| D-2 | ヘッド項目の属性 | aid・type_name・seq_nr・events（リスト） | type_name を持たない、events をリストにしない | 合意（2026-10-02） |
-| D-3 | TTL 待ちの履歴を除外する仕組み | 印のない履歴だけが載る KEYS_ONLY の疎な GSI。旧来の snapshot の `(aid, seq_nr)` GSI は廃止。期限を設けない項目は `ttl` 属性を持たない（rs v3 は 0 を入れていた） | 絞り込み条件（FilterExpression）で除外する | 合意（2026-10-02） |
-| D-4 | Streams のレコード形式 | `NEW_IMAGE` | `NEW_AND_OLD_IMAGES` | 合意（2026-10-02） |
-| D-5 | W-8 の外れ方の判別方法 | 条件不成立時に旧項目を返させて、ヘッドの seq_nr と比べる | 失敗後に読み直して比べる | 合意（2026-10-02） |
-| D-6 | トランザクション競合の分類 | 楽観ロック | 保存先 | 合意（2026-10-02） |
-| D-7 | 項目サイズ上限の超過の分類 | 書き込み前に検査し、契約違反 | 保存先（DynamoDB の検証エラーをそのまま返す） | 合意（2026-10-02） |
-| D-8 | rs v3 からの移行手順 | 新テーブルへ Scan で書き直す。ヘッドの seq_nr はジャーナルの最大値から求める | ― | 合意（2026-10-02） |
-| D-9 | 保持処理を行う契機 | 履歴を書いた書き込み（スナップショットを伴う書き込み）の後だけ | rs v3・js と同じく、すべての書き込みの後 | 合意（2026-10-02） |
+| D-1 | Where the configuration item is placed, and its shape | The initial proposal was to place one in the journal under a reserved key. The current layout, creation procedure, and permissions follow chapter 4 | Place it in the head table, or create a dedicated table | Agreed (2026-10-02). P-29 changed it so that only the layout version is recorded. P-40 added store_id and made it placed in all three tables |
+| D-2 | Attributes of the head item | aid, type_name, seq_nr, events (a list) | Do not hold type_name, do not make events a list | Agreed (2026-10-02) |
+| D-3 | The mechanism for excluding history waiting for TTL | A sparse KEYS_ONLY GSI that holds only history without a mark. The old snapshot `(aid, seq_nr)` GSI is abolished. Items with no expiry do not hold the `ttl` attribute (rs v3 put 0) | Exclude with a filter condition (FilterExpression) | Agreed (2026-10-02) |
+| D-4 | Record format of Streams | `NEW_IMAGE` | `NEW_AND_OLD_IMAGES` | Agreed (2026-10-02) |
+| D-5 | How to tell how W-8 was deviated from | On a failed condition, have the old item returned and compare it with the head's seq_nr | Re-read after the failure and compare | Agreed (2026-10-02) |
+| D-6 | Classification of transaction conflicts | Optimistic lock | Storage | Agreed (2026-10-02) |
+| D-7 | Classification of exceeding the item size limit | Check before writing, and treat as a contract violation | Storage (return DynamoDB's validation error as is) | Agreed (2026-10-02) |
+| D-8 | The migration procedure from rs v3 | Rewrite into new tables via Scan. The head's seq_nr is derived from the journal's maximum | ― | Agreed (2026-10-02) |
+| D-9 | When to run retention processing | Only after a write that wrote history (a write accompanied by a snapshot) | After every write, as in rs v3 and js | Agreed (2026-10-02) |
 
-## 2. テーブル構成
+## 2. Table layout
 
-テーブルは 3 つで、作成はライブラリの外で行う。テーブル名とインデックス名は設定で与える。
+There are three tables, and they are created outside the library. Table names and index names are given in the settings.
 
-| テーブル | パーティションキー | ソートキー | GSI | Streams |
+| Table | Partition key | Sort key | GSI | Streams |
 |:--|:--|:--|:--|:--|
-| journal | `aid` (S) | `seq_nr` (N) | なし | 無効 |
-| snapshot | `aid` (S) | `skey` (N) | `(aid, active_history_seq_nr)`、射影は KEYS_ONLY（D-3、2026-10-02 合意） | 無効 |
-| head | `aid` (S) | なし | なし | 有効（D-4、2026-10-02 合意） |
+| journal | `aid` (S) | `seq_nr` (N) | None | Disabled |
+| snapshot | `aid` (S) | `skey` (N) | `(aid, active_history_seq_nr)`, projection KEYS_ONLY (D-3, agreed 2026-10-02) | Disabled |
+| head | `aid` (S) | None | None | Enabled (D-4, agreed 2026-10-02) |
 
-- **必須 DY-2**: snapshot テーブルでは DynamoDB の TTL を属性 `ttl` で有効にする（TTL 方式の保持を使う場合）。
-- **必須 DY-3**: Streams は head テーブルでだけ有効にする。journal の Streams では集約単位の順序が保証されないので、変更フィードの供給源にしない（[ADR-0002](../../adr/0002-separate-aggregate-head-from-snapshot.md)）。
+- **MUST DY-2**: On the snapshot table, enable DynamoDB's TTL on the attribute `ttl` (when using TTL-style retention).
+- **MUST DY-3**: Streams is enabled only on the head table. Streams of the journal does not guarantee ordering per aggregate, so it is not used as a source of the change feed ([ADR-0002](../../adr/0002-separate-aggregate-head-from-snapshot.md)).
 
-- **必須 DY-18**: この配置の前提は、3 つのテーブルが同じリージョンにあり、書き込みもそのリージョンからだけ行うことである。集約の読み取りは強整合で行う（DY-8・DY-9・DY-11）。保持処理の GSI の読み取りだけは結果整合だが、P-24 で安全側に倒している。グローバルテーブル（複数リージョンのレプリカ）は範囲外とする。複数のリージョンから書くと、トランザクションはリージョンの中でしか原子的でなく、別々のリージョンの書き込みがどちらもヘッドの条件を満たしうるので、共通契約 H-1 と W-8 が成り立たない（共通契約 SP-1）（2026-10-03 合意、P-31）。
-- **必須 DY-19**: 書き込み・読み取り・保持処理は、1 つの集約の aid に絞った `GetItem`・`BatchGetItem`・`Query`・`TransactWriteItems`・`BatchWriteItem`・`UpdateItem` だけで行い、Scan を使わない。そのため、集約の数が増えても遅くならない。テーブル全体を読むのは、rs v3 からの移行（11 章）と変更フィードの再同期（DY-15）だけである。この 2 つでは、並列 Scan（`Segment`・`TotalSegments`）で読んでよく、S3 へのエクスポートで代えてもよい。エクスポートは読み取り容量を消費しないが、時点の取り方に注意する。移行では書き込みを止めた後の時点で取り、再同期では Streams の読み取りを再開した後の時点で取る（2026-10-03 合意、P-39）。
+- **MUST DY-18**: The precondition of this layout is that the three tables are in the same region and writes are also made only from that region. Reads of an aggregate are made with strong consistency (DY-8, DY-9, DY-11). Only the GSI read in retention processing is eventually consistent, but P-24 puts it on the safe side. Global tables (replicas in multiple regions) are out of scope. If writes are made from multiple regions, transactions are atomic only within a region, and writes from separate regions can both satisfy the head's condition, so H-1 and W-8 of the common contract do not hold (common contract SP-1) (agreed 2026-10-03, P-31).
+- **MUST DY-19**: Writes, reads, and retention processing use only `GetItem`, `BatchGetItem`, `Query`, `TransactWriteItems`, `BatchWriteItem`, and `UpdateItem` narrowed to the aid of a single aggregate, and do not use Scan. Therefore they do not get slower as the number of aggregates grows. The whole table is read only in the migration from rs v3 (chapter 11) and the resynchronization of the change feed (DY-15). In these two, it may be read with a parallel Scan (`Segment`, `TotalSegments`), and may be replaced by an export to S3. An export does not consume read capacity, but take care in how the point in time is chosen. In migration, take it at a point after writes are stopped, and in resynchronization, take it at a point after the reading of Streams has resumed (agreed 2026-10-03, P-39).
 
-DY-1（journal の GSI の射影）は削除した。journal の GSI をやめたからである（P-29）。
+DY-1 (the projection of the journal's GSI) has been deleted. This is because the journal's GSI was dropped (P-29).
 
-## 3. キー（P-29、2026-10-03 合意）
+## 3. Keys (P-29, agreed 2026-10-03)
 
-- **必須 DY-16**: 3 つのテーブルとも、パーティションキーは aid 文字列（共通契約 T-1）そのものとする。論理シャードもハッシュも使わない（[ADR-0006](../../adr/0006-key-by-aggregate-id-instead-of-logical-shards.md)）。
-- **必須 DY-17**: journal のソートキーは seq_nr（数値）とする。snapshot のソートキー `skey`（数値）は、現在の項目が 0、履歴がその履歴の seq_nr である。head はソートキーを持たない。
+- **MUST DY-16**: In all three tables, the partition key is the aid string itself (common contract T-1). Neither logical shards nor a hash is used ([ADR-0006](../../adr/0006-key-by-aggregate-id-instead-of-logical-shards.md)).
+- **MUST DY-17**: The journal's sort key is seq_nr (a number). The snapshot's sort key `skey` (a number) is 0 for the current item, and the history's seq_nr for a history item. The head has no sort key.
 
-型名が `UserAccount`、値が `01H42K4ABWQ5V2XQEP3A48VE0Z` の集約の例を示す。
+An example for an aggregate with type name `UserAccount` and value `01H42K4ABWQ5V2XQEP3A48VE0Z`.
 
-| 項目 | パーティションキー | ソートキー |
+| Item | Partition key | Sort key |
 |:--|:--|:--|
-| ジャーナル（seq_nr = 3） | `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z` | `seq_nr` = 3 |
-| スナップショット（現在） | `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z` | `skey` = 0 |
-| スナップショット（履歴、seq_nr = 3） | `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z` | `skey` = 3 |
-| ヘッド | `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z` | なし |
+| Journal (seq_nr = 3) | `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z` | `seq_nr` = 3 |
+| Snapshot (current) | `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z` | `skey` = 0 |
+| Snapshot (history, seq_nr = 3) | `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z` | `skey` = 3 |
+| Head | `UserAccount-01H42K4ABWQ5V2XQEP3A48VE0Z` | None |
 
-集約の項目は、パーティションキーの完全一致で読む。前方一致を使わないので、別の集約の項目が混ざることはない。
+The items of an aggregate are read by an exact match on the partition key. Since prefix matching is not used, items of another aggregate never get mixed in.
 
-DY-4〜DY-7（シャード番号、`${型名}-${シャード番号}` のパーティションキー、シャード数の不変、ソートキーの前方一致の禁止）は削除した。論理シャードをやめたからである（P-29）。規則の番号は再利用しない。
+DY-4 to DY-7 (shard numbers, the partition key `${type name}-${shard number}`, immutability of the shard count, and the ban on prefix matching of the sort key) have been deleted. This is because logical shards were dropped (P-29). Rule numbers are not reused.
 
-## 4. 設定項目と照合（D-1、2026-10-02 合意。P-40 で 3 テーブルに広げた）
+## 4. Configuration item and check (D-1, agreed 2026-10-02. Extended to three tables by P-40)
 
-ストアの識別子と配置の版を記録した設定項目を、3 つのテーブルすべてに 1 件ずつ置く。3 つのテーブルが同じストアのものであることを、生成のたびに確かめるためである（P-40、2026-10-03 合意）。
+A configuration item that records the store's identifier and the layout version is placed, one each, in all three tables. This is to confirm at every construction that the three tables belong to the same store (P-40, agreed 2026-10-03).
 
-| 属性 | 値 |
+| Attribute | Value |
 |:--|:--|
 | aid | `__config__` |
-| ソートキー | journal は `seq_nr` = 0、snapshot は `skey` = 0。head はソートキーを持たない |
-| store_id (S) | ストアの識別子。最初の生成でライブラリが作るランダムな値（UUID など） |
-| layout_version (N) | この文書が定める配置の版。初版は `1` |
+| Sort key | For journal, `seq_nr` = 0; for snapshot, `skey` = 0. The head has no sort key |
+| store_id (S) | The store's identifier. A random value (such as a UUID) that the library creates at the first construction |
+| layout_version (N) | The layout version defined by this document. `1` in the first version |
 
-aid 文字列は必ず `-` を含むので（共通契約 T-1、T-11）、`-` を含まないこの予約値とは衝突しない。seq_nr の 0 もイベントには使わない（共通契約 W-6）。snapshot の設定項目は `active_history_seq_nr` を持たないので、保持処理の GSI にも載らない。シャード数とハッシュ方式は、論理シャードをやめたので記録しない（P-29）。
+Since an aid string always contains `-` (common contract T-1, T-11), it does not collide with this reserved value, which does not contain `-`. A seq_nr of 0 is not used for events either (common contract W-6). The snapshot's configuration item does not hold `active_history_seq_nr`, so it does not appear in the retention processing's GSI either. The shard count and hash method are not recorded because logical shards were dropped (P-29).
 
-- **必須 DY-8**: ストアを生成するとき、3 つのテーブルの設定項目を `BatchGetItem` で強整合読み取りする。最初の要求に 3 件すべてを含め、各テーブルで `ConsistentRead = true` とする。応答の `Responses` をテーブル名とキーごとに蓄積し、`UnprocessedKeys` があれば、そのキーだけを指数バックオフ付きで再要求する。再要求でも強整合読み取りを維持する。未処理のキーがなくなるまで、応答にない項目を「存在しない」と判定せず、次の手順にも進まない。再試行回数または待ち時間の設定上限に達したら、設定エラーではなく保存先エラーを返す。[BatchGetItem の仕様](https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchGetItem.html)は、成功応答でも一部のキーが未処理になる場合を定めている。
-  1. 3 つともなければ、新しい store_id を作り、3 つの設定項目を 1 つの `TransactWriteItems` で、それぞれ `attribute_not_exists(aid)` の条件付きで書く。条件が成り立たずに失敗したら、別の生成が先に書いたので、蓄積した応答を捨て、3 件すべてを上記の手順で強整合読み取りし直してから手順 2 に進む。結果整合の読み取りでは、先に書いた側の設定項目が見えないことがあるからである（P-19、2026-10-03 合意）。取り消し理由が `TransactionConflict`（別の生成が同じ設定項目を書いている最中）のときも、条件が成り立たなかったときと同じく、3 件すべてを強整合読み取りし直してから手順 2 に進む。読み直しても 3 つともなければ、作成を繰り返さずに保存先エラーを返す。呼び出し側が生成をやり直す（2026-10-06 合意、P-44）。
-  2. 3 つともあり、store_id と layout_version がすべて一致し、layout_version が自分の版と同じなら、生成を続ける。
-  3. それ以外（一部のテーブルにしかない、store_id が食い違う、layout_version が違う）は、設定エラーを返して生成を止める（共通契約 4 章）。別のストアのテーブルを組み合わせると、あるストアのジャーナルに追記しながら別のストアのヘッドを進めてしまうからである（P-40、2026-10-03 合意）。
+- **MUST DY-8**: When constructing the store, read the configuration items of the three tables with a strongly consistent read by `BatchGetItem`. Include all three in the first request, with `ConsistentRead = true` on each table. Accumulate the response's `Responses` by table name and key, and if there are `UnprocessedKeys`, re-request only those keys with exponential backoff. Keep the strongly consistent read in the re-request as well. Until there are no more unprocessed keys, do not judge an item absent from the response as "nonexistent", and do not proceed to the next step. If the configured upper limit of retry count or wait time is reached, return a storage error, not a configuration error. The [BatchGetItem specification](https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchGetItem.html) provides that even a successful response may leave some keys unprocessed.
+  1. If none of the three exist, create a new store_id and write the three configuration items in one `TransactWriteItems`, each with the condition `attribute_not_exists(aid)`. If it fails because the condition does not hold, another construction wrote first, so discard the accumulated responses, re-read all three items by the above procedure with strong consistency, and then proceed to step 2. This is because, with an eventually consistent read, the configuration item written first by the other side may not be visible (P-19, agreed 2026-10-03). When the cancellation reason is `TransactionConflict` (another construction is in the middle of writing the same configuration item), re-read all three items with strong consistency and proceed to step 2, the same as when the condition did not hold. If none of the three exist even after re-reading, return a storage error without repeating the creation. The caller redoes the construction (agreed 2026-10-06, P-44).
+  2. If all three exist, store_id and layout_version all match, and layout_version is the same as its own version, continue the construction.
+  3. Otherwise (it exists in only some of the tables, store_id differs, layout_version differs), return a configuration error and stop the construction (common contract chapter 4). This is because combining the tables of different stores would advance the head of one store while appending to the journal of another (P-40, agreed 2026-10-03).
 
-  テーブルの作成はライブラリの外だが、この書き込みはライブラリが行う。この生成手順の IAM 権限には、3 つのテーブルへの `dynamodb:BatchGetItem` と `dynamodb:PutItem` が要る。`dynamodb:GetItem` だけでは BatchGetItem を許可できない。TransactWriteItems は API 名であり、同名の IAM アクションはない。トランザクション内の操作に対応する権限を与える。この手順は条件付き Put だけなので PutItem を使い、独立した ConditionCheck の権限は要求しない。他の読み書き・保持・購読に必要な権限は別途与える。根拠は [DynamoDB の IAM アクション一覧](https://docs.aws.amazon.com/service-authorization/latest/reference/list_dynamodb.html)にある。
+  Creating the tables is outside the library, but this write is done by the library. The IAM permissions for this construction procedure require `dynamodb:BatchGetItem` and `dynamodb:PutItem` on the three tables. `dynamodb:GetItem` alone cannot permit BatchGetItem. TransactWriteItems is an API name, and there is no IAM action of the same name. Grant the permissions corresponding to the operations inside the transaction. This procedure uses only conditional Puts, so it uses PutItem and does not require the permission for a standalone ConditionCheck. Permissions needed for other reads, writes, retention, and subscription are granted separately. The grounds are in the [list of DynamoDB IAM actions](https://docs.aws.amazon.com/service-authorization/latest/reference/list_dynamodb.html).
 
-## 5. 項目の属性
+## 5. Item attributes
 
-### 5.1 ジャーナル項目
+### 5.1 Journal item
 
-| 属性 | 型 | 内容 |
+| Attribute | Type | Content |
 |:--|:--|:--|
-| aid | S | aid 文字列。パーティションキー |
-| seq_nr | N | イベントの seq_nr。ソートキー |
-| occurred_at | N | Unix エポックからのナノ秒 |
-| manifest | S | イベントの manifest（省略時は空文字列） |
-| payload | B | 直列化したペイロード |
+| aid | S | The aid string. Partition key |
+| seq_nr | N | The event's seq_nr. Sort key |
+| occurred_at | N | Nanoseconds from the Unix epoch |
+| manifest | S | The event's manifest (an empty string if omitted) |
+| payload | B | The serialized payload |
 
-### 5.2 スナップショット項目
+### 5.2 Snapshot item
 
-現在のスナップショットは 1 件で、書くたびに上書きする。保持件数を設定した場合だけ、書くたびに履歴も 1 件増える。
+There is one current snapshot, and it is overwritten with each write. Only when a retention count is set does the history also increase by one with each write.
 
-| 属性 | 型 | 現在 | 履歴 | 内容 |
+| Attribute | Type | Current | History | Content |
 |:--|:--|:--|:--|:--|
-| aid | S | ○ | ○ | aid 文字列。パーティションキー |
-| skey | N | ○ | ○ | ソートキー。現在は 0、履歴はその履歴の seq_nr |
-| seq_nr | N | ○ | ○ | スナップショットが反映済みの seq_nr |
-| manifest | S | ○ | ○ | スナップショットの manifest（省略時は空文字列） |
-| payload | B | ○ | ○ | 直列化した集約状態 |
-| last_updated_at | N | ○ | ○ | 書き込んだイベントの occurred_at をミリ秒にした値（参考情報） |
-| active_history_seq_nr | N | × | 印がない間だけ | 履歴の seq_nr。疎な GSI のソートキー（D-3、2026-10-02 合意） |
-| ttl | N | × | 印を付けたときだけ | 期限（エポック秒）。期限を設けない項目は属性自体を持たない |
+| aid | S | ○ | ○ | The aid string. Partition key |
+| skey | N | ○ | ○ | Sort key. 0 for the current one, and the history's seq_nr for history |
+| seq_nr | N | ○ | ○ | The seq_nr up to which the snapshot has been applied |
+| manifest | S | ○ | ○ | The snapshot's manifest (an empty string if omitted) |
+| payload | B | ○ | ○ | The serialized aggregate state |
+| last_updated_at | N | ○ | ○ | The occurred_at of the written event converted to milliseconds (reference information) |
+| active_history_seq_nr | N | × | Only while unmarked | The history's seq_nr. The sort key of the sparse GSI (D-3, agreed 2026-10-02) |
+| ttl | N | × | Only when marked | The expiry (epoch seconds). An item with no expiry does not hold the attribute itself |
 
-### 5.3 ヘッド項目（D-2、2026-10-02 合意）
+### 5.3 Head item (D-2, agreed 2026-10-02)
 
-| 属性 | 型 | 内容 |
+| Attribute | Type | Content |
 |:--|:--|:--|
-| aid | S | aid 文字列。パーティションキー |
-| type_name | S | 型名。購読側が型ごとに絞り込むために使う |
-| seq_nr | N | 直近に追記したイベントの seq_nr |
-| events | L | 直前の書き込みで追記したイベントのリスト。要素は M で、seq_nr (N)・occurred_at (N)・manifest (S)・payload (B) を持つ |
+| aid | S | The aid string. Partition key |
+| type_name | S | The type name. Used by subscribers to narrow down by type |
+| seq_nr | N | The seq_nr of the most recently appended event |
+| events | L | The list of events appended by the immediately preceding write. Each element is an M holding seq_nr (N), occurred_at (N), manifest (S), and payload (B) |
 
-共通契約 H-3 により、events の要素は現状 1 件である。将来の一括追記に備えてリストにしておく。type_name は aid 文字列の最初の `-` まで（共通契約 T-11）としても求まるが、購読側が文字列を分解せずに型ごとに絞り込めるよう、独立した属性にする。
+By H-3 of the common contract, events currently has one element. It is made a list to prepare for batch appends in the future. type_name can also be obtained as everything up to the first `-` of the aid string (common contract T-11), but it is made an independent attribute so that subscribers can narrow down by type without decomposing the string.
 
-## 6. 書き込み
+## 6. Writes
 
-### 6.1 トランザクションの構成
+### 6.1 Transaction composition
 
-1 回の書き込みは 1 つの `TransactWriteItems` で行う。トランザクションが成功した時点が確定である（共通契約 H-1）。
+One write is done by one `TransactWriteItems`. The moment the transaction succeeds is the commit (common contract H-1).
 
-| アクション | 対象 | 条件 | 含める場合 |
+| Action | Target | Condition | When included |
 |:--|:--|:--|:--|
-| Put | ジャーナル項目 | `attribute_not_exists(aid)` | 常に |
-| Put | ヘッド項目 | `attribute_not_exists(aid)` | 新規作成（seq_nr = 1） |
-| Update | ヘッド項目 | `seq_nr = :prev`（`:prev` は event.seq_nr − 1） | 更新（seq_nr > 1） |
-| Put | 現在のスナップショット項目 | なし（ヘッドの条件で直列化される） | スナップショットを書く場合 |
-| Put | 履歴のスナップショット項目 | なし | スナップショットを書き、保持件数を設定している場合 |
+| Put | Journal item | `attribute_not_exists(aid)` | Always |
+| Put | Head item | `attribute_not_exists(aid)` | New creation (seq_nr = 1) |
+| Update | Head item | `seq_nr = :prev` (`:prev` is event.seq_nr − 1) | Update (seq_nr > 1) |
+| Put | Current snapshot item | None (serialized by the head's condition) | When writing a snapshot |
+| Put | History snapshot item | None | When writing a snapshot and a retention count is set |
 
-更新時のヘッドの Update は、`seq_nr` と `events` を上書きする。アクションは最大 4 つで、`TransactWriteItems` の上限（100 アクション、合計 4MB）に収まる。
+On update, the head's Update overwrites `seq_nr` and `events`. There are at most four actions, which fit within the `TransactWriteItems` limit (100 actions, 4MB in total).
 
-### 6.2 失敗の分類
+### 6.2 Classification of failures
 
-| 失敗 | 分類 |
+| Failure | Classification |
 |:--|:--|
-| 新規作成でヘッドの条件が不成立（既に存在） | 楽観ロック（共通契約 W-3） |
-| 更新でヘッドの条件が不成立 | ヘッドの seq_nr と比べて分ける（共通契約 W-8）。event.seq_nr がヘッド以下なら楽観ロック、ヘッド + 2 以上なら契約違反。判別方法は（D-5、2026-10-02 合意） |
-| ジャーナルの条件が不成立 | 楽観ロック（共通契約 W-7） |
-| 同じ項目への同時のトランザクション（`TransactionConflict`） | 楽観ロック（D-6、2026-10-02 合意） |
-| 項目サイズの上限超過 | 契約違反。書き込み前に検査する（D-7、2026-10-02 合意） |
-| スロットリング・通信の失敗・その他 | 保存先 |
+| On new creation, the head's condition fails (already exists) | Optimistic lock (common contract W-3) |
+| On update, the head's condition fails | Distinguished by comparing with the head's seq_nr (common contract W-8). If event.seq_nr is less than or equal to the head's, an optimistic lock; if the head's + 2 or more, a contract violation. The method of distinguishing is (D-5, agreed 2026-10-02) |
+| The journal's condition fails | Optimistic lock (common contract W-7) |
+| Concurrent transactions on the same item (`TransactionConflict`) | Optimistic lock (D-6, agreed 2026-10-02) |
+| Exceeding the item size limit | Contract violation. Checked before writing (D-7, agreed 2026-10-02) |
+| Throttling, communication failure, others | Storage |
 
-取り消し理由（`CancellationReasons`）は、トランザクションの項目ごとに 1 つずつ返る。`None` でない理由が 2 つ以上の項目に付いたときは、次の順に見て、最初に当たったもので分類する（2026-10-06 合意、P-43）。
+The cancellation reasons (`CancellationReasons`) are returned one per item of the transaction. When a reason other than `None` is attached to two or more items, look in the following order and classify by the first one that matches (agreed 2026-10-06, P-43).
 
-1. どれかの項目に `TransactionConflict` があれば、楽観ロック（D-6）。
-2. ヘッドの条件不成立。上の表のとおり、新規作成なら楽観ロック（W-3）、更新ならヘッドの seq_nr と比べて分ける（W-8、D-5）。
-3. ジャーナルの条件不成立。楽観ロック（W-7）。
-4. それ以外。保存先エラー。
+1. If any item has `TransactionConflict`, an optimistic lock (D-6).
+2. A failed head condition. As in the table above, for new creation an optimistic lock (W-3), and for an update, distinguished by comparing with the head's seq_nr (W-8, D-5).
+3. A failed journal condition. An optimistic lock (W-7).
+4. Anything else. A storage error.
 
-`TransactionConflict` を先に見るのは、別のトランザクションが同じ集約に進行中であり、読み直せば解消するからである。同じ集約への別の書き込みは必ずヘッドにも触れるので、ヘッドの条件不成立と別の項目の `TransactionConflict` が同時に返ることは、実際にはほぼない。適合テストデータの説明（`conformance/README.md` の、いずれの項目の `TransactionConflict` も D-6 とする記述）とも合わせる。
+`TransactionConflict` is looked at first because another transaction is in progress on the same aggregate and it is resolved by re-reading. Another write to the same aggregate always touches the head too, so in practice a failed head condition and a `TransactionConflict` on another item are almost never returned at the same time. This also matches the description in the conformance test data (the statement in `conformance/README.md` that a `TransactionConflict` on any item is D-6).
 
-D-5 の草案: ヘッドの Put / Update に `ReturnValuesOnConditionCheckFailure = ALL_OLD` を付ける。トランザクションが取り消されると、取り消し理由（`CancellationReasons` の該当要素の `Item`）にヘッドの旧項目が載るので（[API Reference: Update](https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_Update.html)、[CancellationReason](https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_CancellationReason.html)）、その seq_nr と event.seq_nr を比べる。追加の読み取りが要らず、失敗した時点のヘッドで判別できる。更新でヘッドがなかった場合（旧項目が返らない場合）は、ヘッドの seq_nr を 0 とみなす。集約は削除されないので、seq_nr が 2 以上の追記は採番の飛びとして契約違反になる。
+Draft of D-5: attach `ReturnValuesOnConditionCheckFailure = ALL_OLD` to the head's Put / Update. When the transaction is cancelled, the old head item appears in the cancellation reason (the `Item` of the relevant element of `CancellationReasons`) ([API Reference: Update](https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_Update.html), [CancellationReason](https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_CancellationReason.html)), so compare its seq_nr with event.seq_nr. No additional read is needed, and the distinction can be made with the head at the time of the failure. If the head did not exist on an update (when no old item is returned), regard the head's seq_nr as 0. Since aggregates are not deleted, an append with seq_nr of 2 or more is a gap in numbering and becomes a contract violation.
 
-D-6 の草案: `TransactionConflict` は、同じ集約へ別の書き込みが同時に進んでいたことを示す。読み直して再試行すれば解消するので、楽観ロックに分類する。
+Draft of D-6: `TransactionConflict` indicates that another write to the same aggregate was proceeding at the same time. It is resolved by re-reading and retrying, so it is classified as an optimistic lock.
 
-D-7 の草案: DynamoDB の項目は 400KB が上限で、ヘッド項目にもイベントのペイロードが載る。上限を超える書き込みは何度試しても成功しないので、一時的な失敗と区別できるよう、書き込み前に項目サイズを見積もって契約違反を返す。
+Draft of D-7: A DynamoDB item has a limit of 400KB, and the event's payload is also carried in the head item. A write that exceeds the limit will not succeed no matter how many times it is tried, so to distinguish it from a transient failure, estimate the item size before writing and return a contract violation.
 
-## 7. 読み取り
+## 7. Reads
 
-### 7.1 最新スナップショット
+### 7.1 Latest snapshot
 
-- **必須 DY-9**: ヘッド項目と現在のスナップショット項目を、1 回の `BatchGetItem` で強整合読み取りする。`UnprocessedKeys` が返れば、読み切るまで再要求する。
-- **必須 DY-10**: ヘッドがなければ「なし」を返す（共通契約 R-1）。ヘッドがあれば、スナップショット封筒（なければなし）とヘッドの seq_nr の組を返す（共通契約 R-2、R-3）。
+- **MUST DY-9**: Read the head item and the current snapshot item with one `BatchGetItem` using a strongly consistent read. If `UnprocessedKeys` are returned, re-request until it has been read through.
+- **MUST DY-10**: If there is no head, return "none" (common contract R-1). If there is a head, return the pair of the snapshot envelope (none if absent) and the head's seq_nr (common contract R-2, R-3).
 
-2 項目の読み取りは原子的ではない。2 つを読む間に別の書き込みが確定すると、スナップショットの seq_nr がヘッドの seq_nr を上回ることも、下回ることもある。どちらの場合も整合性は崩れない。呼び出し側が実際より古い状態から採番すれば W-8 で楽観ロックになり、新しい状態から採番すれば正しく追記できるからである（共通契約 R-8）。`TransactGetItems` で原子的に読む方式は使わない。読み取り容量が 2 倍になり、書き込みと重なると `TransactionConflict` で失敗するので、再試行の規則も要るからである（P-25、2026-10-03 合意）。
+Reading the two items is not atomic. If another write is committed while the two are read, the snapshot's seq_nr may be above or below the head's seq_nr. In either case consistency does not break. If the caller numbers from an older state than the actual one, it becomes an optimistic lock by W-8, and if it numbers from a newer state, it can append correctly (common contract R-8). The method of reading atomically with `TransactGetItems` is not used. It doubles the read capacity, and when it overlaps with a write it fails with `TransactionConflict`, so a retry rule would also be needed (P-25, agreed 2026-10-03).
 
-### 7.2 イベント
+### 7.2 Events
 
-- **必須 DY-11**: journal を `aid = :aid AND seq_nr >= :seq_nr` で、強整合読み取り（`ConsistentRead = true`）の Query をし、seq_nr の昇順で返す。`LastEvaluatedKey` が返る間は続きを読み、すべて読み切ってから返す。強整合読み取りなので、読み取りを始めた時点で確定していたイベントはすべて含まれる（共通契約 R-5）（P-29、2026-10-03 合意で、GSI の読み取りから本体の読み取りに改めた）。
+- **MUST DY-11**: Run a Query on the journal with `aid = :aid AND seq_nr >= :seq_nr` using a strongly consistent read (`ConsistentRead = true`), and return in ascending order of seq_nr. While `LastEvaluatedKey` is returned, keep reading the continuation, and return after reading everything. Because it is a strongly consistent read, all events that were committed at the time the read started are included (common contract R-5) (P-29, agreed 2026-10-03, changed from reading the GSI to reading the base table).
 
-DY-14（ヘッドを強整合で読み、GSI の結果がその seq_nr に届くまで読み直す。P-26）は削除した。ジャーナルを本体から強整合で読めるようになり、要らなくなったからである（P-29）。
+DY-14 (read the head with strong consistency and re-read until the GSI results reach that seq_nr; P-26) has been deleted. This is because the journal can now be read with strong consistency from the base table, and it became unnecessary (P-29).
 
-## 8. スナップショット保持（D-3、2026-10-02 合意）
+## 8. Snapshot retention (D-3, agreed 2026-10-02)
 
-保持件数 n を設定した場合だけ、履歴を書いた書き込みの確定後に保持処理を行う（共通契約 S-1〜S-4）（D-9、2026-10-02 合意）。印のない履歴は、snapshot テーブルの疎な GSI `(aid, active_history_seq_nr)` にだけ載る。現在の項目と、TTL の印を付けた履歴は載らない。
+Only when a retention count n is set, retention processing is run after the commit of a write that wrote history (common contract S-1 to S-4) (D-9, agreed 2026-10-02). History without a mark appears only in the sparse GSI `(aid, active_history_seq_nr)` of the snapshot table. The current item and history marked for TTL do not appear.
 
-1. GSI を `aid = :aid` で、seq_nr の降順（`ScanIndexForward = false`）に Query し、印のない履歴のキーを読み切る（続きがあれば読む）。射影は KEYS_ONLY なので小さく読める。
-2. 読んだ履歴に、この書き込みで書いた履歴を加える。GSI への反映が遅れて、まだ見えないことがあるからである（すでに見えていれば重ねない）。降順に並べた先頭の n 件を残し、それより古い履歴を取り除く対象に選ぶ（共通契約 S-2）。
-3. 削除方式なら、選んだ履歴を `BatchWriteItem` で削除する。1 回の要求で送れるのは 25 件までなので、25 件ずつに分けて送る（P-18、2026-10-03 合意）。`UnprocessedItems` は再送する。
-4. TTL 方式なら、選んだ履歴を `SET #ttl = :expires REMOVE active_history_seq_nr` で、条件 `attribute_exists(active_history_seq_nr)` を付けて 1 件ずつ更新する。`TTL` は DynamoDB の予約語なので、属性名 `ttl` は `ExpressionAttributeNames` の別名 `#ttl` で書く。`:expires` は、印を付ける時点の Unix エポック秒に、設定で与えた猶予を足した値とする。どちらも rs v3（`delete_ttl`）と同じである（P-17、2026-10-03 合意）。GSI から外れるので、次回以降は読まれず、選び直されない（共通契約 S-3）。2 つの保持処理が同時に同じ履歴を選んでも、条件により後の更新は失敗する。この失敗は「印付け済み」として読み飛ばす。これで期限の付け直しが起きない。
+1. Query the GSI with `aid = :aid` in descending order of seq_nr (`ScanIndexForward = false`), and read through the keys of unmarked history (reading the continuation if there is one). The projection is KEYS_ONLY, so it can be read small.
+2. Add the history written by this write to the history that was read. This is because the reflection into the GSI may be delayed and not yet visible (do not duplicate it if already visible). Keep the first n items arranged in descending order, and select the history older than that as the target to be removed (common contract S-2).
+3. For the delete style, delete the selected history with `BatchWriteItem`. One request can send at most 25 items, so send in batches of 25 (P-18, agreed 2026-10-03). Resend `UnprocessedItems`.
+4. For the TTL style, update the selected history one at a time with `SET #ttl = :expires REMOVE active_history_seq_nr`, with the condition `attribute_exists(active_history_seq_nr)`. `TTL` is a reserved word in DynamoDB, so write the attribute name `ttl` with the alias `#ttl` of `ExpressionAttributeNames`. `:expires` is the Unix epoch seconds at the time of marking plus the grace period given in the settings. Both are the same as rs v3 (`delete_ttl`) (P-17, agreed 2026-10-03). Since it is removed from the GSI, it is not read from the next time on and is not selected again (common contract S-3). Even if two retention processes select the same history at the same time, the later update fails because of the condition. This failure is skipped as "already marked". This prevents the expiry from being reset.
 
-保持処理が失敗しても、書き込みは成功として返し、失敗はログや通知用のコールバックで知らせる（共通契約 S-4）。
+Even if retention processing fails, the write is returned as a success, and the failure is reported through a log or a callback for notification (common contract S-4).
 
-件数を数えてから超過分を選ぶ方式は使わない。GSI は結果整合なので、書いた直後の履歴が数えられず、取り除くべき履歴が残る。また、2 つの保持処理が重なると、古い件数で決めた超過分が、別の処理が履歴を取り除いた後に適用され、新しい n 件のうちの履歴まで取り除きうる。この手順で取り除くのは、それより新しい履歴が n 件見えている履歴だけである。そのため、処理が重なっても、反映が遅れていても、新しい n 件は取り除かれない。反映の遅れで見えなかった分は多めに残り、次の保持処理で片付く（共通契約 S-4）（P-24、2026-10-03 合意）。
+The method of counting and then selecting the excess is not used. The GSI is eventually consistent, so history just written is not counted and history that should be removed remains. Also, when two retention processes overlap, the excess decided with an old count may be applied after another process has removed history, and may remove even history within the newest n. What this procedure removes is only history for which n newer items are visible. Therefore, even if processes overlap or reflection is delayed, the newest n are not removed. What was not visible because of delayed reflection is left in excess and is cleaned up by the next retention processing (common contract S-4) (P-24, agreed 2026-10-03).
 
-D-9 の草案の理由: 履歴が増えるのはスナップショットを伴う書き込みのときだけなので、イベントだけの書き込みの後に保持処理を行っても、取り除く対象は変わらない。毎回行うと、イベントだけの書き込みのたびに無駄な Query が 1 回増える。
+Reason for the draft of D-9: history increases only in a write accompanied by a snapshot, so running retention processing after an events-only write does not change what is to be removed. Running it every time adds one useless Query for each events-only write.
 
-D-3 の草案の理由: 印付け済みの履歴を除外する方法には、絞り込み条件（FilterExpression）もある。しかし絞り込みは読み取った後に捨てるだけなので、印付け済みの履歴の分まで読み取り容量を消費する。スナップショットのペイロードは大きいことが多い。キーだけを持つ疎な GSI なら、印のない履歴だけを小さく読める。この GSI が保持処理を担うので、rs v3 の snapshot テーブルにあった `(aid, seq_nr)` の GSI は不要になる。
+Reason for the draft of D-3: another way to exclude marked history is a filter condition (FilterExpression). However, filtering only discards after reading, so it consumes read capacity even for marked history. Snapshot payloads are often large. A sparse GSI that holds only keys can read just the unmarked history small. Since this GSI takes charge of retention processing, the `(aid, seq_nr)` GSI that rs v3's snapshot table had becomes unnecessary.
 
-## 9. 変更フィード
+## 9. Change feed
 
-- **必須 DY-12**: head テーブルの Streams を有効にし、`StreamViewType` は `NEW_IMAGE` とする（D-4、2026-10-02 合意）。
-- **必須 DY-13**: INSERT と MODIFY のレコードは、それぞれ 1 回のヘッド遷移である。ただし aid が `__config__` のレコードは設定項目（4 章）なので読み飛ばす。ストアの最初の生成で 1 回だけ INSERT として流れる。`NewImage` の aid・seq_nr・events から、ヘッド遷移（共通契約 6 章）を組み立てる。ライブラリはヘッドを削除しないので、REMOVE のレコードは生じない。
+- **MUST DY-12**: Enable Streams on the head table, with `StreamViewType` set to `NEW_IMAGE` (D-4, agreed 2026-10-02).
+- **MUST DY-13**: Each INSERT and MODIFY record is one head transition. However, a record whose aid is `__config__` is the configuration item (chapter 4), so skip it. It flows once as an INSERT at the store's first construction. Assemble the head transition (common contract chapter 6) from the aid, seq_nr, and events of `NewImage`. The library does not delete heads, so no REMOVE records occur.
 
-DynamoDB Streams は、同じ項目への変更を変更した順に流し、各レコードを 1 回だけ流す。ヘッドは集約ごとに 1 項目で、更新は W-8 の照合で直列化されるので、同じ集約のヘッド遷移は seq_nr の順に届く。Lambda のイベントソースマッピングは、並列度（`ParallelizationFactor`）を上げても項目単位の順序を保つ。
+DynamoDB Streams delivers changes to the same item in the order they were made, and delivers each record exactly once. The head is one item per aggregate, and updates are serialized by the check in W-8, so the head transitions of the same aggregate arrive in order of seq_nr. A Lambda event source mapping keeps per-item ordering even if the parallelism (`ParallelizationFactor`) is raised.
 
-ただし次の場合は、購読側の義務（共通契約 F-3、F-4）が実際に効いてくる。
+However, in the following cases the subscriber's obligations (common contract F-3, F-4) actually come into effect.
 
-- Streams の保持期間は 24 時間で、それ以上遅れるとレコードが消えて欠番になる。
-- Kinesis Data Streams 経由で読むと、順序の入れ替わりと重複が起こりうる。
+- The retention period of Streams is 24 hours, and if the subscriber falls behind more than that, records disappear and become missing numbers.
+- When reading via Kinesis Data Streams, reordering and duplicates can occur.
 
-- **必須 DY-15**（購読側の義務）: Streams の読み取りが保持期間を超えたことを示す失敗（`TrimmedDataAccessException`）を受けたとき、または最後に処理した位置が保持期間（24 時間）より古いときは、共通契約 F-5 の再同期を次の手順で行う。まず Streams の読み取りを再開し、届くレコードを処理し続ける。並行して head テーブルを強整合読み取り（`ConsistentRead = true`）で Scan し、`LastEvaluatedKey` が返らなくなるまで読み切る（並列 Scan や、Streams の読み取りを再開した後の時点のエクスポートで代えてよい。DY-19）。各ヘッドの seq_nr を自分の位置と比べ（aid が `__config__` の設定項目は読み飛ばす）、自分の位置が小さい集約は、共通契約 3.5 の操作でジャーナルから補う。Streams と Scan の両方から届いた分は、共通契約 F-3 で重複を捨てる。head テーブルには全集約の最新の位置があるので、止まっている間だけ更新された集約も拾える。型ごとに購読している場合は、ヘッドの type_name で絞り込んでよい（2026-10-03 合意、P-27）。
-  `ExpiredIteratorException` は、シャードイテレーターの有効期限（15 分）が切れたことを示すだけで、レコードが消えたことを意味しない。この場合は全件の再同期を行わず、最後に処理したシーケンス番号の後から（`AFTER_SEQUENCE_NUMBER`）イテレーターを取り直して続ける（2026-10-03 合意、P-38）。
+- **MUST DY-15** (obligation of the subscriber): When receiving a failure indicating that reading of Streams has exceeded the retention period (`TrimmedDataAccessException`), or when the last processed position is older than the retention period (24 hours), perform the resynchronization of common contract F-5 by the following procedure. First resume reading Streams, and keep processing the records that arrive. In parallel, Scan the head table with a strongly consistent read (`ConsistentRead = true`) and read through until `LastEvaluatedKey` is no longer returned (this may be replaced by a parallel Scan, or by an export at a point after the reading of Streams has resumed; DY-19). Compare each head's seq_nr with your own position (skip the configuration item whose aid is `__config__`), and for an aggregate whose own position is smaller, fill in from the journal with the operation in 3.5 of the common contract. Items that arrived from both Streams and the Scan have duplicates discarded by F-3 of the common contract. The head table holds the latest position of all aggregates, so it can also pick up aggregates that were updated only while the subscriber was stopped. If subscribing per type, narrowing down by the head's type_name is allowed (agreed 2026-10-03, P-27).
+  `ExpiredIteratorException` only indicates that the shard iterator's expiry (15 minutes) has passed, and does not mean that records have disappeared. In this case, do not perform a full resynchronization; re-acquire the iterator from after the last processed sequence number (`AFTER_SEQUENCE_NUMBER`) and continue (agreed 2026-10-03, P-38).
 
-D-4 の草案の理由: ヘッド遷移の組み立てに必要なのは更新後の値だけである。`NEW_AND_OLD_IMAGES` にすると、レコードごとに直前のイベントのペイロードまで運ぶことになる。
+Reason for the draft of D-4: what is needed to assemble a head transition is only the value after the update. With `NEW_AND_OLD_IMAGES`, every record would also carry the payload of the preceding event.
 
-## 10. 上限
+## 10. Limits
 
-| 上限 | 値 | 影響 |
+| Limit | Value | Effect |
 |:--|:--|:--|
-| パーティションキー | 2048 バイト | aid 文字列は 1024 バイト以下なので収まる（共通契約 T-12） |
-| 項目サイズ | 400KB | イベントのペイロードは、ジャーナル項目とヘッド項目の両方に載る。スナップショットのペイロードは、スナップショット項目に載る |
-| トランザクション | 100 アクション、合計 4MB | 1 回の書き込みは最大 4 アクション |
-| Query の 1 回の応答 | 1MB | 続きを読み切る（DY-11、8 章） |
-| Streams の保持 | 24 時間 | 9 章 |
+| Partition key | 2048 bytes | The aid string is at most 1024 bytes, so it fits (common contract T-12) |
+| Item size | 400KB | The event's payload is carried in both the journal item and the head item. The snapshot's payload is carried in the snapshot item |
+| Transaction | 100 actions, 4MB in total | One write is at most 4 actions |
+| One response of Query | 1MB | Read through the continuation (DY-11, chapter 8) |
+| Streams retention | 24 hours | Chapter 9 |
 
-## 11. rs v3 からの移行（D-8、2026-10-02 合意）
+## 11. Migration from rs v3 (D-8, agreed 2026-10-02)
 
-rs v3 の配置からは、全件の書き直しが要る。キーが論理シャードから aid 文字列に変わり（P-29）、ヘッドのテーブルが増えるからである。
+A full rewrite is required from the layout of rs v3. This is because the keys change from logical shards to the aid string (P-29), and a head table is added.
 
-この手順の対象は、rs v3 の既定のキーの配置（`KeyResolver` を差し替えていない場合。pkey は `${型名}-${シャード番号}`、skey は `${型名}-${値}-${seq_nr}`）に限る。独自の `KeyResolver` を使っている場合は範囲外とする。手順 3 で旧 pkey・旧 skey がこの形でない項目を見つけたら、移行を止める（P-22、2026-10-03 合意）。
+The target of this procedure is limited to rs v3's default key layout (when `KeyResolver` has not been replaced; pkey is `${type name}-${shard number}` and skey is `${type name}-${value}-${seq_nr}`). Cases using a custom `KeyResolver` are out of scope. If an item whose old pkey and old skey are not in this form is found in step 3, stop the migration (P-22, agreed 2026-10-03).
 
-1. 新しい 3 つのテーブルを作り、設定項目を書く。
-2. 旧テーブルへの書き込みを止める。書き直しの間に書き込みが続くと取りこぼすからである。
-3. 旧 journal テーブルを Scan し、各項目を新しいキーで新 journal に書く。属性は v3 と同じ形なので、キーと aid の書式（共通契約 T-1）だけを変える。型名と値は、旧 pkey の末尾のシャード番号と、旧 skey の末尾の seq_nr を取り除いて取り出す。rs v3 は型名に `-` を許していたので、`-` を含む旧型名は、利用者が移行の入力として与える対応表で新しい型名に置き換える（共通契約 T-11）。対応表にない `-` を含む旧型名を見つけたら、移行を止める（P-23、2026-10-03 合意）。Scan は、書き込みを止めた後に強整合読み取り（`ConsistentRead = true`）で行い、`LastEvaluatedKey` が返らなくなるまで続ける（並列 Scan や、書き込みを止めた後の時点のエクスポートで代えてよい。DY-19）。結果整合の読み取りや 1 ページだけの読み取りでは、イベントを取りこぼしたまま旧テーブルを捨てることになるからである（P-20、2026-10-03 合意）。Scan しながら、集約ごとに seq_nr の最大値と件数を集計する。
-4. 集約ごとに、seq_nr が 1 から最大値まで欠けずに並ぶこと（件数が最大値と等しいこと）を確かめる。欠けている集約があれば、その一覧を出して移行を止める。rs v3 は連続性を検証していなかったので欠番がありうるが、新しい配置は欠番がないこと（共通契約 W-8）を前提にするからである。欠番のある集約は、利用者が直してから移行し直す（2026-10-03 合意、P-36）。
-5. 集約ごとに、手順 3 で集計した最大の seq_nr でヘッド項目を作る。書いたばかりの新 journal を読み直して最大値を求めない。events には、その seq_nr のイベントを、新 journal から強整合読み取りの `GetItem` で読んで入れる（2026-10-03 合意、P-37）。rs v3 の current 項目の seq_nr はスナップショットの位置なので、ヘッドの seq_nr には使わない。
-6. 旧 snapshot テーブルを Scan し、現在の項目と履歴を新しいキーで書く。Scan の読み方は手順 3 と同じである（P-20、2026-10-03 合意）。version 属性は捨てる。`ttl` が 0 の項目は属性を持たせず、印のない履歴には `active_history_seq_nr` を付ける。rs v3 の項目は manifest を持たないので、空文字列を入れる（共通契約 T-10 の省略時の値）（P-21、2026-10-03 合意）。
-7. 新しいテーブルを使う版のライブラリで書き込みを再開する。
+1. Create the three new tables and write the configuration items.
+2. Stop writes to the old tables. This is because writes continuing during the rewrite would be missed.
+3. Scan the old journal table and write each item to the new journal with the new key. The attributes are in the same form as v3, so only the key and the aid format (common contract T-1) change. The type name and the value are extracted by removing the trailing shard number from the old pkey and the trailing seq_nr from the old skey. rs v3 allowed `-` in type names, so an old type name containing `-` is replaced with a new type name by a mapping table that the user gives as input to the migration (common contract T-11). If an old type name containing `-` that is not in the mapping table is found, stop the migration (P-23, agreed 2026-10-03). Do the Scan with a strongly consistent read (`ConsistentRead = true`) after writes are stopped, and continue until `LastEvaluatedKey` is no longer returned (this may be replaced by a parallel Scan, or by an export at a point after writes are stopped; DY-19). This is because, with an eventually consistent read or a read of only one page, the old table would be discarded with events missed (P-20, agreed 2026-10-03). While scanning, tally the maximum seq_nr and the count for each aggregate.
+4. For each aggregate, check that the seq_nr values line up from 1 to the maximum without gaps (that the count equals the maximum). If there is an aggregate with gaps, output the list and stop the migration. rs v3 did not verify continuity, so missing numbers are possible, but the new layout presupposes that there are no missing numbers (common contract W-8). Aggregates with missing numbers are fixed by the user before migrating again (agreed 2026-10-03, P-36).
+5. For each aggregate, create the head item with the maximum seq_nr tallied in step 3. Do not re-read the newly written new journal to find the maximum. For events, read the event of that seq_nr from the new journal with a strongly consistent `GetItem` and put it in (agreed 2026-10-03, P-37). The seq_nr of rs v3's current item is the position of the snapshot, so it is not used for the head's seq_nr.
+6. Scan the old snapshot table and write the current items and history with the new keys. The way of scanning is the same as in step 3 (P-20, agreed 2026-10-03). Discard the version attribute. Items whose `ttl` is 0 are given no attribute, and unmarked history is given `active_history_seq_nr`. rs v3's items have no manifest, so put an empty string (the value for omission in T-10 of the common contract) (P-21, agreed 2026-10-03).
+7. Resume writes with a version of the library that uses the new tables.
 
-手順 3 で新 journal に書く前に、旧 journal を最後まで読んで手順 4 の検査を済ませてもよい。その場合は、書くときに旧 journal をもう一度読む。手順 2 で書き込みを止めているので、2 回とも同じ内容を読む。欠番などを見つけたとき、新しいテーブルにデータの項目を書く前に止められる（2026-10-06 合意、P-45）。
+Before writing to the new journal in step 3, you may read the old journal to the end and finish the check in step 4. In that case, read the old journal once more when writing. Since writes are stopped in step 2, the same content is read both times. When missing numbers or the like are found, it can be stopped before any data item is written to the new tables (agreed 2026-10-06, P-45).
 
-旧 pkey を計算し直す方式は使わない。そのときのツールチェーンの `DefaultHasher` が、書き込み時と同じ値を返す保証がないからである（[ADR-0002](../../adr/0002-separate-aggregate-head-from-snapshot.md)）。
+The method of recomputing the old pkey is not used. This is because there is no guarantee that the toolchain's `DefaultHasher` at that time returns the same value as at write time ([ADR-0002](../../adr/0002-separate-aggregate-head-from-snapshot.md)).
 
-js・java・go の旧来の契約の配置からの移行は、この文書の範囲外とする。
+Migration from the layouts of the old contracts of js, java, and go is outside the scope of this document.

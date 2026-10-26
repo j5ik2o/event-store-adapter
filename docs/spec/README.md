@@ -1,147 +1,149 @@
-# event-store-adapter 仕様（v5）
+# event-store-adapter specification (v5)
 
-各言語の event-store-adapter が従う仕様。ここに書かれた内容が正であり、どの言語の実装も参照実装ではない（[ADR-0001](../adr/0001-language-neutral-spec-based-on-envelope-model.md)）。用語は [CONTEXT.md](../../CONTEXT.md) に従う。
+The specification that each language's event-store-adapter follows. What is written here is authoritative, and no language's implementation is a reference implementation ([ADR-0001](../adr/0001-language-neutral-spec-based-on-envelope-model.md)). Terminology follows [CONTEXT.md](../../CONTEXT.md).
 
-共通契約、DynamoDB とメモリのストレージプロファイル、キーに使うハッシュ（[storage/hash.md](storage/hash.md)）、適合テストデータ 1.0.0 は、v5 として確定している（P-47・P-49）。適合テストデータ 1.1.0〜1.3.0 は、1.0.0 に v5 の規則のケースを足した版である（P-51・P-52・P-59）。1.3.0 は、SQLite・Spanner・Bigtable のプロファイルのケースも含む。v5 の文書は、本リポジトリのタグ `contract-v5` で固定して指せる（P-50）。SQLite・Bigtable・Spanner のストレージプロファイルは 2026-10-16 に確定した（SQLite は P-53・P-54、Bigtable は P-55・P-56、Spanner は P-57・P-58）。これは v5 の共通契約に対する確定で、タグ `contract-v5` の後に確定したので、タグの指す文書には含まれない。草案のまま残るのは、変更フィードを提供するときに確定する規則（SQ-13・BT-15・SPN-15）だけである。下の P-1〜P-60 は合意済みで（P-17〜P-40 は [PR #1](https://github.com/j5ik2o/event-store-adapter/pull/1) のレビューを受けて 2026-10-03 に、P-41 は適合テストデータを作る中で 2026-10-05 に、P-42〜P-45 は各言語の設計文書のレビューを受けて 2026-10-06 に、P-46〜P-48 は最初のメジャーの準備の中で 2026-10-13 に、P-49・P-50 は v5 の定義をはっきりさせる中で、P-51 は適合テストデータを 1.1.0 にする中で、2026-10-14 に足した。P-52 は適合テストデータを 1.2.0 にする中で、2026-10-15 に足した。P-53・P-54 は SQLite のプロファイルを確定する中で、P-55・P-56 は Bigtable のプロファイルを確定する中で、P-57・P-58 は Spanner のプロファイルを確定する中で、2026-10-16 に足した。P-59 は適合テストデータを 1.3.0 にする中で、2026-10-17 に足した。P-60 は rs の Bigtable の移行のレビューを受けて、2026-10-22 に足した）、基になる ADR-0001〜0006 も `accepted` である。共通契約のほかの規則は、rs v3 の挙動を引き継いだもの（P-1 による）か、合意事項から導いたものである。新たに足した規則のうち R-7（P-14）・R-3（P-15）・S-3（P-16）も個別に合意済みである。仕様を変えるときは、リポジトリのオーナーの合意を得る。
+The common contract, the DynamoDB and memory storage profiles, the hash used for keys ([storage/hash.md](storage/hash.md)), and conformance test data 1.0.0 are finalized as v5 (P-47, P-49). Conformance test data 1.1.0 to 1.3.0 are versions that add cases for the v5 rules to 1.0.0 (P-51, P-52, P-59). 1.3.0 also includes cases for the SQLite, Spanner, and Bigtable profiles. The v5 documents can be pinned and referenced with this repository's tag `contract-v5` (P-50). The SQLite, Bigtable, and Spanner storage profiles were finalized on 2026-10-16 (SQLite by P-53 and P-54, Bigtable by P-55 and P-56, Spanner by P-57 and P-58). This is a finalization against the v5 common contract, and because it was finalized after the tag `contract-v5`, it is not included in the documents the tag points to. The only rules that remain drafts are those to be finalized when a change feed is provided (SQ-13, BT-15, SPN-15). P-1 to P-60 below are agreed (P-17 to P-40 were added on 2026-10-03 following the review of [PR #1](https://github.com/j5ik2o/event-store-adapter/pull/1), P-41 on 2026-10-05 while building the conformance test data, P-42 to P-45 on 2026-10-06 following the review of each language's design document, P-46 to P-48 on 2026-10-13 while preparing the first major version, P-49 and P-50 while clarifying the definition of v5, and P-51 while moving the conformance test data to 1.1.0, on 2026-10-14. P-52 was added on 2026-10-15 while moving the conformance test data to 1.2.0. P-53 and P-54 were added while finalizing the SQLite profile, P-55 and P-56 while finalizing the Bigtable profile, and P-57 and P-58 while finalizing the Spanner profile, on 2026-10-16. P-59 was added on 2026-10-17 while moving the conformance test data to 1.3.0. P-60 was added on 2026-10-22 following the review of the rs Bigtable migration), and the underlying ADR-0001 to 0006 are also `accepted`. The other rules of the common contract are either carried over from the behavior of rs v3 (by P-1) or derived from the agreements. Among the newly added rules, R-7 (P-14), R-3 (P-15), and S-3 (P-16) are also individually agreed. Changing the specification requires the agreement of the repository owner.
 
-## 合意状況
+<a id="合意状況"></a>
 
-合意した提案を次に挙げる。「rs v3 との差」は、基準にした rs v3.0.2 の挙動から変わるかどうかを示す。
+## Agreement status
 
-| # | 提案 | 根拠 | rs v3 との差 | 状態 |
+The agreed proposals are listed below. "Difference from rs v3" shows whether the behavior changes from rs v3.0.2, which was used as the baseline.
+
+| # | Proposal | Basis | Difference from rs v3 | Status |
 |:--|:--|:--|:--|:--|
-| P-1 | rs v3 の封筒モデルを意味論の基準にし、仕様を本リポジトリで言語中立に管理する | ADR-0001 | なし | 合意（2026-10-02） |
-| P-2 | 集約ヘッドをスナップショットから分離し、変更フィードをヘッド遷移の列として定義する | ADR-0002、H-1〜H-3、6 章 | あり | 合意（2026-10-02） |
-| P-3 | DynamoDB では集約ヘッドを専用テーブルに置き、キーはジャーナルと同じ論理シャードの考え方に揃える。シャード数は不変とし、生成時に設定を照合する | ADR-0002 | あり | 合意（2026-10-02）。キーの部分は P-29 で撤回（ヘッドを専用テーブルに置く部分は有効） |
-| P-4 | パーティションキーのハッシュを FNV-1a 64 に固定する | ADR-0003 | あり | 合意（2026-10-02）。P-29 で、キーにハッシュを使うプロファイルの接頭辞に適用範囲を絞った |
-| P-5 | seq_nr と version の範囲を 0〜2^53−1 にする（version は P-12 で廃止） | ADR-0003、T-9 | あり（`usize` から範囲を狭める） | 合意（2026-10-02） |
-| P-6 | occurred_at をナノ秒で保存する | ADR-0003、T-3 | なし（js・java・go は変更） | 合意（2026-10-02） |
-| P-7 | aid 文字列を `${型名}-${値}` とし、ライブラリが組み立てる（型名の制限は P-23） | ADR-0003、T-1 | あり | 合意（2026-10-02） |
-| P-8 | スナップショット保持で古い履歴から取り除く | S-2 | あり（rs の DynamoDB 実装は新しい側を消している） | 合意（2026-10-02） |
-| P-9 | イベント読み取りで、保存先の応答上限を超えても全件を読み切る | R-5 | あり（現状は 1 回の応答で打ち切る） | 合意（2026-10-02） |
-| P-10 | エラー分類に「設定」を加える | 4 章 | あり | 合意（2026-10-02） |
-| P-11 | スナップショット封筒を読み書き共通の型にし、manifest を持たせる。ヘッドの情報は封筒から外し、読み取りで封筒と組にして返す | 1.4、3.2、3.4 | あり | 合意（2026-10-02） |
-| P-12 | version と expectedVersion を廃止し、楽観ロックはヘッドの seq_nr で照合する。読み取りはヘッドの最新 seq_nr を返す | ADR-0004、2・3 章 | あり | 合意（2026-10-02） |
-| P-13 | 保持処理が失敗しても、追記が確定していれば書き込みは成功として返し、保持の失敗は別経路で知らせる | S-4 | あり | 合意（2026-10-02） |
-| P-14 | 呼び出し側は、リプレイで得た最後の seq_nr がヘッドの seq_nr に届いているかを確かめ、届いていなければ読み直す（推奨） | R-7 | あり | 合意（2026-10-02） |
-| P-15 | スナップショットを任意にする。新規作成もスナップショットなしでできる。ない場合はジャーナルの先頭からリプレイする | R-2、R-3、W-3 | あり（rs v3 は新規作成にスナップショットを必須としていた） | 合意（2026-10-02） |
-| P-16 | TTL 方式の保持では、期限切れの印を付けた履歴を件数に数えず、再び印を付ける対象にも選ばない | S-3 | あり（rs v3 は印付け済みも数え、期限を付け直している） | 合意（2026-10-02） |
-| P-17 | DynamoDB の TTL 方式の印付けで、予約語の属性名 `ttl` を別名 `#ttl` で書き、期限は「印を付ける時点のエポック秒 + 設定の猶予」とする | dynamodb.md 8 章 | なし（rs v3 と同じ） | 合意（2026-10-03） |
-| P-18 | DynamoDB の削除方式の保持で、`BatchWriteItem` を 25 件ずつに分けて送る | dynamodb.md 8 章 | なし | 合意（2026-10-03） |
-| P-19 | DynamoDB の設定項目の条件付き書き込みが失敗したら、強整合読み取りで読み直す | DY-8 | ― | 合意（2026-10-03） |
-| P-20 | rs v3 からの移行の Scan を、書き込みを止めた後に強整合読み取りで、`LastEvaluatedKey` がなくなるまで読み切る | dynamodb.md 11 章 | ― | 合意（2026-10-03） |
-| P-21 | rs v3 からの移行で、manifest のないスナップショットに空文字列を入れる | dynamodb.md 11 章、T-10 | ― | 合意（2026-10-03） |
-| P-22 | rs v3 からの移行手順の対象を、既定の `KeyResolver` のキーの配置に限り、合わない項目があれば止める | dynamodb.md 11 章 | ― | 合意（2026-10-03） |
-| P-23 | 型名に `-` を使えないようにし、aid 文字列の最初の `-` までを型名にする。rs v3 からの移行では、`-` を含む旧型名を利用者が与える対応表で置き換える | ADR-0003、T-11、dynamodb.md 11 章 | あり（rs v3 は型名を制限していない） | 合意（2026-10-03） |
-| P-24 | DynamoDB の保持処理は、件数を数えずに GSI を降順に読み、今書いた履歴を加えて新しい n 件を残し、それより古い履歴を取り除く | dynamodb.md 8 章 | あり（rs v3 は件数から超過分を求めている） | 合意（2026-10-03） |
-| P-25 | 最新スナップショットの読み取りが原子的でない保存先では、スナップショットの seq_nr がヘッドを上回りうることを認め、そのときはスナップショットから採番してよいとする。各プロファイルは原子的に読むかどうかを明記する。DynamoDB は BatchGetItem のまま | R-8、dynamodb.md 7.1 | なし | 合意（2026-10-03） |
-| P-26 | イベントの読み取りは、読み取りを始めた時点で確定していたイベントをすべて返す。DynamoDB では、先にヘッドを強整合で読み、GSI の結果がその seq_nr まで欠けずに並ぶまで読み直す（回数の上限は設定、超えたら保存先エラー） | R-5、DY-14 | あり（rs v3 は GSI の結果をそのまま返す） | 合意（2026-10-03）。DynamoDB の読み直し（DY-14）は P-29 で不要になった（R-5 の規則は有効） |
-| P-27 | 変更フィードの購読側が転送経路の保持期間を超えて止まったら、全集約の現在位置と照合して再同期する。DynamoDB では head テーブルを強整合で Scan し、足りない分をジャーナルから補う | F-5、DY-15 | あり | 合意（2026-10-03） |
-| P-28 | 追記の原子性を、物理的な書き方ではなく観測できる確定で定める（H-1）。ヘッドは確定したイベント封筒を持つことを必須にする（H-4）。確定の仕組みはプロファイルが定める | ADR-0005、H-1、H-4 | なし（Bigtable で実装できるようにするための変更） | 合意（2026-10-03） |
-| P-29 | 論理シャードをやめ、DynamoDB では 3 テーブルとも aid 文字列をパーティションキーにする。ジャーナルのソートキーは seq_nr（数値）で、本体を強整合で読む。キーにハッシュを使うプロファイルは、aid の FNV-1a 64 を割り算せずに接頭辞にする | ADR-0006、DY-16、DY-17、DY-11、hash.md | あり（rs v3 は論理シャード） | 合意（2026-10-03） |
-| P-30 | 期限切れで取り除く方式（S-3）は「印付けは 1 回、印付きは数えず選び直さない」という性質だけを共通契約に残し、期限の仕組み・猶予の置き場所と精度・遅れはプロファイルに委ねる（仕組みのない保存先は提供しなくてよい）。S-4 は「保持の失敗は追記の結果を変えない」という性質に改める | S-3、S-4 | なし | 合意（2026-10-03） |
-| P-31 | ストレージプロファイルは、規則が成り立つ前提（読み取りの整合性、書き込みの経路の構成）を明記し、外れる構成は範囲外とする。DynamoDB ではグローバルテーブルを範囲外とする | SP-1、DY-18 | なし | 合意（2026-10-03） |
-| P-32 | ヘッドがない集約への更新（seq_nr ≥ 2）は、ヘッドの seq_nr を 0 とみなし、飛び番として契約違反にする | W-8 | なし（DynamoDB の D-5 の扱いを共通契約に上げる） | 合意（2026-10-03） |
-| P-33 | ストレージプロファイルのキーの組み立ては単射にし、別の集約の項目に当たらないようにする | SP-2 | ― | 合意（2026-10-03） |
-| P-34 | occurred_at を、エポックからのナノ秒が符号付き 64bit 整数に収まる範囲に限り、範囲外は契約違反にする | T-13 | あり | 合意（2026-10-03） |
-| P-35 | aid 文字列を UTF-8 で 1024 バイト以下に限り、超えたら契約違反にする | T-12 | あり | 合意（2026-10-03） |
-| P-36 | rs v3 からの移行で、集約ごとに seq_nr が 1 から欠けずに並ぶことを確かめ、欠けていれば一覧を出して止める | dynamodb.md 11 章 | ― | 合意（2026-10-03） |
-| P-37 | rs v3 からの移行で、ヘッドの seq_nr は旧 journal の Scan で集計した最大値から作り、新 journal を読み直さない | dynamodb.md 11 章 | ― | 合意（2026-10-03） |
-| P-38 | Streams の `ExpiredIteratorException` では全件の再同期をせず、最後に処理した位置からイテレーターを取り直す。全件の再同期は、レコードが消えたとき（`TrimmedDataAccessException`）か、位置が保持期間より古いときに限る | DY-15 | ― | 合意（2026-10-03） |
-| P-39 | DynamoDB の書き込み・読み取り・保持処理は、1 つの集約の aid に絞った操作だけで行い、Scan を使わない。全件を読むのは移行と再同期だけで、並列 Scan や S3 へのエクスポートで代えてよい | DY-19 | なし | 合意（2026-10-03） |
-| P-40 | DynamoDB の 3 テーブルすべてに、共通の store_id と配置の版を持つ設定項目を置き、生成のたびに照合する。食い違えば設定エラー。変更フィードと再同期は設定項目を読み飛ばす | DY-8、DY-13、DY-15 | あり | 合意（2026-10-03） |
-| P-41 | seq_nr の範囲（T-9）を外れた値で操作を呼ぶと、契約違反エラーを返す。4 章の契約違反の一覧に T-9 を足す | T-9、4 章 | あり（rs v3 は `usize` で、範囲を検査しない） | 合意（2026-10-05） |
-| P-42 | 封筒の必須要素の欠落（T-2・T-10）を契約違反にする。言語の型で欠落を表せない場合は検査しなくてよい。契約違反のメッセージの seq_nr は、関係する seq_nr があるときだけ含める | T-2、T-10、4 章、E-3 | なし（rs v3 は型が欠落を許さない） | 合意（2026-10-06） |
-| P-43 | DynamoDB の取り消し理由が複数の項目に付いたときは、`TransactionConflict`、ヘッドの条件不成立、ジャーナルの条件不成立、その他の順に見て分類する | dynamodb.md 6.2 | なし | 合意（2026-10-06） |
-| P-44 | DynamoDB の設定項目の作成で `TransactionConflict` が返ったら、条件不成立と同じく強整合で読み直す。読み直しても設定項目がなければ、繰り返さずに保存先エラーを返す | DY-8 | なし（rs v3 に設定項目はない） | 合意（2026-10-06） |
-| P-45 | rs v3 からの移行で、新しいテーブルに書く前に、旧 journal を最後まで読んで連続性の検査を済ませてよい。その場合は書くときに読み直す | dynamodb.md 11 章 | なし | 合意（2026-10-06） |
-| P-46 | この仕様の版を「v5」と呼ぶ。各言語の文書は「共通契約 v5」（英語では common contract v5）と書いて本仕様へリンクする。同日にいったん「v4」と決めたが、各言語の版をそろえるため（P-48）v5 に改めた | 本文書 | なし | 合意（2026-10-13） |
-| P-47 | 共通契約、DynamoDB とメモリのストレージプロファイル、適合テストデータ 1.0.0 を v5 として確定する。Spanner・Bigtable・SQLite のストレージプロファイルは草案のまま残す。メモリのプロファイルの MEM-D10（変更フィードの形）は、変更フィードを提供しないため保留のままで、確定の対象外である。確定した部分を変えるときは、オーナーの合意を得て、仕様の版（v6 など、今の v5 より新しい版）か適合テストデータの版を上げる | 本文書 | なし | 合意（2026-10-13） |
-| P-48 | 各言語のメジャーの番号を、共通契約の版の番号にそろえる。最初のメジャーは全言語で 5.0.0 とする（js は 4.0.0・4.0.1 を旧来の契約で使っているので、そろえられる最小の番号が 5）。契約が変わらないのに、ある言語だけ非互換な変更が要るときの扱いは、そのときに改めて決める。java の 2.0.0 は、この決定の前に出した版で、中身は 5.0.0 と同じである | 本文書 | なし | 合意（2026-10-13） |
-| P-49 | キーに使うハッシュ（[storage/hash.md](storage/hash.md) の K-1・K-2）を v5 として確定する。確定した適合テストデータ 1.0.0 が K-1 を参照し、値の表 4 件を収録しているので、規範の側も確定させて食い違いをなくす。最初のメジャーの保存先はハッシュを使わないので、K-1・K-2 とも対象外で、適合テストデータの 4 件は対象外と報告する（[実装計画](../plan/implementation-plan.md) 5 章）。Spanner・Bigtable などを出すときは、このハッシュを変えずに使う | hash.md | なし | 合意（2026-10-14） |
-| P-50 | v5 として確定した文書を、本リポジトリのタグ `contract-v5` で固定し、どの時点の文書が v5 かを指せるようにする。タグは付け直さない | 本文書 | なし | 合意（2026-10-14） |
-| P-51 | 適合テストデータを 1.1.0 にし、v5 の規則のケースを足す。DY-19（Scan を使わない）の DynamoDB の場面と、メモリが提供しない期限切れ方式・変更フィードを求める設定が設定エラーになる場面（MEM-3・MEM-12・MEM-13）である。1.0.0 のケースは変えない。73 の規則のすべてが、ケースか対象外の理由を持つ。規則は足さないので、仕様の版は v5 のままで、タグ `contract-v5` も動かさない | 適合テストデータ | なし | 合意（2026-10-14） |
-| P-52 | 適合テストデータを 1.2.0 にし、メモリのプロファイルの MEM-2（新しく生成した保存先は空で独立し、明示的に共有したものだけが記録・設定・排他制御を共有する）と MEM-6（書き込んだ後や取得した後に値を変えても、保存した値は変わらない）のケースを足す。新しい操作 `createStore`・`mutateWrittenPayload`・`mutateReadPayload` を使う。書き換えを言語の型や API で表せない実装は、MEM-6 の 2 ケースに限り、理由を付けて「表現不能」と報告してよい。1.0.0・1.1.0 のケースは変えない。規則は足さないので、仕様の版は v5 のままで、タグ `contract-v5` も動かさない | 適合テストデータ | なし | 合意（2026-10-15） |
-| P-53 | SQLite のプロファイルの草案の規則 SQ-1・SQ-3〜SQ-10 と、3 章の配置・config の形を、草案どおり確定する。ロックを待つ時間の既定値は言語に任せる。ヘッドの確認を通った後の主キー重複も楽観ロックにする（W-7、DynamoDB の 6.2 にそろえる）。共通契約は変えないので仕様の版は v5 のままで、タグ `contract-v5` は動かさない。確定した部分を変えるときの扱いは P-47 と同じ | storage/sqlite.md | あり（rs v3 の SQLite は journal・snapshot の 2 テーブルで、version を照合する） | 合意（2026-10-16） |
-| P-54 | SQLite の最初の版では変更フィードを提供しない（SQ-D8・SQ-20）。求める設定は設定エラー。config の change_feed_enabled は残して 0 に固定する。SQ-13 は草案のまま残し、提供するときに確定する | storage/sqlite.md | なし | 合意（2026-10-16） |
-| P-55 | Bigtable のプロファイルの草案の規則 BT-2〜BT-12 と、2 章の設定行の形（キー `0x00`、`config:metadata` の JSON とその各フィールド）を、草案どおり確定する。BT-1 の単一クラスタへの固定はエミュレーターで再現できないので、配置の設定として利用者が守り、試験の対象外とする。共通契約は変えないので仕様の版は v5 のままで、タグ `contract-v5` は動かさない。確定した部分を変えるときの扱いは P-47 と同じ | storage/bigtable.md | あり（rs v3 の Bigtable は snapshot の version の CAS の後に別の行へイベントを書き、欠番を残し得る。キーも `#` で連結する） | 合意（2026-10-16） |
-| P-56 | Bigtable の最初の版では変更フィードを提供しない（BT-D8・BT-17）。求める設定は設定エラー。BT-15 は草案のまま残し、提供するときに確定する | storage/bigtable.md | なし | 合意（2026-10-16） |
-| P-57 | Spanner のプロファイルの草案の規則 SPN-1・SPN-3〜SPN-13 と、2 章の設定項目の形（config の各列）を、草案どおり確定する。SPN-7 の再実行の上限の既定値は言語に任せる。エミュレーターで再現できないもの（SPN-8 のコミットの応答の消失、サービス側の大きさの上限、行削除ポリシーによる物理的な削除）は規則を変えず、確かめ方を 9 章に書く。共通契約は変えないので仕様の版は v5 のままで、タグ `contract-v5` は動かさない。確定した部分を変えるときの扱いは P-47 と同じ | storage/spanner.md | ―（rs v3 に Spanner の実装はない。js の現行実装との違いは storage/spanner.md 8 章） | 合意（2026-10-16） |
-| P-58 | Spanner の最初の版では変更フィードを提供しない（SPN-D8・SPN-17）。求める設定は設定エラー。config の change_feed_enabled は残して false に固定する。SPN-15 は草案のまま残し、提供するときに確定する | storage/spanner.md | ― | 合意（2026-10-16） |
-| P-59 | 適合テストデータを 1.3.0 にし、SQLite・Spanner・Bigtable のケースを足す。共通契約の 42 場面を 3 つの保存先でも実行する。各保存先の設定エラーの場面と、論理的な段階への差し込みで書ける障害の場面（SQLite の書き込みのロック SQ-7、Spanner の中断のやり直し SPN-7 とコミットの応答の消失 SPN-8、Bigtable の書き出しの失敗と条件付き更新の応答の消失 BT-7）、同じ保存先を共有した 2 つ目のストアの場面、Bigtable の封筒の固定バイナリ形式の値の表（BT-D6a）、メモリの設定の共有の場面（MEM-2）を足す。生の行や SDK の応答の形に寄るものと、本当に同時に走る競合は、理由を書いて各言語の試験に任せる。1.0.0〜1.2.0 のケースは、共通契約の場面の `backends` のほかは変えない。規則は足さないので、仕様の版は v5 のままで、タグ `contract-v5` も動かさない | 適合テストデータ | なし | 合意（2026-10-17） |
-| P-60 | Bigtable のプロファイル 2 章に、両テーブルの `config` の列ファミリに年齢による GC を付けると設定行が消え、確定済みの規則（設定の欠損は設定エラーにし、片方だけ欠けた設定も自動で補わない。BT-D1）によって、以後の生成が設定エラーになる、という説明を足す。`config` にも年齢による GC を付けない配置を勧める。規則は足さないので、P-47 の版の扱いは要らず、仕様の版は v5 のまま、適合テストデータも変えない。rs の Bigtable の移行（[rs#330](https://github.com/j5ik2o/event-store-adapter-rs/pull/330)）のレビューで見つかった | storage/bigtable.md | なし | 合意（2026-10-22） |
+| P-1 | Use the envelope model of rs v3 as the baseline for semantics, and manage the specification in this repository in a language-neutral way | ADR-0001 | None | Agreed (2026-10-02) |
+| P-2 | Separate the aggregate head from the snapshot, and define the change feed as a sequence of head transitions | ADR-0002, H-1 to H-3, chapter 6 | Yes | Agreed (2026-10-02) |
+| P-3 | In DynamoDB, place the aggregate head in a dedicated table, with keys following the same logical-shard approach as the journal. The shard count is immutable, and the configuration is checked at construction | ADR-0002 | Yes | Agreed (2026-10-02). The key part was withdrawn by P-29 (placing the head in a dedicated table remains valid) |
+| P-4 | Fix the partition key hash to FNV-1a 64 | ADR-0003 | Yes | Agreed (2026-10-02). P-29 narrowed its scope to the prefix of profiles that use a hash in the key |
+| P-5 | Make the range of seq_nr and version 0 to 2^53−1 (version was removed by P-12) | ADR-0003, T-9 | Yes (narrows the range from `usize`) | Agreed (2026-10-02) |
+| P-6 | Store occurred_at in nanoseconds | ADR-0003, T-3 | None (js, java, and go change) | Agreed (2026-10-02) |
+| P-7 | Make the aid string `${type name}-${value}`, assembled by the library (type name restrictions are in P-23) | ADR-0003, T-1 | Yes | Agreed (2026-10-02) |
+| P-8 | Under snapshot retention, remove from the oldest history | S-2 | Yes (the rs DynamoDB implementation deletes the newer side) | Agreed (2026-10-02) |
+| P-9 | When reading events, read all of them even if the storage response limit is exceeded | R-5 | Yes (currently it cuts off at one response) | Agreed (2026-10-02) |
+| P-10 | Add "configuration" to the error classification | chapter 4 | Yes | Agreed (2026-10-02) |
+| P-11 | Make the snapshot envelope a type shared by reads and writes, and give it a manifest. Remove the head information from the envelope, and return it paired with the envelope on read | 1.4, 3.2, 3.4 | Yes | Agreed (2026-10-02) |
+| P-12 | Remove version and expectedVersion, and check optimistic locking against the head's seq_nr. A read returns the latest seq_nr of the head | ADR-0004, chapters 2 and 3 | Yes | Agreed (2026-10-02) |
+| P-13 | Even if retention processing fails, if the append is committed, return the write as a success and report the retention failure through a separate path | S-4 | Yes | Agreed (2026-10-02) |
+| P-14 | The caller checks whether the last seq_nr obtained by replay has reached the head's seq_nr, and re-reads if it has not (recommended) | R-7 | Yes | Agreed (2026-10-02) |
+| P-15 | Make snapshots optional. Creating a new aggregate can also be done without a snapshot. When there is none, replay from the beginning of the journal | R-2, R-3, W-3 | Yes (rs v3 required a snapshot for creating a new aggregate) | Agreed (2026-10-02) |
+| P-16 | In TTL-style retention, do not count history already marked as expired, and do not select it for re-marking | S-3 | Yes (rs v3 also counts already-marked items and resets the expiry) | Agreed (2026-10-02) |
+| P-17 | In DynamoDB's TTL-style marking, write the reserved-word attribute name `ttl` with the alias `#ttl`, and set the expiry to "epoch seconds at the time of marking + the configured grace period" | dynamodb.md chapter 8 | None (same as rs v3) | Agreed (2026-10-03) |
+| P-18 | In DynamoDB's delete-style retention, send `BatchWriteItem` in batches of 25 items | dynamodb.md chapter 8 | None | Agreed (2026-10-03) |
+| P-19 | If the conditional write of the DynamoDB configuration item fails, re-read it with a strongly consistent read | DY-8 | ― | Agreed (2026-10-03) |
+| P-20 | Read the migration Scan from rs v3 to the end, after writes are stopped, with strongly consistent reads, until `LastEvaluatedKey` is gone | dynamodb.md chapter 11 | ― | Agreed (2026-10-03) |
+| P-21 | In the migration from rs v3, put an empty string in snapshots that have no manifest | dynamodb.md chapter 11, T-10 | ― | Agreed (2026-10-03) |
+| P-22 | Limit the target of the migration procedure from rs v3 to the key layout of the default `KeyResolver`, and stop if there is an item that does not match | dynamodb.md chapter 11 | ― | Agreed (2026-10-03) |
+| P-23 | Disallow `-` in type names, and take everything up to the first `-` of the aid string as the type name. In the migration from rs v3, replace old type names containing `-` using a mapping table that the user provides | ADR-0003, T-11, dynamodb.md chapter 11 | Yes (rs v3 does not restrict type names) | Agreed (2026-10-03) |
+| P-24 | DynamoDB's retention processing reads the GSI in descending order without counting items, adds the history just written, keeps the newest n items, and removes anything older | dynamodb.md chapter 8 | Yes (rs v3 derives the excess from a count) | Agreed (2026-10-03) |
+| P-25 | For storages where reading the latest snapshot is not atomic, accept that the snapshot's seq_nr may exceed the head, and in that case allow numbering from the snapshot. Each profile states whether it reads atomically. DynamoDB stays with BatchGetItem | R-8, dynamodb.md 7.1 | None | Agreed (2026-10-03) |
+| P-26 | An event read returns all events that were committed at the time the read started. In DynamoDB, read the head first with strong consistency, and re-read until the GSI results line up without gaps up to that seq_nr (the retry limit is a setting, and exceeding it is a storage error) | R-5, DY-14 | Yes (rs v3 returns the GSI results as they are) | Agreed (2026-10-03). The DynamoDB re-read (DY-14) became unnecessary with P-29 (the rule R-5 remains valid) |
+| P-27 | When the subscriber of the change feed stops beyond the retention period of the transport path, resynchronize by comparing against the current positions of all aggregates. In DynamoDB, Scan the head table with strong consistency and fill in the missing part from the journal | F-5, DY-15 | Yes | Agreed (2026-10-03) |
+| P-28 | Define the atomicity of append by the observable commit, not by the physical way of writing (H-1). Require the head to hold the committed event envelope (H-4). The profile defines the commit mechanism | ADR-0005, H-1, H-4 | None (a change to make implementation on Bigtable possible) | Agreed (2026-10-03) |
+| P-29 | Drop logical shards, and in DynamoDB make the aid string the partition key of all three tables. The journal's sort key is seq_nr (a number), and the body is read with strong consistency. Profiles that use a hash in the key use the aid's FNV-1a 64 as a prefix without division | ADR-0006, DY-16, DY-17, DY-11, hash.md | Yes (rs v3 uses logical shards) | Agreed (2026-10-03) |
+| P-30 | For the expire-and-remove style (S-3), leave only the property "marking happens once, and marked items are not counted or re-selected" in the common contract, and leave the expiry mechanism and the place and precision of the grace period and delay to the profile (a storage with no such mechanism need not provide it). Revise S-4 to the property "a retention failure does not change the result of the append" | S-3, S-4 | None | Agreed (2026-10-03) |
+| P-31 | A storage profile states the preconditions under which its rules hold (read consistency, composition of the write path), and treats configurations that deviate as out of scope. DynamoDB treats global tables as out of scope | SP-1, DY-18 | None | Agreed (2026-10-03) |
+| P-32 | An update to an aggregate with no head (seq_nr ≥ 2) regards the head's seq_nr as 0, and treats the gap as a contract violation | W-8 | None (raises DynamoDB's treatment in D-5 to the common contract) | Agreed (2026-10-03) |
+| P-33 | The key construction of a storage profile is injective, so that it never hits the items of another aggregate | SP-2 | ― | Agreed (2026-10-03) |
+| P-34 | Restrict occurred_at to the range in which nanoseconds from the epoch fit in a signed 64-bit integer, and treat anything out of range as a contract violation | T-13 | Yes | Agreed (2026-10-03) |
+| P-35 | Restrict the aid string to at most 1024 bytes in UTF-8, and treat anything longer as a contract violation | T-12 | Yes | Agreed (2026-10-03) |
+| P-36 | In the migration from rs v3, check that for each aggregate the seq_nr values line up from 1 without gaps, and if there are gaps, output the list and stop | dynamodb.md chapter 11 | ― | Agreed (2026-10-03) |
+| P-37 | In the migration from rs v3, build the head's seq_nr from the maximum aggregated in the Scan of the old journal, and do not re-read the new journal | dynamodb.md chapter 11 | ― | Agreed (2026-10-03) |
+| P-38 | On a Streams `ExpiredIteratorException`, do not run a full resynchronization; re-acquire the iterator from the last processed position. A full resynchronization is limited to when records have disappeared (`TrimmedDataAccessException`) or when the position is older than the retention period | DY-15 | ― | Agreed (2026-10-03) |
+| P-39 | DynamoDB writes, reads, and retention processing use only operations narrowed to the aid of a single aggregate, and do not use Scan. Reading everything is limited to migration and resynchronization, and may be replaced by a parallel Scan or an export to S3 | DY-19 | None | Agreed (2026-10-03) |
+| P-40 | Put a configuration item holding a common store_id and a layout version in all three DynamoDB tables, and check it at every construction. A mismatch is a configuration error. The change feed and resynchronization skip the configuration item | DY-8, DY-13, DY-15 | Yes | Agreed (2026-10-03) |
+| P-41 | Calling an operation with a value outside the seq_nr range (T-9) returns a contract violation error. Add T-9 to the list of contract violations in chapter 4 | T-9, chapter 4 | Yes (rs v3 uses `usize` and does not check the range) | Agreed (2026-10-05) |
+| P-42 | Treat the absence of a required element of the envelope (T-2, T-10) as a contract violation. If the language's type cannot express the absence, the check is not needed. The seq_nr in the contract violation message is included only when there is a relevant seq_nr | T-2, T-10, chapter 4, E-3 | None (in rs v3 the type does not allow absence) | Agreed (2026-10-06) |
+| P-43 | When DynamoDB cancellation reasons are attached to multiple items, classify them by looking, in order, at `TransactionConflict`, a failed head condition, a failed journal condition, and others | dynamodb.md 6.2 | None | Agreed (2026-10-06) |
+| P-44 | When `TransactionConflict` is returned while creating the DynamoDB configuration item, re-read with strong consistency, the same as for a failed condition. If the configuration item is still absent after re-reading, return a storage error without repeating | DY-8 | None (rs v3 has no configuration item) | Agreed (2026-10-06) |
+| P-45 | In the migration from rs v3, before writing to the new tables, it is allowed to read the old journal to the end and finish the continuity check. In that case, re-read at write time | dynamodb.md chapter 11 | None | Agreed (2026-10-06) |
+| P-46 | Call the version of this specification "v5". The document of each language writes "共通契約 v5" (in English, "common contract v5") and links to this specification. It was once decided to be "v4" on the same day, but it was changed to v5 in order to align the versions of the languages (P-48) | This document | None | Agreed (2026-10-13) |
+| P-47 | Finalize the common contract, the DynamoDB and memory storage profiles, and conformance test data 1.0.0 as v5. The Spanner, Bigtable, and SQLite storage profiles remain drafts. MEM-D10 of the memory profile (the shape of the change feed) stays on hold because no change feed is provided, and is outside the scope of finalization. When changing the finalized parts, obtain the owner's agreement and raise the version of the specification (v6 or the like, a version newer than the current v5) or of the conformance test data | This document | None | Agreed (2026-10-13) |
+| P-48 | Align each language's major version number with the version number of the common contract. The first major version is 5.0.0 in all languages (js uses 4.0.0 and 4.0.1 with the old contract, so the smallest number that can be aligned is 5). How to handle the case where only one language needs an incompatible change although the contract does not change will be decided again at that time. java's 2.0.0 is a version released before this decision, and its content is the same as 5.0.0 | This document | None | Agreed (2026-10-13) |
+| P-49 | Finalize the hash used for keys (K-1 and K-2 of [storage/hash.md](storage/hash.md)) as v5. The finalized conformance test data 1.0.0 refers to K-1 and contains four entries of the value table, so the normative side is also finalized to eliminate the discrepancy. The storages of the first major version do not use a hash, so both K-1 and K-2 are not applicable, and the four entries of the conformance test data are reported as not applicable (chapter 5 of the [implementation plan](../plan/implementation-plan.md)). When providing Spanner, Bigtable, and others, use this hash unchanged | hash.md | None | Agreed (2026-10-14) |
+| P-50 | Pin the documents finalized as v5 with this repository's tag `contract-v5`, so that it is possible to point to which point in time's documents are v5. The tag is not re-applied | This document | None | Agreed (2026-10-14) |
+| P-51 | Make the conformance test data 1.1.0 and add cases for the v5 rules. They are the DynamoDB scenarios for DY-19 (do not use Scan), and the scenarios where a setting that asks for the expiry style or change feed that memory does not provide becomes a configuration error (MEM-3, MEM-12, MEM-13). The cases of 1.0.0 do not change. All 73 rules have a case or a reason for being not applicable. Since no rules are added, the specification version stays v5, and the tag `contract-v5` is not moved either | Conformance test data | None | Agreed (2026-10-14) |
+| P-52 | Make the conformance test data 1.2.0 and add cases for MEM-2 of the memory profile (a newly created store is empty and independent, and only explicitly shared ones share records, settings, and mutual exclusion) and MEM-6 (changing a value after writing or after fetching does not change the stored value). They use the new operations `createStore`, `mutateWrittenPayload`, and `mutateReadPayload`. An implementation that cannot express mutation in the language's types or API may, for the two cases of MEM-6 only, report "not expressible" with a reason. The cases of 1.0.0 and 1.1.0 do not change. Since no rules are added, the specification version stays v5, and the tag `contract-v5` is not moved either | Conformance test data | None | Agreed (2026-10-15) |
+| P-53 | Finalize the draft rules SQ-1 and SQ-3 to SQ-10 of the SQLite profile, and the layout and config shape in chapter 3, as drafted. The default for the lock wait time is left to each language. A primary key duplicate after passing the head check is also treated as optimistic locking (W-7, aligned with 6.2 of DynamoDB). Since the common contract does not change, the specification version stays v5, and the tag `contract-v5` is not moved. The handling when changing the finalized parts is the same as P-47 | storage/sqlite.md | Yes (rs v3's SQLite has two tables, journal and snapshot, and checks version) | Agreed (2026-10-16) |
+| P-54 | The first version of SQLite does not provide a change feed (SQ-D8, SQ-20). A setting that asks for it is a configuration error. Keep change_feed_enabled in config and fix it to 0. SQ-13 stays a draft and is finalized when it is provided | storage/sqlite.md | None | Agreed (2026-10-16) |
+| P-55 | Finalize the draft rules BT-2 to BT-12 of the Bigtable profile, and the shape of the configuration row in chapter 2 (key `0x00`, the JSON of `config:metadata` and its fields), as drafted. Fixing BT-1 to a single cluster cannot be reproduced with the emulator, so the user observes it as a placement setting and it is outside the scope of tests. Since the common contract does not change, the specification version stays v5, and the tag `contract-v5` is not moved. The handling when changing the finalized parts is the same as P-47 | storage/bigtable.md | Yes (rs v3's Bigtable writes events to another row after the CAS of the snapshot's version and may leave gaps. Keys are also joined with `#`) | Agreed (2026-10-16) |
+| P-56 | The first version of Bigtable does not provide a change feed (BT-D8, BT-17). A setting that asks for it is a configuration error. BT-15 stays a draft and is finalized when it is provided | storage/bigtable.md | None | Agreed (2026-10-16) |
+| P-57 | Finalize the draft rules SPN-1 and SPN-3 to SPN-13 of the Spanner profile, and the shape of the configuration item in chapter 2 (each column of config), as drafted. The default of the retry limit of SPN-7 is left to each language. For what the emulator cannot reproduce (the loss of the commit response of SPN-8, service-side size limits, physical deletion by the row deletion policy), the rules do not change, and how to verify them is written in chapter 9. Since the common contract does not change, the specification version stays v5, and the tag `contract-v5` is not moved. The handling when changing the finalized parts is the same as P-47 | storage/spanner.md | ― (rs v3 has no Spanner implementation. For the differences from the current js implementation, see chapter 8 of storage/spanner.md) | Agreed (2026-10-16) |
+| P-58 | The first version of Spanner does not provide a change feed (SPN-D8, SPN-17). A setting that asks for it is a configuration error. Keep change_feed_enabled in config and fix it to false. SPN-15 stays a draft and is finalized when it is provided | storage/spanner.md | ― | Agreed (2026-10-16) |
+| P-59 | Make the conformance test data 1.3.0 and add cases for SQLite, Spanner, and Bigtable. The 42 scenarios of the common contract are also run on the three storages. Add the configuration error scenarios of each storage, the failure scenarios that can be written by injection at logical stages (SQLite's write lock SQ-7, Spanner's abort retry SPN-7 and loss of the commit response SPN-8, Bigtable's write-out failure and loss of the conditional update response BT-7), the scenario of a second store sharing the same storage, the value table of Bigtable's fixed binary format of the envelope (BT-D6a), and the scenario of sharing memory settings (MEM-2). Whatever depends on the shape of raw rows or SDK responses, and truly concurrent races, are left to each language's tests with the reasons written. The cases of 1.0.0 to 1.2.0 do not change except for `backends` in the scenarios of the common contract. Since no rules are added, the specification version stays v5, and the tag `contract-v5` is not moved either | Conformance test data | None | Agreed (2026-10-17) |
+| P-60 | Add to chapter 2 of the Bigtable profile an explanation that if age-based GC is attached to the `config` column family of both tables, the configuration row disappears, and by the finalized rule (a missing configuration is a configuration error, and a configuration with only one side missing is not filled in automatically either; BT-D1) subsequent construction becomes a configuration error. A layout that attaches no age-based GC to `config` either is recommended. Since no rules are added, the version handling of P-47 is not needed, the specification version stays v5, and the conformance test data does not change either. It was found in the review of the rs Bigtable migration ([rs#330](https://github.com/j5ik2o/event-store-adapter-rs/pull/330)) | storage/bigtable.md | None | Agreed (2026-10-22) |
 
-共通契約の未決事項は残っていない。DynamoDB のストレージプロファイルは、これらの合意から導き、新たに必要になった判断 D-1〜D-9 も合意済みである（[storage/dynamodb.md](storage/dynamodb.md) の 1 章）。
+There are no open items in the common contract. The DynamoDB storage profile is derived from these agreements, and the newly required decisions D-1 to D-9 are also agreed (chapter 1 of [storage/dynamodb.md](storage/dynamodb.md)).
 
-## 構成
+## Structure
 
-仕様は 3 層に分かれる。
+The specification is divided into three layers.
 
-| 層 | 文書 | 内容 |
+| Layer | Document | Content |
 |:--|:--|:--|
-| 共通契約 | [core-contract.md](core-contract.md) | 保存先に依存しない意味論。型、4 つの操作、seq_nr の規約、エラー分類、スナップショット保持、変更フィード |
-| ストレージプロファイル | [DynamoDB](storage/dynamodb.md)（D-1〜D-9 合意済み）、[Bigtable](storage/bigtable.md)（1 章の主要判断と草案の規則を確定。BT-15 は変更フィードを提供するときに確定）、[Spanner](storage/spanner.md)（1 章の主要判断と草案の規則を確定。SPN-15 は変更フィードを提供するときに確定）、[SQLite](storage/sqlite.md)（1 章の主要判断と草案の規則を確定。SQ-13 は変更フィードを提供するときに確定）、[メモリ](storage/memory.md)（MEM-D1〜D9・MEM-D11・MEM-D12 合意済み、MEM-D10 は保留）。DynamoDB とメモリは v5 で確定（P-47）、SQLite も確定（P-53・P-54）、Bigtable も確定（P-55・P-56）、Spanner も確定（P-57・P-58） | 保存先ごとの配置、確定、読み取り、保持、変更フィード |
-| ストレージプロファイル共通 | [storage/hash.md](storage/hash.md)（v5 で確定、P-49） | キーにハッシュを使うプロファイル（Spanner・Bigtable など）が使う FNV-1a 64 とその入出力表 |
-| 適合テストデータ | [conformance/](../../conformance/README.md)（v1.3.0、2026-10-17。v1.2.0 は 2026-10-15、v1.1.0 は 2026-10-14、v1.0.0 は 2026-10-05） | 言語に依存しない JSON で書いた入出力と期待結果。各実装は同じ内容を写して CI で版とハッシュを照合し、段階 2 で実行器を作って読み込む |
+| Common contract | [core-contract.md](core-contract.md) | Storage-independent semantics. Types, the four operations, the seq_nr conventions, error classification, snapshot retention, and the change feed |
+| Storage profile | [DynamoDB](storage/dynamodb.md) (D-1 to D-9 agreed), [Bigtable](storage/bigtable.md) (the main decisions in chapter 1 and the draft rules are finalized; BT-15 is finalized when a change feed is provided), [Spanner](storage/spanner.md) (the main decisions in chapter 1 and the draft rules are finalized; SPN-15 is finalized when a change feed is provided), [SQLite](storage/sqlite.md) (the main decisions in chapter 1 and the draft rules are finalized; SQ-13 is finalized when a change feed is provided), [memory](storage/memory.md) (MEM-D1 to D9, MEM-D11, and MEM-D12 agreed; MEM-D10 on hold). DynamoDB and memory are finalized in v5 (P-47), SQLite is also finalized (P-53, P-54), Bigtable is also finalized (P-55, P-56), and Spanner is also finalized (P-57, P-58) | Per-storage layout, commit, reads, retention, and change feed |
+| Common to storage profiles | [storage/hash.md](storage/hash.md) (finalized in v5, P-49) | The FNV-1a 64 used by profiles that use a hash in the key (Spanner, Bigtable, and others), and its input/output table |
+| Conformance test data | [conformance/](../../conformance/README.md) (v1.3.0, 2026-10-17; v1.2.0 is 2026-10-15, v1.1.0 is 2026-10-14, v1.0.0 is 2026-10-05) | Inputs, outputs, and expected results written in language-independent JSON. Each implementation copies the same content, checks the version and hash in CI, and in stage 2 builds a runner to load it |
 
-Spanner・Bigtable・SQLite の草案は 2026-10-04 に作成し、各プロファイルの 1 章にある主要判断をすべて同日に合意した。その後、最初の版では変更フィードを提供しないという判断（SQLite の SQ-D8、Bigtable の BT-D8、Spanner の SPN-D8）を 1 章に足し、2026-10-16 に合意した。SQLite・Bigtable・Spanner は 2026-10-16 に、草案の規則も確定した（SQLite は P-53・P-54、Bigtable は P-55・P-56、Spanner は P-57・P-58）。
+The drafts of Spanner, Bigtable, and SQLite were created on 2026-10-04, and all the main decisions in chapter 1 of each profile were agreed on the same day. After that, the decision that the first version does not provide a change feed (SQLite's SQ-D8, Bigtable's BT-D8, Spanner's SPN-D8) was added to chapter 1 and agreed on 2026-10-16. The draft rules of SQLite, Bigtable, and Spanner were also finalized on 2026-10-16 (SQLite by P-53 and P-54, Bigtable by P-55 and P-56, Spanner by P-57 and P-58).
 
-Bigtable の判断は、外部での初期化、ジャーナル行への履歴配置、クラスタ固定、即時削除、最初の版では変更フィードを提供しないこと（BT-D8。提供するときは head の Change Streams、BT-D5）、封筒の固定バイナリ形式、ストア単位のサイズ上限、ヘッド更新前の必須の書き出しである。履歴配置は [ADR-0007](../adr/0007-store-bigtable-snapshot-history-with-events.md)、封筒の保存形式は [ADR-0008](../adr/0008-fix-bigtable-envelope-binary-format.md) に記録した。
+The decisions for Bigtable are initialization outside the library, placing history in the journal rows, fixing to a single cluster, immediate deletion, not providing a change feed in the first version (BT-D8; when providing it, Change Streams on the head, BT-D5), the fixed binary format of the envelope, a store-wide size limit, and the mandatory write-out before the head update. The history placement is recorded in [ADR-0007](../adr/0007-store-bigtable-snapshot-history-with-events.md), and the storage format of the envelope in [ADR-0008](../adr/0008-fix-bigtable-envelope-binary-format.md).
 
-Spanner は GoogleSQL、共通の接頭辞から生成する 5 テーブル、SERIALIZABLE の書き込みと強整合の復元、即時削除と TTL、最初の版では変更フィードを提供しないこと（SPN-D8。提供するときは head の Change Stream、SPN-D4）、外部での初期化、保持件数のストア単位での統一、TTL の猶予を正の整数の日数で指定する API を採用した。
+Spanner adopts GoogleSQL, five tables generated from a common prefix, SERIALIZABLE writes and strongly consistent restoration, immediate deletion and TTL, not providing a change feed in the first version (SPN-D8; when providing it, a Change Stream on the head, SPN-D4), initialization outside the library, a store-wide uniform retention count, and an API that specifies the TTL grace period as a positive integer number of days.
 
-SQLite は同じホストのローカルファイル、WAL と synchronous=FULL、SQLite 3.51.3 以上、全テーブルの STRICT、BEGIN IMMEDIATE の追記と同じ時点の読み取り、確定後の履歴削除、最初の版では変更フィードを提供しないこと（SQ-D8。提供するときは同じ確定で書く遷移表を無期限に保持する、SQ-D5a・SQ-D5b）、明示的な初期化、保持・フィード設定のストア単位での統一を採用した。
+SQLite adopts a local file on the same host, WAL and synchronous=FULL, SQLite 3.51.3 or later, STRICT on all tables, appending with BEGIN IMMEDIATE and reads at the same point in time, history deletion after the commit, not providing a change feed in the first version (SQ-D8; when providing it, keep indefinitely the transition table written in the same commit, SQ-D5a, SQ-D5b), explicit initialization, and a store-wide uniform retention and feed setting.
 
-主要判断の合意は、実装の適合を宣言するものではない。Spanner・Bigtable・SQLite の 3 つとも規則を確定済み（変更フィードを提供するときに確定する SQ-13・BT-15・SPN-15 を除く）で、各言語の実装での検証が残っている。共通契約の合意済み規則は変更していない。
+The agreement on the main decisions does not declare the conformance of implementations. All three of Spanner, Bigtable, and SQLite have their rules finalized (except SQ-13, BT-15, and SPN-15, which are finalized when a change feed is provided), and verification in each language's implementation remains. The agreed rules of the common contract have not been changed.
 
-メモリのプロファイルは 2026-10-05 に作成し、主要判断を合意した（[実装計画](../plan/implementation-plan.md)の IP-D4 による）。単一プロセスで永続化しない保存先とし、明示的な共有、ストア全体の排他制御による確定と同じ時点の読み取り（スナップショットとヘッドの組も原子的に読む）、確定後に同じ排他制御の中で行う保持、保持の失敗のログによる通知、保存先が持つ不変の設定、実装による並行呼び出しの保護を採用した。期限切れ方式と変更フィードは、最初の版では提供しない。フィードの保持と順序（MEM-D10）は、提供すると決めたときに決める。
+The memory profile was created on 2026-10-05 and its main decisions were agreed (per IP-D4 of the [implementation plan](../plan/implementation-plan.md)). It is a storage that is single-process and does not persist, and adopts explicit sharing, commit and reads at the same point in time under store-wide mutual exclusion (a pair of snapshot and head is also read atomically), retention performed within the same mutual exclusion after the commit, notification of retention failure by logging, immutable settings held by the storage, and protection of concurrent calls by the implementation. The expiry style and the change feed are not provided in the first version. The retention and ordering of the feed (MEM-D10) will be decided when it is decided to provide it.
 
-### Spanner・Bigtable・SQLite の比較
+### Comparison of Spanner, Bigtable, and SQLite
 
-| 項目 | Spanner | Bigtable | SQLite |
+| Item | Spanner | Bigtable | SQLite |
 |:--|:--|:--|:--|
-| 確定点 | 同じデータベースの SERIALIZABLE トランザクション | ヘッド 1 行の CheckAndMutateRow | 同じファイルの BEGIN IMMEDIATE / COMMIT |
-| イベントの読み取り | 強整合の読み取り専用トランザクション | 取得済みヘッド h と、物理行 1〜h−1 の組 | 同じ読み取りトランザクション |
-| ヘッドと最新スナップショット | 同じ読み取り時点 | 同じ行の原子的な読み取り | 同じ読み取り時点 |
-| 履歴の保持 | 別トランザクションで削除または TTL の印付け | journal 行の履歴 payload を削除し、削除済みの印は残す | 確定後の別トランザクションで削除 |
-| 期限切れ方式 | 提供。猶予は正の整数の日数で指定し DDL と照合（SPN-D3・D7 合意済み） | 最初の版では提供しない（BT-D4 合意済み） | 最初の版では提供しない（SQ-D4 合意済み） |
-| 変更フィード | 最初の版では提供しない（SPN-D8 合意済み）。提供するときは head の Change Stream、NEW_ROW（SPN-D4） | 最初の版では提供しない（BT-D8 合意済み）。提供するときは head の Change Streams（BT-D5） | 最初の版では提供しない（SQ-D8 合意済み）。提供するときは同じ確定で書く遷移表（SQ-D5a） |
-| 購読の保持期間 | 提供するときは構成を照合。既定 7 日、最大 30 日 | 提供するときは構成を照合。1〜7 日 | 提供するときは無期限で、アダプタによる削除なし（SQ-D5b） |
-| 主な制約・確認事項 | 方言、TTL の猶予、ストア単位の設定 | 書き出し失敗中の追記停止、保持の読み取り費用、封筒の上限 | 複数プロセス、WAL と同期、修正済み SQLite、遷移表の容量 |
+| Commit point | A SERIALIZABLE transaction in the same database | CheckAndMutateRow on the single head row | BEGIN IMMEDIATE / COMMIT on the same file |
+| Event reads | A strongly consistent read-only transaction | The pair of the fetched head h and physical rows 1 to h−1 | The same read transaction |
+| Head and latest snapshot | The same read timestamp | An atomic read of the same row | The same read point |
+| History retention | Deletion or TTL marking in a separate transaction | Delete the history payload of the journal rows and leave the deleted marker | Deletion in a separate transaction after the commit |
+| Expiry style | Provided. The grace period is specified as a positive integer number of days and checked against the DDL (SPN-D3 and D7 agreed) | Not provided in the first version (BT-D4 agreed) | Not provided in the first version (SQ-D4 agreed) |
+| Change feed | Not provided in the first version (SPN-D8 agreed). When provided, a Change Stream on the head, NEW_ROW (SPN-D4) | Not provided in the first version (BT-D8 agreed). When provided, Change Streams on the head (BT-D5) | Not provided in the first version (SQ-D8 agreed). When provided, a transition table written in the same commit (SQ-D5a) |
+| Subscription retention period | When provided, the configuration is checked. Default 7 days, maximum 30 days | When provided, the configuration is checked. 1 to 7 days | When provided, indefinite, with no deletion by the adapter (SQ-D5b) |
+| Main constraints and points to verify | Dialect, TTL grace period, store-wide settings | Append halts while write-out is failing, read cost of retention, envelope limit | Multiple processes, WAL and synchronization, a patched SQLite version, capacity of the transition table |
 
-保存先の性質の根拠、現行実装との違い、障害時の手順、実装時の受け入れ条件は各プロファイルに記録した。各言語の実装を変える前に、保存形式に焼き付く配置と設定を確認する。
+The grounds for the nature of each storage, the differences from the current implementations, procedures for failures, and acceptance criteria at implementation time are recorded in each profile. Before changing each language's implementation, check the layout and settings that get baked into the storage format.
 
-## 規範の表記
+## Normative notation
 
-各規則の先頭に、次のいずれかを付ける。
+At the start of each rule, one of the following is attached.
 
-- **必須**: 適合する実装は必ず満たす
-- **推奨**: 満たさない場合は理由を文書に書く
-- **任意**: 実装してもしなくてもよい。実装するなら規則に従う
+- **MUST**: a conforming implementation always satisfies it (corresponds to 必須 in the Japanese version)
+- **SHOULD**: if not satisfied, the reason is written in the document (corresponds to 推奨 in the Japanese version)
+- **MAY**: the implementation may or may not do it; if implemented, it follows the rule (corresponds to 任意 in the Japanese version)
 
-規則には `W-1` のような番号を振る。適合テストデータはこの番号を参照する。
+Rules are given numbers such as `W-1`. The conformance test data refers to these numbers.
 
-## 適合対象の実装
+## Conforming implementations
 
-2026-10-13 に、次の 6 言語が最初のメジャー 5.0.0 を出した（P-48）。その後、適合テストデータの外の規則を確かめて見つけた不足（設定の検査の漏れ、文書に書くべき前提の欠落）を、同じ日の 5.0.1 で直した。v5 に適合した版は 5.0.1 以降である。保存先は DynamoDB とメモリである。受け入れ条件（[実装計画](../plan/implementation-plan.md) 5 章）と不足の確かめ方と結果は、[段階 4 の準備状況](../plan/stage4-readiness.md) にある。ハッシュを使う保存先はまだないので、適合テストデータの FNV-1a 64 の 4 件は、6 言語とも対象外と報告している。
+On 2026-10-13, the following six languages released the first major version, 5.0.0 (P-48). After that, the shortcomings found by checking the rules outside the conformance test data (omissions in configuration checks, missing preconditions that should be written in the documents) were fixed in 5.0.1 on the same day. The versions conforming to v5 are 5.0.1 and later. The storages are DynamoDB and memory. The acceptance criteria (chapter 5 of the [implementation plan](../plan/implementation-plan.md)) and how the shortcomings were checked, with the results, are in the [stage 4 readiness](../plan/stage4-readiness.md). There is no storage that uses a hash yet, so all six languages report the four FNV-1a 64 entries of the conformance test data as not applicable.
 
-| 実装 | v5 に適合した版 |
+| Implementation | Version conforming to v5 |
 |:--|:--|
-| [event-store-adapter-rs](https://github.com/j5ik2o/event-store-adapter-rs) | 5.0.1 以降 |
-| [event-store-adapter-js](https://github.com/j5ik2o/event-store-adapter-js) | 5.0.1 以降 |
-| [event-store-adapter-java](https://github.com/j5ik2o/event-store-adapter-java) | 5.0.1 以降。2.0.0 は P-48 の前に出した版で、中身は 5.0.0 と同じ |
-| [event-store-adapter-kotlin](https://github.com/j5ik2o/event-store-adapter-kotlin) / [scala](https://github.com/j5ik2o/event-store-adapter-scala) | 5.0.1 以降（java 5.0.1 を包む） |
-| [event-store-adapter-go](https://github.com/j5ik2o/event-store-adapter-go) | 5.0.1 以降（module のパスは `/v5`） |
-| php / swift / dotnet | 未調査 |
+| [event-store-adapter-rs](https://github.com/j5ik2o/event-store-adapter-rs) | 5.0.1 or later |
+| [event-store-adapter-js](https://github.com/j5ik2o/event-store-adapter-js) | 5.0.1 or later |
+| [event-store-adapter-java](https://github.com/j5ik2o/event-store-adapter-java) | 5.0.1 or later. 2.0.0 is a version released before P-48, and its content is the same as 5.0.0 |
+| [event-store-adapter-kotlin](https://github.com/j5ik2o/event-store-adapter-kotlin) / [scala](https://github.com/j5ik2o/event-store-adapter-scala) | 5.0.1 or later (wrapping java 5.0.1) |
+| [event-store-adapter-go](https://github.com/j5ik2o/event-store-adapter-go) | 5.0.1 or later (the module path is `/v5`) |
+| php / swift / dotnet | Not investigated |
 
-### v5 より前の版との差（2026-10-05 時点）
+### Differences from versions before v5 (as of 2026-10-05)
 
-各実装を適合させる計画は [実装計画](../plan/implementation-plan.md) にある（計画の判断 IP-D1〜IP-D8 は 2026-10-05 に合意）。書き直す前の各実装と、この仕様との主な乖離は次のとおりだった。
+The plan for making each implementation conform is in the [implementation plan](../plan/implementation-plan.md) (the plan's decisions IP-D1 to IP-D8 were agreed on 2026-10-05). The main divergences between each implementation before the rewrite and this specification were as follows.
 
-| 実装 | 当時の契約 | 主な乖離 |
+| Implementation | Contract at the time | Main divergences |
 |:--|:--|:--|
-| [event-store-adapter-rs](https://github.com/j5ik2o/event-store-adapter-rs) v3.0.5 | 封筒モデル | 集約ヘッドが未分離、ハッシュが `DefaultHasher`、ジャーナル読み取りのページ送りなし、保持で新しい履歴を消す |
-| [event-store-adapter-js](https://github.com/j5ik2o/event-store-adapter-js) v4.0.0 | 旧来の契約 | 封筒モデル未導入、occurred_at がミリ秒、ページ送りなし |
-| [event-store-adapter-java](https://github.com/j5ik2o/event-store-adapter-java) v1.2.90 | 旧来の契約 | 封筒モデル未導入、ハッシュが `Math.abs(hashCode)`、ページ送りなし |
-| [event-store-adapter-kotlin](https://github.com/j5ik2o/event-store-adapter-kotlin) v1.0.510 / [scala](https://github.com/j5ik2o/event-store-adapter-scala) v1.0.340 | 旧来の契約（java のラッパー） | java に同じ |
-| [event-store-adapter-go](https://github.com/j5ik2o/event-store-adapter-go) v1.0.196 | 旧来の契約 | 封筒モデル未導入、ページ送りなし |
+| [event-store-adapter-rs](https://github.com/j5ik2o/event-store-adapter-rs) v3.0.5 | Envelope model | Aggregate head not separated, hash is `DefaultHasher`, no paging in journal reads, retention deletes the newer history |
+| [event-store-adapter-js](https://github.com/j5ik2o/event-store-adapter-js) v4.0.0 | Old contract | Envelope model not introduced, occurred_at in milliseconds, no paging |
+| [event-store-adapter-java](https://github.com/j5ik2o/event-store-adapter-java) v1.2.90 | Old contract | Envelope model not introduced, hash is `Math.abs(hashCode)`, no paging |
+| [event-store-adapter-kotlin](https://github.com/j5ik2o/event-store-adapter-kotlin) v1.0.510 / [scala](https://github.com/j5ik2o/event-store-adapter-scala) v1.0.340 | Old contract (wrappers of java) | Same as java |
+| [event-store-adapter-go](https://github.com/j5ik2o/event-store-adapter-go) v1.0.196 | Old contract | Envelope model not introduced, no paging |
