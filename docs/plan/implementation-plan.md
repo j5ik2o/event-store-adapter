@@ -430,6 +430,45 @@ After stages 0 to 5 were all done, the owner and the coordinator decided, one qu
 
 The progress as of 2026-10-26 is as follows. For the user-facing documents, the template verification and content check are done for all six languages. rs has published 5.1.1 ([rs#339](https://github.com/j5ik2o/event-store-adapter-rs/pull/339)). The remaining five languages were merged on 2026-10-25 ([js#1096](https://github.com/j5ik2o/event-store-adapter-js/pull/1096), [java#765](https://github.com/j5ik2o/event-store-adapter-java/pull/765), [kotlin#877](https://github.com/j5ik2o/event-store-adapter-kotlin/pull/877), [scala#898](https://github.com/j5ik2o/event-store-adapter-scala/pull/898), [go#460](https://github.com/j5ik2o/event-store-adapter-go/pull/460)). We published js 5.1.1 and go 5.0.2 and confirmed that the tidied documents are included in the distributed artifacts. For java, kotlin, and scala, the owner chose not to publish a stable version only for documentation. The tidying of developer-facing documents is in progress, and the milestone is not yet complete.
 
+<a id="全言語で全保存先を提供する2026-10-26"></a>
+### Provide All Storage Backends in All Languages (2026-10-26)
+
+On 2026-10-26 the owner said "全部サポートしてほしい。" ("I want all of them supported.") and showed a table of memory, DynamoDB, SQLite, Spanner, and Bigtable. The target is to provide all five storage backends in each of the six languages (rs, js, java, kotlin, scala, and go), 30 combinations in total. The 15 combinations that were not provided until now are treated as unimplemented remaining work. This widens the "Scope of the storage backends of stage 5" in [Decisions (2026-10-15)](#決めたこと2026-10-15) (only restore the storage backends each language previously had, and broaden later, starting with the storage backends that become necessary). The earlier line is kept as the record of that time. The current state is not "all 30 combinations are implemented". The 15 combinations marked "Implemented" below and the reports of their success are kept as they are.
+
+State as of 2026-10-26:
+
+| Language | Memory | DynamoDB | SQLite | Spanner | Bigtable |
+|:--|:--|:--|:--|:--|:--|
+| rs | Implemented | Implemented | Implemented | Remaining (independent implementation) | Implemented |
+| js | Implemented | Implemented | Remaining (independent implementation) | Implemented | Remaining (independent implementation) |
+| java | Implemented | Implemented | Remaining (independent implementation) | Remaining (independent implementation) | Remaining (independent implementation) |
+| kotlin | Implemented | Implemented | Remaining (support that uses java's implementation) | Remaining (support that uses java's implementation) | Remaining (support that uses java's implementation) |
+| scala | Implemented | Implemented | Remaining (support that uses java's implementation) | Remaining (support that uses java's implementation) | Remaining (support that uses java's implementation) |
+| go | Implemented | Implemented | Remaining (independent implementation) | Remaining (independent implementation) | Remaining (independent implementation) |
+
+Of the 30 combinations, 15 are implemented and 15 remain. The 15 remaining combinations are split into 9 independent storage backend implementations (rs 1, js 2, java 3, go 3) and 6 combinations of kotlin and scala that use java's implementation (3 storage backends each).
+
+| Item | Decision | Decided by |
+|:--|:--|:--|
+| Target | All five storage backends in all six languages (30 combinations). The 15 combinations not provided until now are unimplemented remaining work | Owner |
+| Version of takt | Use the latest. 0.72.0, the latest on npm, is used. The pin of 0.68.0 is updated in this working tree, and takt is not started with the old version | Owner |
+| Rewriting flash-default | Allowed ("書き換えていいよ flash-default"). The body of flash-default and the child workflows it needs may be updated to match the latest takt. The existing division of models is kept | Owner |
+| How the remaining work is split | 9 independent storage backend implementations (rs 1, js 2, java 3, go 3) and 6 combinations of kotlin and scala that use java's implementation | Coordinator (reported to the owner) |
+| The unit of the first verification | The first one, java's SQLite, is one unit of verification. Only after its conformance tests, documentation, and review hold, broaden to the other implementations. The implementations of the same repository are not edited at the same time. In principle, up to 4 pieces of work run in parallel | Coordinator (reported to the owner) |
+| How the work is run | Delegate to takt in an independent working tree managed by Orca, using flash-default. Planning is Opus 5.5, implementation and tests are Sonnet 5.5, and review is Sonnet 5.5, DeepSeek V4.1 Flash, and GLM 5.3 Flash | Coordinator (reported to the owner) |
+| What is not changed | Common contract v5, the profile of each storage backend, conformance test data 1.3.0, and the definition of the shape of the public API. The rules and the distributed data are not changed for convenience | Coordinator (reported to the owner) |
+| Where tests run | Only on local SQLite files and on the emulators of DynamoDB Local, Spanner, and Bigtable. Do not connect to real services. This follows the owner's decision of 2026-10-15 (checking on the real production service is not done) | Owner (2026-10-15) |
+| Out of scope for now | Migration of production data, publishing libraries, and releasing new stable versions are handled after the finished deliverables are shown. Adding a change feed is not mixed into this addition of storage backends | Coordinator (reported to the owner) |
+
+Completion conditions (conditions for the future; they do not describe the current state):
+
+- All five storage backends can be used from each of the six languages.
+- Conformance tests against the corresponding real local storage backend (SQLite files) or emulator (DynamoDB Local, Spanner, Bigtable) finish with 0 failures and 0 unverified.
+- The documents are aligned in English and Japanese.
+- A whole storage backend is not excluded from the conformance tests, and the work is not accepted, on the grounds that it is not provided. A legitimate exclusion, such as an input that cannot be expressed in the language's types or a scene where the storage backend differs, is kept separately with its reason.
+
+As of 2026-10-26, the coordinator started java's SQLite with takt 0.72.0. The remaining combinations are not yet implemented.
+
 <a id="11-リスクと対策"></a>
 ## 11. Risks and Countermeasures
 
