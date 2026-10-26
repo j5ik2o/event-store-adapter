@@ -2,19 +2,22 @@
 status: accepted
 ---
 
-# Bigtable の封筒を、版番号付きの固定バイナリ形式で保存する
+<a id="bigtable-の封筒を版番号付きの固定バイナリ形式で保存する"></a>
+# Store Bigtable envelopes in a fixed binary format with a version number
 
-Bigtable のイベント封筒とスナップショット封筒は、[プロファイルの 4 章](../spec/storage/bigtable.md#4-封筒と履歴の削除状態を固定する) の固定バイナリ形式で保存する（2026-10-04、オーナーと合意、BT-D6a）。先頭の 1 バイトで形式の版を識別し、項目順、整数の幅とビッグエンディアン、UTF-8 の文字列と payload のバイト長を全言語でそろえる。
+Bigtable's event envelope and snapshot envelope are stored in the fixed binary format of [chapter 4 of the profile](../spec/storage/bigtable.md#4-封筒と履歴の削除状態を固定する) (2026-10-04, agreed with the owner, BT-D6a). The first byte identifies the format version, and the item order, the integer widths and big-endian, and the UTF-8 strings and payload byte lengths are made the same in every language.
 
-ドメインのシリアライザが扱うのは payload だけである。封筒のメタデータはライブラリが組み立てる。ナノ秒の時刻は符号付き 64bit 整数のまま保存するので、浮動小数点への変換を経由しない。
+The domain serializer handles only the payload. The envelope's metadata is assembled by the library. Nanosecond timestamps are stored as signed 64-bit integers as they are, so they do not pass through conversion to floating point.
 
-## 検討した代案
+<a id="検討した代案"></a>
+## Considered Options
 
-- **JSON**: メタデータを目で確認しやすいが、ナノ秒の整数を文字列、バイナリ payload を Base64 にして保存する必要がある。保存量も増える。
-- **Protocol Buffers**: 項目を拡張しやすく、共通スキーマから各言語のコードを生成できるが、コード生成と依存の管理が必要になる。
+- **JSON**: The metadata is easy to check by eye, but nanosecond integers would have to be stored as strings and binary payloads as Base64. The storage size also increases.
+- **Protocol Buffers**: Items are easy to extend, and code for each language can be generated from a shared schema, but code generation and dependency management become necessary.
 
-## 影響
+<a id="影響"></a>
+## Consequences
 
-各言語に同じエンコード・復元処理と入出力の検証を用意する。形式の変更は版番号で管理する。既存データに焼き付くため、別の形式への変更には読み取りの対応や移行が必要になる。
+Prepare the same encoding and decoding processing and input/output verification in each language. Changes to the format are managed by the version number. Because it gets burned into existing data, changing to another format requires read support or migration.
 
-この合意は封筒の保存形式を対象とする。サイズ上限は、BT-D6b で既定 1MiB・最大 8MiB のストア単位の設定として別に合意した。
+This agreement covers the storage format of the envelope. The size limit was agreed separately in BT-D6b as a store-level setting with a default of 1MiB and a maximum of 8MiB.

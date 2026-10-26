@@ -1,85 +1,92 @@
-# 公開 API の形
+<a id="公開-api-の形"></a>
+# Public API shape
 
-共通契約 v5 が各言語の公開 API に求める「形」を、言語に依存しない JSON で書いたものです。各言語は、自分の公開 API がこの形を満たしているかを CI で照合します。
+This is the "shape" that core contract v5 requires of each language's public API, written in language-independent JSON. Each language checks in CI whether its own public API satisfies this shape.
 
-**状態: 6 言語で照合を入れ、受け入れ条件にした（0.1.0、2026-10-14）。** 2026-10-14 に go で照合を試作し、ずれを検出できることを確かめた（[ハブの PR #28](https://github.com/j5ik2o/event-store-adapter/pull/28)）。オーナーは段階的な採用を決め、同じ日に 6 言語の CI に照合が入った（下の「各言語の照合の方式」）。6 言語がそろった後、オーナーは照合を受け入れ条件（[実装計画](../docs/plan/implementation-plan.md) の 5 章の 4 番）に入れると決めた。`surface.json` の `status` は `experimental` のままである。変えると SHA-256 が変わり、6 言語に配り直すことになるので、次に版を上げるときに `stable` に改める（下の「版を上げるときの手順」）。
+**Status: the check has been introduced in all 6 languages and made an acceptance condition (0.1.0, 2026-10-14).** On 2026-10-14 we prototyped the check in go and confirmed that it can detect deviations ([hub PR #28](https://github.com/j5ik2o/event-store-adapter/pull/28)). The owner decided on a phased adoption, and on the same day the check was introduced into the CI of all 6 languages (see "How each language performs the check" below). After all 6 languages were in place, the owner decided to include the check in the acceptance conditions (item 4 of chapter 5 of the [implementation plan](../docs/plan/implementation-plan.md)). The `status` of `surface.json` remains `experimental`. Changing it changes the SHA-256 and requires redistributing to the 6 languages, so it will be changed to `stable` the next time the version is raised (see "Procedure when raising the version" below).
 
-## 何を書くか、何を書かないか
+<a id="何を書くか何を書かないか"></a>
+## What is written and what is not
 
-書くのは、仕様が言語に関係なく決めていることだけです。
+What is written is only what the specification decides regardless of language.
 
-- 2 つの封筒の要素と、構築時に必須の要素（1.2・1.4、T-2・T-10）
-- 最新のスナップショットの読み取りが返す組（3.4、R-2）
-- ストアの 4 つの操作の入力と出力（3 章）
-- エラーの 5 つの分類（4 章、E-1）
+- The elements of the two envelopes, and the elements required at construction (1.2 and 1.4, T-2 and T-10)
+- The pair returned by reading the latest snapshot (3.4, R-2)
+- The inputs and outputs of the store's four operations (chapter 3)
+- The five error categories (chapter 4, E-1)
 
-書かないのは、仕様が言語に任せていることです。
+What is not written is what the specification leaves to each language.
 
-- 名前の綴り（`persist_event` / `persistEvent` / `PersistEvent`）
-- 失敗の返し方（`Result`、例外、`error` の値）と、非同期かどうか
-- 組の表し方（構造体、タプルなど）、「なし」の表し方（`Option`、`null`、`undefined`、ポインタ）
-- 言語の作法で足す引数（go の `context.Context` など）
+- The spelling of names (`persist_event` / `persistEvent` / `PersistEvent`)
+- How failure is returned (`Result`, exceptions, an `error` value), and whether it is asynchronous
+- How a pair is represented (a struct, a tuple, and so on), and how "none" is represented (`Option`, `null`, `undefined`, a pointer)
+- Arguments added by the conventions of the language (such as go's `context.Context`)
 
-振る舞い（照合、保持、エラーの分類の条件など）は、この形では表せません。振る舞いは [適合テストデータ](../conformance/README.md) で確かめます。
+Behavior (the conditions of checking, retention, error categories, and so on) cannot be expressed in this shape. Behavior is verified with the [conformance test data](../docs/conformance-guide.md).
 
-## 書き方
+<a id="書き方"></a>
+## Notation
 
-| 書き方 | 意味 |
+| Notation | Meaning |
 |:--|:--|
-| `P`・`A` | 利用者が決める型（イベントのペイロード、集約の状態）。言語の型の引数で表す |
-| `aggregate_id`・`seq_nr`・`timestamp`・`string` | 値の種類。意味は `value_types` に書いた |
-| `optional<T>` | `T` があるか、ないか |
-| `list<T>` | `T` の列（順序あり） |
-| `none` | 成功のときに返す値がない |
-| `required: true` | 構築時に必ず与える要素。`required: false` は省略でき、省略時は `default` の値になる |
+| `P`, `A` | Types decided by the user (the event payload, the aggregate state). Expressed with the language's type parameters |
+| `aggregate_id`, `seq_nr`, `timestamp`, `string` | Kinds of values. Their meanings are written in `value_types` |
+| `optional<T>` | `T` is present or absent |
+| `list<T>` | A sequence of `T` (ordered) |
+| `none` | There is no value to return on success |
+| `required: true` | An element that must always be given at construction. `required: false` can be omitted, and when omitted it takes the value of `default` |
 
-## 各言語での照合
+<a id="各言語での照合"></a>
+## Checking in each language
 
-各言語のリポジトリは、次の 2 つを持ちます。
+The repository of each language has the following two.
 
-1. この `surface.json` の写し（`api-surface/surface.json`）。CI で、下の SHA-256 と一致することを確かめる（適合テストデータと同じ配り方）。
-2. 名前の対応表（`api-surface/<言語>.json` など）。共通の名前（`event_envelope`、`occurred_at` など）を、その言語の公開 API の名前と型に対応させる。対応表は各言語のリポジトリだけに置き、ハブは持たない。
+1. A copy of this `surface.json` (`api-surface/surface.json`). CI confirms that it matches the SHA-256 below (distributed in the same way as the conformance test data).
+2. A name mapping table (such as `api-surface/<言語>.json`, where `<言語>` is the language). It maps the common names (`event_envelope`, `occurred_at`, and so on) to the names and types of that language's public API. The mapping table is placed only in each language's repository, and the hub does not hold it.
 
-照合の試験は、少なくとも次を確かめます。
+The checking tests confirm at least the following.
 
-- 各型と、その要素を読む手段（フィールド、取得の関数など）がある。要素の型が、値の種類と合う。
-- 構築の手段（関数、ビルダーなど）が、`required: true` の要素を必ず受け取り、`required: false` の要素を省略できる。
-- ストアの 4 つの操作があり、入力と出力が合う（失敗の返し方と非同期の包み方は、言語の対応表が決める）。
-- エラーの 5 つの分類を、呼び出し側が型か値で区別できる。
+- Each type exists, along with a means of reading its elements (fields, getter functions, and so on). The element types match the kinds of values.
+- The means of construction (a function, a builder, and so on) always accepts the elements with `required: true`, and can omit the elements with `required: false`.
+- The store's four operations exist, and the inputs and outputs match (how failure is returned and how asynchrony is wrapped are decided by the language's mapping table).
+- The caller can distinguish the five error categories by type or by value.
 
-照合の試験は、形をわざとずらしたとき（要素を消す、名前を変える、型を変える、分類を消すなど）に、それを報告できることも試験で示します。
+The checking tests also demonstrate by tests that they can report it when the shape is deliberately shifted (removing an element, renaming it, changing a type, removing a category, and so on).
 
-## 各言語の照合の方式
+<a id="各言語の照合の方式"></a>
+## How each language performs the check
 
-| 言語 | 公開 API の読み方 | 否定の試験で確かめたずれ | PR |
+| Language | How the public API is read | Deviations confirmed by negative tests | PR |
 |:--|:--|:--|:--|
-| go | `go/types`（ソースを読む importer） | 要素の欠落・名前の変更・型の変更、構築の関数の必須の引数の欠落、操作の戻り値、エラーの分類の欠落、型の引数の制約、対応表の抜け | [go #438](https://github.com/j5ik2o/event-store-adapter-go/pull/438) |
-| java | リフレクション（ビルダーは実際に呼んで必須の要素を確かめる） | 要素の欠落・名前の変更・型の変更、必須の要素の省略、ビルダーの引数の型、操作の戻り値、型の引数の制約、同期・非同期のストアの対応の抜け | [java #740](https://github.com/j5ik2o/event-store-adapter-java/pull/740) |
-| js | TypeScript のコンパイラ API（型を当てはめる試しのファイルを作る） | 要素の欠落・名前の変更・型の変更、省略できる要素の誤り、操作の戻り値、エラーの分類の欠落、型の引数の制約、型を公開しなくなったこと | [js #1058](https://github.com/j5ik2o/event-store-adapter-js/pull/1058) |
-| rs | 日付を固定した nightly の rustdoc の JSON（`rustdoc-types`） | 要素の欠落・名前の変更・型の変更、構築の関数の必須の引数の欠落、操作の戻り値（`async_trait` の書き換えの中まで。`Future` が `Send` を持つことも）、エラーの分類の欠落、型の引数の制約、対応表の抜け | [rs #298](https://github.com/j5ik2o/event-store-adapter-rs/pull/298) |
-| kotlin | `kotlin-reflect` | 操作の欠落と戻り値、`suspend` でない非同期の操作、なしを表せない戻り値、型の引数の制約、同期・`suspend` のストアや例外の基底の対応の抜け | [kotlin #857](https://github.com/j5ik2o/event-store-adapter-kotlin/pull/857) |
-| scala | Java のリフレクション（総称型の情報を含む） | 操作の戻り値（`Try`・`Future`・`Option` の包み方）、`SnapshotReadResult` の要素の欠落、型の引数の制約、ストア・要素・例外のクラスの対応の抜け | [scala #879](https://github.com/j5ik2o/event-store-adapter-scala/pull/879) |
+| go | `go/types` (an importer that reads the source) | Missing elements, renamed elements, changed types, missing required arguments of the construction function, return values of operations, missing error categories, constraints on type arguments, gaps in the mapping table | [go #438](https://github.com/j5ik2o/event-store-adapter-go/pull/438) |
+| java | Reflection (builders are actually called to confirm the required elements) | Missing elements, renamed elements, changed types, omitted required elements, argument types of builders, return values of operations, constraints on type arguments, gaps in the correspondence between synchronous and asynchronous stores | [java #740](https://github.com/j5ik2o/event-store-adapter-java/pull/740) |
+| js | TypeScript compiler API (creates a trial file that applies the types) | Missing elements, renamed elements, changed types, mistakes in optional elements, return values of operations, missing error categories, constraints on type arguments, a type no longer being exported | [js #1058](https://github.com/j5ik2o/event-store-adapter-js/pull/1058) |
+| rs | rustdoc JSON of a date-pinned nightly (`rustdoc-types`) | Missing elements, renamed elements, changed types, missing required arguments of the construction function, return values of operations (down to inside the `async_trait` rewrite, including that `Future` is `Send`), missing error categories, constraints on type arguments, gaps in the mapping table | [rs #298](https://github.com/j5ik2o/event-store-adapter-rs/pull/298) |
+| kotlin | `kotlin-reflect` | Missing operations and return values, asynchronous operations that are not `suspend`, return values that cannot express none, constraints on type arguments, gaps in the correspondence of synchronous and `suspend` stores and of the exception base class | [kotlin #857](https://github.com/j5ik2o/event-store-adapter-kotlin/pull/857) |
+| scala | Java reflection (including generic type information) | Return values of operations (how `Try`, `Future`, and `Option` wrap them), missing elements of `SnapshotReadResult`, constraints on type arguments, gaps in the correspondence of store, element, and exception classes | [scala #879](https://github.com/j5ik2o/event-store-adapter-scala/pull/879) |
 
-kotlin と scala は java の封筒と例外をそのまま使うので、封筒の要素と例外の分類の形は java の照合に任せ、クラスが解決できることだけを確かめる。kotlin は自分のストアの操作（`SnapshotReadResult` も java のもの）、scala は自分のストアと `SnapshotReadResult` を照合する。各言語で確かめられないこと（scala の `implicit` の印や `AnyRef` の上限など）は、各言語の `api-surface/README.md` に書いた。
+kotlin and scala use java's envelopes and exceptions as they are, so the shape of the envelope elements and exception categories is left to java's check, and only that the classes can be resolved is confirmed. kotlin checks its own store operations (`SnapshotReadResult` is also java's), and scala checks its own store and `SnapshotReadResult`. What cannot be confirmed in each language (such as scala's `implicit` marker and the `AnyRef` upper bound) is written in each language's `api-surface/README.md`.
 
-## 版を上げるときの手順
+<a id="版を上げるときの手順"></a>
+## Procedure when raising the version
 
-`surface.json` を変えるのは、共通契約の版が変わって公開 API の形が変わるとき（要素の追加・削除、必須かどうか、操作の入力と出力、エラーの分類）か、`surface.json` が契約を正しく写していなかったときである。説明の文言だけを直すときも SHA-256 が変わるので、急がなければ次に形を変えるときにまとめる。
+`surface.json` is changed when the core contract's version changes and the shape of the public API changes (adding or removing elements, whether something is required, the inputs and outputs of operations, the error categories), or when `surface.json` did not copy the contract correctly. Fixing only the wording of the description also changes the SHA-256, so unless it is urgent, bundle it with the next time the shape changes.
 
-各言語の CI は、自分のリポジトリの写しを、自分のリポジトリの固定値と照合する。ハブの `surface.json` を変えても、各言語の CI は落ちない。その代わり、配り直すまで各言語は古い版で照合を続けるので、コーディネーターが 6 言語に配り直す（適合テストデータと同じ）。
+Each language's CI checks its own repository's copy against its own repository's pinned value. Changing the hub's `surface.json` does not make any language's CI fail. Instead, each language keeps checking with the old version until it is redistributed, so the coordinator redistributes to the 6 languages (the same as the conformance test data).
 
-1. ハブで `surface.json` を変え、`version` を上げる。契約の版が変わるなら `contract` も改める。`status` が `experimental` のままなら `stable` にする。SHA-256 を計算し、下の「版と SHA-256」の表に行を足す。照合の方式が変わる言語があれば、上の「各言語の照合の方式」の表も直す。
-2. 各言語では、1 つの PR で次をそろえる。
-   - `api-surface/surface.json` を、ハブのものと同じ内容で替える。
-   - `.github/workflows/ci.yml` の SHA-256 の固定値を替える。java・rs・kotlin・scala は、手順の名前（`Verify API surface 0.1.0`）の版も替える。
-   - 各言語の `api-surface/README.md` に書いた版と SHA-256 を替える（6 言語とも版を書いており、java・kotlin・scala は SHA-256 の全体、rs は略した形も書いている）。替え忘れは、各言語のリポジトリで `git grep -n -e '<前の版>' -e '<前の SHA-256 の先頭の 8 文字>' -- api-surface .github` を実行して見つける。
-   - 対応表 `api-surface/<言語>.json` の `surface_version` を新しい版にする（go の対応表にはこの要素がない）。java・scala・rs は、照合の試験が写しの版との一致を確かめる。
-   - 足した要素や変えた要素を、対応表と照合の試験に足す。否定の試験にも、その要素をずらした場合を足す。
-   - 形が変わるなら、ライブラリの公開 API の変更も同じ PR に入れる。照合は `CI Success` に含まれるので、写しだけを替えると CI が落ちる。
-3. kotlin と scala は、java の封筒と例外をそのまま使い、その形の照合を java に任せている（上の「各言語の照合の方式」）。java の変更を先に入れ、kotlin と scala は、その java に依存を上げてから写しを替える。
+1. Change `surface.json` in the hub and raise `version`. If the contract's version changes, update `contract` as well. If `status` is still `experimental`, make it `stable`. Compute the SHA-256 and add a row to the table "Versions and SHA-256" below. If the method of checking changes for any language, also fix the table "How each language performs the check" above.
+2. In each language, align the following in one PR.
+   - Replace `api-surface/surface.json` with the same content as the hub's.
+   - Replace the pinned SHA-256 value in `.github/workflows/ci.yml`. For java, rs, kotlin, and scala, also replace the version in the step name (`Verify API surface 0.1.0`).
+   - Replace the version and SHA-256 written in each language's `api-surface/README.md` (all 6 languages write the version; java, kotlin, and scala write the whole SHA-256, and rs also writes an abbreviated form). Find anything left unreplaced by running `git grep -n -e '<前の版>' -e '<前の SHA-256 の先頭の 8 文字>' -- api-surface .github` (the previous version, and the first 8 characters of the previous SHA-256) in each language's repository.
+   - Set `surface_version` in the mapping table `api-surface/<言語>.json` to the new version (go's mapping table does not have this element). For java, scala, and rs, the checking test confirms that it matches the version of the copy.
+   - Add the elements that were added or changed to the mapping table and the checking tests. Also add, to the negative tests, the case in which those elements are shifted.
+   - If the shape changes, include the change to the library's public API in the same PR. The check is included in `CI Success`, so replacing only the copy makes CI fail.
+3. kotlin and scala use java's envelopes and exceptions as they are, and leave the check of that shape to java ("How each language performs the check" above). Merge java's change first, and for kotlin and scala, raise the dependency to that java before replacing the copy.
 
-## 版と SHA-256
+<a id="版と-sha-256"></a>
+## Versions and SHA-256
 
-| 版 | `surface.json` の SHA-256 |
+| Version | SHA-256 of `surface.json` |
 |:--|:--|
 | 0.1.0 | `37c91f8f94e10c73513a9c1deef990ea4deea96d5001ae700d6bf799658d0e32` |

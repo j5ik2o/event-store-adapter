@@ -1,71 +1,76 @@
 # event-store-adapter
 
-各言語の event-store-adapter 実装が共有する概念の用語集。仕様本体は `docs/spec/`、設計判断は `docs/adr/` にある。
+A glossary of the concepts shared by the event-store-adapter implementations in each language. The specification itself is in `docs/spec/`, and design decisions are in `docs/adr/`.
 
 ## Language
 
-### 書き込みと記録
+<a id="書き込みと記録"></a>
+### Writing and recording
 
-**ジャーナル**:
-集約ごとのイベントを seq_nr 順に追記するだけの記録。集約状態の唯一の正であり、リプレイはここから行う。
-_Avoid_: イベントログ、イベントテーブル
+**Journal**:
+A record that only appends each aggregate's events in seq_nr order. It is the single source of truth for aggregate state, and replay is performed from it.
+_Avoid_: event log (イベントログ), event table (イベントテーブル)
 
-**イベント封筒**:
-1 件のイベントを運ぶ入れ物。aggregate_id・seq_nr・occurred_at・manifest のメタデータと、ペイロードを分けて持つ。
-_Avoid_: イベント（封筒全体を指す場合）、イベントレコード
+**Event envelope**:
+The container that carries one event. It keeps the metadata (aggregate_id, seq_nr, occurred_at, manifest) and the payload separately.
+_Avoid_: event (when referring to the whole envelope; イベント), event record (イベントレコード)
 
-**ペイロード**:
-封筒が運ぶドメインの中身。ライブラリは解釈せず、メタデータも埋め込まない。
-_Avoid_: イベント本体、データ
+**Payload**:
+The domain content that the envelope carries. The library does not interpret it, and no metadata is embedded in it.
+_Avoid_: event body (イベント本体), data (データ)
 
 **manifest**:
-ペイロードやスナップショットの集約状態について、型やスキーマ版を識別するために利用者が付ける自由形式の文字列。ライブラリは値を解釈しない。
-_Avoid_: タイプ名、イベント種別
+A free-form string that the user attaches to identify the type or schema version of a payload or of the aggregate state in a snapshot. The library does not interpret the value.
+_Avoid_: type name (タイプ名), event kind (イベント種別)
 
 **seq_nr**:
-集約内でイベントに付く 1 始まりの通し番号。採番するのはドメイン側で、ストアではない。楽観ロックの照合にも使う。
-_Avoid_: シーケンス番号、オフセット、version（照合用の番号として）
+A serial number, starting at 1, assigned to events within an aggregate. The domain side assigns it, not the store. It is also used for the optimistic-locking check.
+_Avoid_: sequence number (シーケンス番号), offset (オフセット), version (as a number used for the check; version（照合用の番号として）)
 
-### 集約の現在位置
+<a id="集約の現在位置"></a>
+### Current position of an aggregate
 
-**確定**:
-追記が集約の記録として成立すること。確定した追記だけが、集約ヘッド・イベントの読み取り・変更フィードに現れ、確定しなかった追記はどこにも現れない。
-_Avoid_: コミット（保存先のトランザクションの意味と紛らわしい）、永続化
+**Commit of an append** (確定):
+An append becoming established as a record of the aggregate. Only committed appends appear in the aggregate head, in event reads, and in the change feed; an append that was not committed appears nowhere.
+_Avoid_: commit (コミット; easily confused with the storage transaction's meaning), persistence (永続化)
 
-**集約ヘッド**:
-集約ごとに 1 件だけある、最新の書き込み位置の記録。最初の追記で作られ、それまではない。直近の seq_nr と、その seq_nr で確定したイベント封筒を持ち、追記の確定と同時に進む。楽観ロックの照合点であり、変更フィードの単位でもある。
-_Avoid_: current スナップショット、ヘッダ、先頭項目
+**Aggregate head**:
+The record of the latest write position, of which there is exactly one per aggregate. It is created by the first append and does not exist before that. It holds the latest seq_nr and the event envelope committed at that seq_nr, and it advances at the same time as an append is committed. It is the check point for optimistic locking and also the unit of the change feed.
+_Avoid_: current snapshot (current スナップショット), header (ヘッダ), leading item (先頭項目)
 
-**ヘッド遷移**:
-集約ヘッドの seq_nr が n−1 から n へ進む 1 回の変化と、そのとき追記されたイベント封筒の組。
-_Avoid_: 更新イベント、変更レコード
+**Head transition**:
+The pair of one change in which the aggregate head's seq_nr advances from n−1 to n, and the event envelope appended at that time.
+_Avoid_: update event (更新イベント), change record (変更レコード)
 
-### 状態の再構築
+<a id="状態の再構築"></a>
+### Rebuilding state
 
-**スナップショット**:
-ある seq_nr 時点の集約状態を保存したキャッシュ。ヘッドより古くてもよく、なくてもよい。楽観ロックの照合には使わない。
-_Avoid_: 集約状態（保存物を指す場合）
+**Snapshot**:
+A cache that stores the aggregate state at a certain seq_nr. It may be older than the head, and it may be absent. It is not used for the optimistic-locking check.
+_Avoid_: aggregate state (when referring to the stored object; 集約状態（保存物を指す場合）)
 
-**スナップショット封筒**:
-1 件のスナップショットを運ぶ入れ物。集約状態、それが反映済みの seq_nr、manifest を持ち、書き込みと読み取りで同じ型を使う。
+**Snapshot envelope**:
+The container that carries one snapshot. It holds the aggregate state, the seq_nr it already reflects, and the manifest, and the same type is used for writing and reading.
 _Avoid_: AggregateResult
 
-**リプレイ**:
-スナップショットの集約状態に、その seq_nr より後のイベントを順に適用して最新状態を得ること。
-_Avoid_: 再生、復元
+**Replay**:
+Obtaining the latest state by applying, in order, the events after the snapshot's seq_nr to the aggregate state in the snapshot.
+_Avoid_: playback (再生), restoration (復元)
 
-### 外部への配信
+<a id="外部への配信"></a>
+### Delivery to the outside
 
-**変更フィード**:
-集約ごとに seq_nr 順で並んだヘッド遷移の列。リードモデル更新などの下流は、ジャーナルではなくこれを購読する。
-_Avoid_: CDC ストリーム、イベントストリーム（汎用語として）
+**Change feed**:
+The sequence of head transitions arranged in seq_nr order for each aggregate. Downstream consumers such as read-model updates subscribe to this, not to the journal.
+_Avoid_: CDC stream (CDC ストリーム), event stream (as a general term; イベントストリーム（汎用語として）)
 
-### 仕様の構成
+<a id="仕様の構成"></a>
+### Structure of the specification
 
-**共通契約**:
-保存先に依存しない、全実装が満たすべき意味論。
-_Avoid_: コア API、インターフェイス定義
+**Core contract**:
+The semantics, independent of the storage backend, that every implementation must satisfy.
+_Avoid_: core API (コア API), interface definition (インターフェイス定義)
 
-**ストレージプロファイル**:
-共通契約を特定の保存先（DynamoDB など）でどう実現するかを定めた仕様。物理配置・キー導出・保存形式を含む。
-_Avoid_: バックエンド実装、アダプタ仕様
+**Storage profile**:
+The specification that defines how the core contract is realized on a particular storage backend (such as DynamoDB). It includes the physical layout, key derivation, and storage format.
+_Avoid_: backend implementation (バックエンド実装), adapter specification (アダプタ仕様)

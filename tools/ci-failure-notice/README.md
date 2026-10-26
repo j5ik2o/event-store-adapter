@@ -1,37 +1,42 @@
-# main の CI の失敗を issue で知らせるワークフロー
+<a id="main-の-ci-の失敗を-issue-で知らせるワークフロー"></a>
+# Workflow that reports main CI failures through an issue
 
-6 言語のリポジトリに同じ内容で写す、main の CI の失敗を知らせるワークフローの正本。
+The canonical source of the workflow that reports main CI failures, copied with the same content into the repositories of the 6 languages.
 
-| ファイル | 役割 |
+| File | Role |
 |---|---|
-| `main-ci-failure.yml` | 各リポジトリの `.github/workflows/` に写すワークフロー |
+| `main-ci-failure.yml` | The workflow to copy into each repository's `.github/workflows/` |
 
-## 何をするか
+<a id="何をするか"></a>
+## What it does
 
-CI のワークフローが main で完了したとき（`workflow_run`）、元の実行のきっかけが `push` か `schedule`（定期実行）のものだけを扱う。
+When a CI workflow completes on main (`workflow_run`), it handles only runs whose original trigger was `push` or `schedule` (a scheduled run).
 
-- 結論が `failure`・`timed_out`（時間切れ）・`startup_failure`（起動の失敗）: ラベル `ci-failure-on-main` の付いた開いている issue を探す。なければ issue を作り、あればその issue にコメントを足す。本文とコメントには、元の実行の URL、コミット、きっかけ、失敗したジョブの名前を書く。
-- 結論が `success`: 開いている issue があれば、成功した実行の URL をコメントして閉じる。CI の実行は重なりうるので、issue に記録した最後の失敗より新しい成功でだけ閉じる。新しさは、CI のワークフローの実行番号（`run_number`）と試行の回数（`run_attempt`。流し直すと増える）で比べるので、失敗した実行を流し直して成功した場合も閉じる。
-- ラベルがなければ作る。
+- Conclusion `failure`, `timed_out`, or `startup_failure` (a failure to start): look for an open issue with the label `ci-failure-on-main`. If there is none, create an issue; if there is one, add a comment to that issue. The body and the comment state the URL of the original run, the commit, the trigger, and the names of the failed jobs.
+- Conclusion `success`: if there is an open issue, comment the URL of the successful run and close it. CI runs can overlap, so the issue is closed only by a success newer than the last failure recorded in the issue. Newness is compared by the CI workflow's run number (`run_number`) and attempt count (`run_attempt`, which increases when re-run), so it also closes when a failed run is re-run and succeeds.
+- If the label does not exist, create it.
 
-同時に動く数は制限しない。制限すると、待っている知らせが後の知らせに置き換えられて消えることがあるからである。その代わり、2 つの失敗がほぼ同時に終わると、issue が 2 つできることがある。
+The number of concurrent runs is not limited. If it were limited, a waiting notification could be replaced by a later one and disappear. In exchange, when two failures finish at almost the same time, two issues may be created.
 
-`CI Success` の外の検査の失敗も、`CI Success` 自体の失敗も、CI のワークフローの失敗として同じように扱う。使うのは GitHub の issue とその通知だけで、外部への通知や Secret は使わない。権限は `issues: write` と `actions: read` だけ。
+A failure of a check outside `CI Success` and a failure of `CI Success` itself are treated in the same way, as a failure of the CI workflow. It uses only GitHub issues and their notifications, and uses no external notification or Secret. The permissions are only `issues: write` and `actions: read`.
 
-## 各リポジトリへの写し方
+<a id="各リポジトリへの写し方"></a>
+## How to copy into each repository
 
-1. `main-ci-failure.yml` を、そのリポジトリの `.github/workflows/main-ci-failure.yml` に写す。
-2. ファイルの `on.workflow_run.workflows` の 1 か所だけを、そのリポジトリの CI のワークフローの `name:` に合わせる。rs は `ci`、ほかの 5 つは `CI`（正本は `CI`）。ほかは替えない。
+1. Copy `main-ci-failure.yml` to that repository's `.github/workflows/main-ci-failure.yml`.
+2. Change only one place in the file, `on.workflow_run.workflows`, to match the `name:` of that repository's CI workflow. rs is `ci`, and the other 5 are `CI` (the canonical source is `CI`). Change nothing else.
 
-## 写した後の確かめ方
+<a id="写した後の確かめ方"></a>
+## How to verify after copying
 
-1. 写したワークフローを main に入れる。
-2. Actions の `main-ci-failure` を `workflow_dispatch` で実行し、入力 `run_id` に、過去の失敗した main の CI の実行の ID（push か定期実行のもの）を渡す。
-3. ラベル `ci-failure-on-main` の付いた issue ができたことを見る。
-4. 確かめ終わったら、その issue を閉じる。
+1. Merge the copied workflow into main.
+2. Run `main-ci-failure` in Actions with `workflow_dispatch`, and pass as the input `run_id` the ID of a past failed main CI run (one from a push or a scheduled run).
+3. Confirm that an issue with the label `ci-failure-on-main` was created.
+4. When the verification is finished, close that issue.
 
-過去の成功した実行の ID を渡すと、開いている issue を閉じる処理も確かめられる。
+If you pass the ID of a past successful run, you can also verify the process of closing an open issue.
 
-## `CI Success` の依存に入れない
+<a id="ci-success-の依存に入れない"></a>
+## Do not include it in the dependencies of `CI Success`
 
-このワークフローは知らせるだけで、マージを止める仕組みではない。CI の `CI Success` の依存にも、ブランチ保護の必須の検査にも入れない。
+This workflow only notifies; it is not a mechanism to block merging. Do not include it in the dependencies of CI's `CI Success`, nor in the required checks of branch protection.

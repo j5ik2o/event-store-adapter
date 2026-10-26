@@ -2,18 +2,19 @@
 status: accepted
 ---
 
-# version を廃止し、楽観ロックは seq_nr で照合する
+<a id="version-を廃止し楽観ロックは-seq_nr-で照合する"></a>
+# Abolish version and check the optimistic lock against seq_nr
 
-rs v3 は、書き込みのたびに 1 増える version を楽観ロックに使い、書き込み操作で `expected_version` を受け取っていた。共通契約では、書き込み時に seq_nr の連続性を強制し（W-8）、1 回の書き込みで 1 イベントだけを追記する（H-3）と決めた。この 2 つがそろうと version と seq_nr は常に一致する。version は冗長になった。
+rs v3 used version, which increases by 1 on every write, for the optimistic lock, and the write operation accepted `expected_version`. The core contract decided to enforce the continuity of seq_nr at write time (W-8) and to append only one event per write (H-3). With these two together, version and seq_nr always match. Version became redundant.
 
-そこで version を廃止し、楽観ロックは集約ヘッドの seq_nr で照合する。seq_nr が n のイベントは、ヘッドの seq_nr が n−1 のときだけ追記できる。照合の期待値がイベントの seq_nr から決まるので、書き込み操作は `expectedVersion` 引数を取らない。最新スナップショットの読み取りは、version の代わりにヘッドの最新 seq_nr を返す。pekko-persistence も同じく sequenceNr だけで照合している。
+So we abolish version, and the optimistic lock is checked against the aggregate head's seq_nr. An event with seq_nr n can be appended only when the head's seq_nr is n−1. Because the expected value for the check is determined from the event's seq_nr, the write operation does not take an `expectedVersion` argument. Reading the latest snapshot returns the head's latest seq_nr instead of version. pekko-persistence also checks against sequenceNr alone in the same way.
 
 ## Considered Options
 
-- **version を残す**: rs v3 の API をそのまま保てる。将来、複数イベントをまとめて追記するときに「書き込み回数」として要るという見方もあった。しかし、まとめて追記する場合も「ヘッドの seq_nr == 先頭イベントの seq_nr − 1」で照合できるので、version は要らない。常に seq_nr と一致する値を照合し続けることになるので採らない。
+- **Keep version**: The rs v3 API could be kept as it is. There was also a view that it would be needed as a "write count" when multiple events are appended together in the future. However, even when appending together, the check can be done with "head's seq_nr == first event's seq_nr − 1," so version is not needed. We would keep checking a value that always matches seq_nr, so we do not adopt it.
 
 ## Consequences
 
-- rs v3 の `expected_version` 引数は破壊的に消える。ADR-0001 が rs v3 の強みとして挙げた「期待値の明示」は、「イベントの seq_nr で書き込み位置を明示する」形に変わる。
-- 読み取りで返るヘッドの seq_nr を、リプレイで得た最後の seq_nr と比べれば、結果整合の読み取りの遅れを呼び出し側で検出できる（共通契約 R-7）。
-- 外部 API の楽観ロック用トークンに seq_nr をそのまま出すと、集約のイベント数が分かる。これは version でも同じだった。隠す必要があるなら、アプリケーション側で秘密鍵付きの HMAC などを使い、不透明なトークンに変える。seq_nr は小さな整数なので、鍵のないハッシュは総当たりで元の値に戻せる。
+- rs v3's `expected_version` argument is removed as a breaking change. The "explicit expected value" that ADR-0001 listed as a strength of rs v3 changes into the form "make the write position explicit by the event's seq_nr."
+- By comparing the head's seq_nr returned on read with the last seq_nr obtained by replay, the caller can detect the lag of an eventually consistent read (core contract R-7).
+- If seq_nr is exposed as is as the token for optimistic locking in an external API, the number of events of the aggregate becomes known. This was the same with version. If it needs to be hidden, the application should use something like an HMAC with a secret key to turn it into an opaque token. Because seq_nr is a small integer, a hash without a key can be brute-forced back to the original value.

@@ -2,18 +2,19 @@
 status: accepted
 ---
 
-# 追記の原子性を、物理的な書き方ではなく観測できる確定で定める
+<a id="追記の原子性を物理的な書き方ではなく観測できる確定で定める"></a>
+# Define append atomicity by observable confirmation, not by the physical way of writing
 
-共通契約の H-1 は、当初「ジャーナルへの追記と集約ヘッドの更新を 1 つの原子的な書き込みで行う」と、物理的な書き方を定めていた。DynamoDB・Spanner・SQLite はトランザクションでこれを満たせる。しかし Bigtable は 1 行の中でしか原子的に書けないので、満たすには集約のジャーナルを丸ごと 1 行に入れるしかなく、行が際限なく育つ（上限 256MB）。そこで H-1 を「追記の確定は 1 つの原子的な操作で決まり、確定した追記はヘッド・イベントの読み取り・変更フィードのすべてに現れ、確定しなかった追記はどれにも現れない」という、外から観測できる性質に改めた。確定の仕組みはストレージプロファイルが定める（2026-10-03 オーナーと合意、P-28）。
+The core contract's H-1 originally prescribed a physical way of writing: "do the append to the journal and the update of the aggregate head in one atomic write." DynamoDB, Spanner, and SQLite can satisfy this with transactions. However, Bigtable can write atomically only within a single row, so the only way to satisfy it is to put the whole journal of an aggregate into one row, and the row would grow without bound (limit 256MB). So we revised H-1 into a property observable from the outside: "the confirmation of an append is decided by one atomic operation; a confirmed append appears in all of the head, event reads, and the change feed, and an append that was not confirmed appears in none of them." The confirmation mechanism is defined by the storage profile (agreed with the owner on 2026-10-03, P-28).
 
 ## Considered Options
 
-- **今の文言のまま、Bigtable では集約を 1 行に入れる**: 共通契約は変えずに済む。しかし長く続く集約はいずれ行の上限に当たり、大きな行は圧縮や読み取りの遅延も悪化させる。採らない。
-- **Bigtable を対象から外す**: rs には Bigtable の実装があり、利用者を切り捨てることになる。採らない。
+- **Keep the current wording and put the aggregate in one row in Bigtable**: The core contract would not need to change. However, a long-lived aggregate will eventually hit the row limit, and large rows also worsen compression and read latency. We do not adopt it.
+- **Exclude Bigtable from the scope**: rs has a Bigtable implementation, and it would cut off its users. We do not adopt it.
 
 ## Consequences
 
-- Bigtable のプロファイルは、ヘッド行の条件付き更新（CheckAndMutateRow）を確定点にし、ジャーナル行は確定の後に冪等に書き出す方式を採れる。書き出しが失敗しても、次の書き手か読み手がヘッドの持つイベント封筒から補う。このため、ヘッドが確定したイベント封筒を持つことを H-4 として必須にした。
-- スナップショットも確定に従う。Bigtable ではヘッドと同じ行に置けば、確定と同時に原子的に書ける。
-- DynamoDB・Spanner・SQLite は、これまでどおり 1 つのトランザクションで書けばよく、変更は要らない。
-- ADR-0002 の「追記と同じ原子的な書き込みで進む」は、この ADR の確定の意味で読む。
+- The Bigtable profile can take the approach of making the conditional update of the head row (CheckAndMutateRow) the confirmation point, and writing out the journal row idempotently after confirmation. Even if the write-out fails, the next writer or reader fills it in from the event envelope held by the head. For this reason, the head holding the confirmed event envelope was made mandatory as H-4.
+- The snapshot also follows confirmation. In Bigtable, if it is placed in the same row as the head, it can be written atomically at the same time as confirmation.
+- DynamoDB, Spanner, and SQLite can keep writing in one transaction as before, and no change is needed.
+- "Advances in the same atomic write as the append" in ADR-0002 is to be read in the sense of confirmation in this ADR.

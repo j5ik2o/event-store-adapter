@@ -1,32 +1,34 @@
-# DynamoDB 試験環境の比較
+<a id="dynamodb-試験環境の比較"></a>
+# Comparison of DynamoDB test environments
 
-2026-10-05 に実行した結果、LocalStack 2.1.0、LocalStack 4.14.0、DynamoDB Local 3.3.1 のすべてで、指定された 6 項目が成功した。各言語の試験には **DynamoDB Local 3.3.1 を digest で固定して使うことを推奨する**。D-5 の旧項目返却と DY-12 の Streams も、AWS 公式イメージだけで再現できた。採用の決定は指揮役が行う。
+In the results run on 2026-10-05, the specified 6 items succeeded on all of LocalStack 2.1.0, LocalStack 4.14.0, and DynamoDB Local 3.3.1. For each language's tests, we **recommend using DynamoDB Local 3.3.1 pinned by digest**. D-5's return of the old item and DY-12's Streams could also be reproduced with the official AWS image alone. The decision to adopt is made by the coordinator.
 
-対象は[実装計画の 4.1](../../../docs/plan/implementation-plan.md#41-試験基盤の確認)に記した試験基盤の比較で、[DynamoDB 仕様](../../../docs/spec/storage/dynamodb.md)が前提とする機能をローカル環境で確認した。
+The subject is the comparison of test foundations described in [4.1 of the implementation plan](../../../docs/plan/implementation-plan.md#41-試験基盤の確認), and we confirmed in a local environment the features that the [DynamoDB specification](../../../docs/spec/storage/dynamodb.md) presupposes.
 
-## 実行方法
+<a id="実行方法"></a>
+## How to run
 
-Docker が起動している環境と uv、Python 3.11 以上を用意し、リポジトリのルートで実行する。依存関係は `uv.lock`、イメージは `probe.py` のタグと digest で固定している。
+Prepare an environment where Docker is running, plus uv and Python 3.11 or later, and run from the repository root. Dependencies are pinned by `uv.lock`, and images by the tags and digests in `probe.py`.
 
 ```sh
 uv run --frozen --project tools/spikes/dynamodb-emulators \
   python tools/spikes/dynamodb-emulators/probe.py
 ```
 
-既存の実測結果を残して再実行する場合は、保存先を変える。
+To keep the existing measured results and run again, change the output location.
 
 ```sh
 uv run --frozen --project tools/spikes/dynamodb-emulators \
   python tools/spikes/dynamodb-emulators/probe.py --output results-rerun
 ```
 
-`--environment A`、`B`、`C` で 1 環境だけ実行できる。保存先はこのディレクトリ配下に限定される。結果は各環境の JSON とコンテナログに出力される。`run.json` は直近の実行のホスト・SDK・Docker 情報、各環境の JSON はその環境の実行日時を含む。
+You can run just one environment with `--environment A`, `B`, or `C`. The output location is restricted to under this directory. The results are output to each environment's JSON and the container logs. `run.json` contains the host, SDK, and Docker information of the latest run, and each environment's JSON contains that environment's run date and time.
 
-スクリプトはイメージを pull して、永続ボリュームを持たない専用コンテナを順番に起動する。ホストの公開ポートは `127.0.0.1` の空きポートを自動割り当てする。DynamoDB と DynamoDB Streams の両クライアントに同じローカル endpoint、リージョン `us-east-1`、ダミー資格情報 `dummy` / `dummy` を明示する。AWS の資格情報や LocalStack のトークンは渡さない。LocalStack は `SERVICES=dynamodb,dynamodbstreams`、`EAGER_SERVICE_LOADING=1`、`DISABLE_EVENTS=1`、DynamoDB Local は `-inMemory -sharedDb -disableTelemetry` で起動する。
+The script pulls the images and starts dedicated containers without persistent volumes one after another. The host's published port is automatically assigned from the free ports of `127.0.0.1`. The same local endpoint, the region `us-east-1`, and the dummy credentials `dummy` / `dummy` are specified explicitly for both the DynamoDB and DynamoDB Streams clients. No AWS credentials or LocalStack token are passed. LocalStack is started with `SERVICES=dynamodb,dynamodbstreams`, `EAGER_SERVICE_LOADING=1`, and `DISABLE_EVENTS=1`, and DynamoDB Local with `-inMemory -sharedDb -disableTelemetry`.
 
-正常終了、検査失敗、Ctrl-C、SIGTERM では `finally` で所有するコンテナを強制停止・削除する。検査項目の `failure` は比較結果として保存し、終了コードは 0 とする。起動・実行基盤の失敗、またはコンテナの削除失敗は終了コード 1 になるので、能力の判定には JSON の `checks.*.status` も確認する。
+On normal exit, check failure, Ctrl-C, and SIGTERM, the owned containers are forcibly stopped and removed in `finally`. A `failure` of a check item is saved as a comparison result, and the exit code is 0. A failure of startup or the execution foundation, or a failure to remove a container, gives exit code 1, so also check the JSON's `checks.*.status` to judge a capability.
 
-強制終了や Docker 自体の停止で後片付けできなかった場合は、このスパイク専用のラベルで確認する。
+If cleanup could not be done because of a forced termination or the stopping of Docker itself, check with this spike's dedicated label.
 
 ```sh
 docker ps -a --filter label=event-store-adapter.dynamodb-spike
@@ -34,75 +36,80 @@ docker ps -aq --filter label=event-store-adapter.dynamodb-spike |
   while IFS= read -r container; do docker rm -f "$container"; done
 ```
 
-## 対象版とトークン
+<a id="対象版とトークン"></a>
+## Target versions and tokens
 
-| 環境 | Docker Hub のタグ | トークン | 選定根拠 |
+| Environment | Docker Hub tag | Token | Basis for selection |
 |:--|:--|:--|:--|
-| A | `localstack/localstack:2.1.0` | 不要、未設定で実行成功 | 既存 5 リポジトリの試験の固定版 |
-| B | `localstack/localstack:4.14.0` | 不要、未設定で実行成功 | 調査時点のトークン不要の最新正式版 |
-| C | `amazon/dynamodb-local:latest` = `3.3.1` | 不要、未設定で実行成功 | `latest` と `3.3.1` の manifest digest が一致し、起動ログも 3.3.1 |
-| 比較対象外 | 現行 `localstack/localstack:latest` | 必要 | トークン未用意のため pull・起動はしていない |
+| A | `localstack/localstack:2.1.0` | Not required; ran successfully unset | The pinned version of the tests in the existing 5 repositories |
+| B | `localstack/localstack:4.14.0` | Not required; ran successfully unset | The latest official version not requiring a token at the time of investigation |
+| C | `amazon/dynamodb-local:latest` = `3.3.1` | Not required; ran successfully unset | The manifest digests of `latest` and `3.3.1` match, and the startup log is also 3.3.1 |
+| Not compared | Current `localstack/localstack:latest` | Required | Not pulled or started, because no token was prepared |
 
-B の選定は次の公開情報と実測を合わせたもの。
+The selection of B combines the following public information and measurements.
 
-1. [LocalStack の Docker イメージ説明](https://docs.localstack.cloud/aws/customization/other-installations/docker-images/)は、セマンティック版の最後を 4.14.0 とし、2026 年 3 月末から暦ベースの版に移ると説明している。
-2. [2026.03.0 の公式告知](https://blog.localstack.cloud/localstack-for-aws-release-2026-03-0/)は、2026-03-23 の統合イメージから起動に認証トークンが必要と説明している。一時的な回避の期限は 2026-04-06 であり、今回の選定には含めていない。
-3. [Docker Hub の 4.x タグ API](https://hub.docker.com/v2/repositories/localstack/localstack/tags/?name=4.&page_size=100)を全 2 ページ取得し、正式な `4.x.y` の最大値が 4.14.0 であることを確認した。[4.14.0 のタグ情報](https://hub.docker.com/v2/repositories/localstack/localstack/tags/4.14.0)の最終更新は `2026-02-26T10:41:15.725761Z` だった。
-4. その digest のイメージをトークンなしで起動し、DynamoDB と Streams の API 呼び出しが成功した。開発版・日次版は採用候補に含めていない。
+1. [LocalStack's Docker image description](https://docs.localstack.cloud/aws/customization/other-installations/docker-images/) states that the last semantic version is 4.14.0, and that it will move to calendar-based versions from the end of March 2026.
+2. [The official announcement of 2026.03.0](https://blog.localstack.cloud/localstack-for-aws-release-2026-03-0/) states that from the unified image of 2026-03-23, an authentication token is required to start. The deadline of the temporary workaround is 2026-04-06, and it is not included in this selection.
+3. We fetched all 2 pages of [Docker Hub's 4.x tag API](https://hub.docker.com/v2/repositories/localstack/localstack/tags/?name=4.&page_size=100) and confirmed that the maximum of the official `4.x.y` is 4.14.0. The last update of [the tag information of 4.14.0](https://hub.docker.com/v2/repositories/localstack/localstack/tags/4.14.0) was `2026-02-26T10:41:15.725761Z`.
+4. We started the image of that digest without a token, and the DynamoDB and Streams API calls succeeded. Development versions and daily versions are not included as adoption candidates.
 
-取得したタグ一覧、照会 URL、各アーキテクチャの digest は [results/tags.json](results/tags.json) に保存した。C の [latest のタグ情報](https://hub.docker.com/v2/repositories/amazon/dynamodb-local/tags/latest)と [3.3.1 のタグ情報](https://hub.docker.com/v2/repositories/amazon/dynamodb-local/tags/3.3.1)の digest は一致した。[AWS のリリース履歴](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocalHistory.html)にも 3.3.1 が載っている。
+The fetched tag list, the query URLs, and the digest of each architecture are saved in [results/tags.json](results/tags.json). The digests of C's [tag information of latest](https://hub.docker.com/v2/repositories/amazon/dynamodb-local/tags/latest) and [tag information of 3.3.1](https://hub.docker.com/v2/repositories/amazon/dynamodb-local/tags/3.3.1) matched. 3.3.1 is also listed in [AWS's release history](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocalHistory.html).
 
-| 環境 | 再実行時に固定する manifest digest |
+| Environment | Manifest digest to pin when re-running |
 |:--|:--|
 | A | `sha256:74c3cb7cfa3d8a8ea9e786c0974dddf6ea60e7cea91e7a739f93cecafc09a9e2` |
 | B | `sha256:3ebc37595918b8accb852f8048fef2aff047d465167edd655528065b07bc364a` |
 | C | `sha256:ff89bd48ff32cd8d9be5fee8873b65b8854dc408f1afe881be6eb00247bc0dab` |
 
-`latest` は変わるため、C の再実行も観測した digest に固定する。将来の最新版を比較するときはタグ API を再確認し、`IMAGES["C"]` の digest を更新する。
+`latest` changes, so C's re-runs are also pinned to the observed digest. When comparing a future latest version, check the tag API again and update the digest of `IMAGES["C"]`.
 
-## 確認結果
+<a id="確認結果"></a>
+## Results
 
-「成功」は以下に記した要求・値の検査を通過したことを表す。実測応答は [A.json](results/A.json)、[B.json](results/B.json)、[C.json](results/C.json) に保存した。
+"Success" means that the checks of the requests and values described below passed. The measured responses are saved in [A.json](results/A.json), [B.json](results/B.json), and [C.json](results/C.json).
 
-| 確認項目 | A: LocalStack 2.1.0 | B: LocalStack 4.14.0 | C: DynamoDB Local 3.3.1 |
+| Check item | A: LocalStack 2.1.0 | B: LocalStack 4.14.0 | C: DynamoDB Local 3.3.1 |
 |:--|:--|:--|:--|
-| 1a. 条件付き Update の取り消しで旧項目を返す | 成功 | 成功 | 成功 |
-| 1b. 条件付き Put の取り消しで旧項目を返す | 成功 | 成功 | 成功 |
-| 2. head の NEW_IMAGE、INSERT → MODIFY | 成功 | 成功。初期化待ちが必要だった | 成功 |
-| 3. 1 パーティションで 1 MB を超える強整合 Query のページ送り | 成功、9 件 + 3 件 | 成功、9 件 + 3 件 | 成功、9 件 + 3 件 |
-| 4. BatchGetItem の強整合オプション | 成功、3 テーブルの値を取得 | 成功、3 テーブルの値を取得 | 成功、3 テーブルの値を取得 |
-| 5. ソートキー属性の有無による疎な GSI、KEYS_ONLY | 成功、対象 1 件だけを射影 | 成功、対象 1 件だけを射影 | 成功、対象 1 件だけを射影 |
-| 6. `ttl` の TTL 有効化 | 成功、ENABLED | 成功、ENABLED | 成功、ENABLED |
+| 1a. A cancelled conditional Update returns the old item | Success | Success | Success |
+| 1b. A cancelled conditional Put returns the old item | Success | Success | Success |
+| 2. head's NEW_IMAGE, INSERT → MODIFY | Success | Success. A wait for initialization was needed | Success |
+| 3. Paging of a strongly consistent Query exceeding 1 MB in one partition | Success, 9 items + 3 items | Success, 9 items + 3 items | Success, 9 items + 3 items |
+| 4. BatchGetItem's strongly consistent option | Success, obtained the values of 3 tables | Success, obtained the values of 3 tables | Success, obtained the values of 3 tables |
+| 5. A sparse GSI by the presence of the sort-key attribute, KEYS_ONLY | Success, projected only the 1 target item | Success, projected only the 1 target item | Success, projected only the 1 target item |
+| 6. Enabling TTL on `ttl` | Success, ENABLED | Success, ENABLED | Success, ENABLED |
 
-### 検査内容と挙動の違い
+<a id="検査内容と挙動の違い"></a>
+### What was checked and differences in behavior
 
-- **旧項目の返却**: head に `seq_nr=7` と識別用属性を入れ、Update は `seq_nr = :prev`（`:prev=6`）、Put は `attribute_not_exists(aid)` で失敗させた。いずれも `ReturnValuesOnConditionCheckFailure=ALL_OLD` を指定した。2 操作のトランザクションの 2 番目を失敗させ、`TransactionCanceledException`、`CancellationReasons[1].Code=ConditionalCheckFailed`、その `Item` が旧項目全体と一致することを検査した。別の成功するはずの Put が残らず、head も更新されないことを強整合 GetItem で確認した。
-- **Streams**: DescribeTable の `LatestStreamArn` と `NEW_IMAGE` を確認し、DescribeStream、GetShardIterator（TRIM_HORIZON）、GetRecords で同じ aid の INSERT、MODIFY を順に読んだ。NewImage の `seq_nr` は 1、2 で、OldImage はなく、2 件は同じ shard に載った。C の ARN とレコードのリージョンは `ddblocal`、A/B は `us-east-1` だった。各言語の試験では C の ARN から通常の AWS リージョンを推測せず、Streams にも endpoint を明示する必要がある。
-- **B の初期化**: 待機前の実行では DescribeStream が `ENABLING` を返し、GetShardIterator は内部 Kinesis の `ResourceInUseException` を包んだ `InternalError` で失敗した。[待機前の JSON](results/B-before-stream-wait.json)と[ログ](results/B-before-stream-wait.log)を保存した。最終スクリプトでは、書き込み前に Streams が `ENABLED` になり iterator を取得できるまで最大 30 秒待つ。その手順で成功した。テーブルの ACTIVE だけを開始条件にすると不足する。
-- **A の初期化ログ**: [A のログ](results/A.log)でも、Streams の準備前に行った取り消し検査用 Put の転送で `ResourceInUseException` が出た。A/B とも、表の INSERT → MODIFY の検査は iterator の取得後に書き込んだ項目に対する結果である。試験開始時にはテーブルだけでなく Streams の準備も待つ必要がある。
-- **Query**: 同じ aid に 120,000 バイトの ASCII payload を持つ項目を 12 件、合計 1,440,000 バイト書いた。`ConsistentRead=true` を指定し、`Limit` を指定せず Query した。最初の応答に LastEvaluatedKey があり、ExclusiveStartKey を使って 12 件を欠落・重複なく順に読めた。3 環境とも 9 件 + 3 件だった。最初のページの payload 合計は 1,080,000 バイトで、厳密な 1 MiB 以下への切り詰めまでは検証結果に含めない。
-- **BatchGetItem**: head・journal・snapshot に設定項目を入れ、各テーブルに `ConsistentRead=true` を指定して 3 件とも取得した。今回 UnprocessedKeys は空だった。再要求の処理は備えているが、未処理キーを発生させる試験はしていない。
-- **疎な GSI**: snapshot のキーは `aid` / `skey`、GSI のキーは `aid` / `active_history_seq_nr`、射影は KEYS_ONLY とした。同じ aid の 3 件のうち、GSI のソートキー属性を持つ 1 件だけが載り、返る属性はテーブルのキー 2 個と GSI のソートキーだけだった。payload は返らなかった。
-- **TTL**: UpdateTimeToLive で `ttl` を有効にし、DescribeTimeToLive で属性名と ENABLED を確認した。期限切れの削除は調べていない。
+- **Return of the old item**: We put `seq_nr=7` and an identifying attribute in head, and made the Update fail with `seq_nr = :prev` (`:prev=6`) and the Put with `attribute_not_exists(aid)`. Both specified `ReturnValuesOnConditionCheckFailure=ALL_OLD`. We made the second of the two operations in a transaction fail, and checked that `TransactionCanceledException`, `CancellationReasons[1].Code=ConditionalCheckFailed`, and its `Item` matched the whole old item. With a strongly consistent GetItem we confirmed that another Put that should have succeeded did not remain, and that head was not updated.
+- **Streams**: We checked DescribeTable's `LatestStreamArn` and `NEW_IMAGE`, and read the INSERT and MODIFY of the same aid in order with DescribeStream, GetShardIterator (TRIM_HORIZON), and GetRecords. NewImage's `seq_nr` was 1 and 2, there was no OldImage, and the 2 items were on the same shard. C's ARN and the record region were `ddblocal`, and A/B were `us-east-1`. In each language's tests, do not guess a normal AWS region from C's ARN, and the endpoint must also be specified explicitly for Streams.
+- **Initialization of B**: In the run before waiting, DescribeStream returned `ENABLING`, and GetShardIterator failed with an `InternalError` wrapping the internal Kinesis `ResourceInUseException`. We saved [the JSON before waiting](results/B-before-stream-wait.json) and [the log](results/B-before-stream-wait.log). In the final script, it waits up to 30 seconds, before writing, until Streams becomes `ENABLED` and an iterator can be obtained. It succeeded with that procedure. Using only the table being ACTIVE as the start condition is insufficient.
+- **Initialization log of A**: In [A's log](results/A.log) as well, `ResourceInUseException` occurred in the forwarding of the Put for the cancellation check, performed before Streams was ready. For both A/B, the table's INSERT → MODIFY check is a result for items written after the iterator was obtained. At the start of the tests, it is necessary to wait not only for the table but also for Streams to be ready.
+- **Query**: We wrote 12 items, each with a 120,000-byte ASCII payload, to the same aid, for a total of 1,440,000 bytes. We queried with `ConsistentRead=true` and without specifying `Limit`. The first response had a LastEvaluatedKey, and using ExclusiveStartKey the 12 items could be read in order without omissions or duplicates. All 3 environments gave 9 items + 3 items. The total payload of the first page was 1,080,000 bytes, and truncation to a strict 1 MiB or less is not included in the verification results.
+- **BatchGetItem**: We put configuration items in head, journal, and snapshot, specified `ConsistentRead=true` for each table, and obtained all 3. UnprocessedKeys was empty this time. The handling of re-requests is provided, but no test that generates unprocessed keys was done.
+- **Sparse GSI**: The snapshot's key was `aid` / `skey`, the GSI's key was `aid` / `active_history_seq_nr`, and the projection was KEYS_ONLY. Of the 3 items with the same aid, only the 1 that has the GSI's sort-key attribute appeared, and the only attributes returned were the table's 2 keys and the GSI's sort key. The payload was not returned.
+- **TTL**: We enabled `ttl` with UpdateTimeToLive, and confirmed the attribute name and ENABLED with DescribeTimeToLive. Deletion upon expiry was not investigated.
 
-強整合の 2 項目は、オプションが受理され、直前に書いた期待値を取得できることの検査である。並行実行における読み取り一貫性を証明するものではない。[AWS の DynamoDB Local 使用上の注意](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.UsageNotes.html)も、ローカルの読み取りと shard 作成が実サービスと異なることを説明している。今回の成功は、このスパイクの 6 項目に対する結果であり、実 AWS の全挙動への適合を示すものではない。
+The 2 strongly consistent items are checks that the option is accepted and that the expected value written just before can be obtained. They do not prove read consistency under concurrent execution. [AWS's usage notes for DynamoDB Local](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.UsageNotes.html) also explain that local reads and shard creation differ from the real service. This success is the result for this spike's 6 items, and does not show conformance to all the behavior of real AWS.
 
-## 起動の速さ
+<a id="起動の速さ"></a>
+## Startup speed
 
-macOS / arm64、Docker Desktop の Linux / arm64 で、各イメージを事前に取得した後に計測した。Python 3.13.13、boto3 1.42.70、botocore 1.42.97 を使った。起動時間は `docker run` の開始から、ダミー資格情報による DynamoDB ListTables の最初の成功までで、pull とテーブル作成を含まない。反復ベンチマークは行っていないので、差の統計的な有意性は評価しない。
+Measured after pre-fetching each image, on macOS / arm64 with Docker Desktop's Linux / arm64. We used Python 3.13.13, boto3 1.42.70, and botocore 1.42.97. The startup time is from the start of `docker run` to the first success of DynamoDB ListTables with dummy credentials, and does not include pull or table creation. We did not run repeated benchmarks, so we do not evaluate the statistical significance of the differences.
 
-| 環境 | 起動時間（秒） | Streams 検査開始後の読取準備待ち（秒） |
+| Environment | Startup time (seconds) | Read-readiness wait after the start of the Streams check (seconds) |
 |:--|--:|--:|
 | A | 2.249 | 0.057 |
 | B | 3.402 | 0.307 |
 | C | 0.992 | 0.009 |
 
-Streams の準備待ちは、テーブル作成と取り消し検査の後、Streams 検査を開始してから iterator を取得するまでの時間であり、コンテナ起動からの総時間ではない。詳細は各環境の `startup_seconds`、`checks.2_streams_new_image.stream_ready_seconds` と [run.json](results/run.json) を参照。
+The Streams readiness wait is the time from the start of the Streams check, after the table creation and the cancellation check, until the iterator is obtained, and is not the total time from the container start. For details, see each environment's `startup_seconds` and `checks.2_streams_new_image.stream_ready_seconds`, and [run.json](results/run.json).
 
-## 推奨と次の選択肢
+<a id="推奨と次の選択肢"></a>
+## Recommendation and next options
 
-1. **推奨: 各言語を DynamoDB Local 3.3.1 に統一する。** D-5 と DY-12 を含む 6 項目が成功し、トークンも LocalStack の独自 Streams 実装も不要になる。DynamoDB と Streams に同じ endpoint を明示し、イメージを上記 digest で固定する。今回の起動時間は約 1〜3 秒だった。反復計測はしていないため、速さの差だけを採用理由にはしない。
-2. **移行を見送る場合: LocalStack を固定して使う。** 2.1.0 は今回の項目が成功したので継続できる。新しいトークン不要版を選ぶなら 4.14.0 が候補だが、Streams の準備待ちを各言語の試験にも入れる。どちらも現行の統合イメージより前の版になる。
-3. **現行 LocalStack の機能・継続更新を必要とする場合: トークンを用意して別途比較する。** 今回はトークンがないため未検証で、採用可否の結論は出していない。
+1. **Recommended: unify each language on DynamoDB Local 3.3.1.** The 6 items including D-5 and DY-12 succeeded, and neither a token nor LocalStack's own Streams implementation is needed. Specify the same endpoint explicitly for DynamoDB and Streams, and pin the image by the digest above. This time the startup time was about 1 to 3 seconds. Because repeated measurements were not done, the difference in speed alone is not made the reason for adoption.
+2. **If migration is deferred: pin LocalStack and keep using it.** 2.1.0 can be continued because this time's items succeeded. If a newer version not requiring a token is chosen, 4.14.0 is the candidate, but the wait for Streams readiness must also be put into each language's tests. Both are versions earlier than the current unified image.
+3. **If the features and continued updates of the current LocalStack are needed: prepare a token and compare separately.** It is unverified because no token was available this time, and no conclusion on whether to adopt has been reached.
 
-仕様・計画書は変更していない。今回起動したコンテナはすべて停止・削除し、各環境の JSON の `container_removed=true` と、専用ラベルによる `docker ps -a` が空であることを確認した。
+The specification and plan documents were not changed. All containers started this time were stopped and removed, and we confirmed that each environment's JSON has `container_removed=true` and that `docker ps -a` with the dedicated label is empty.
