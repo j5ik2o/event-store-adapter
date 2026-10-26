@@ -52,7 +52,7 @@ journal の行キー   = P(aid) || U64BE(seq_nr)
 - **MUST BT-3**: The assembly, type name, and length of aid follow T-1, T-11, and T-12. Since the length is included, even if hashes collide, the P of a different aid is not a prefix match. Even if aid contains `#`, NUL, or Japanese, that byte sequence is not interpreted as a delimiter (SP-2) (agreed 2026-10-16, P-55).
 - **MUST BT-4**: seq_nr is an 8-byte unsigned big-endian value. The order of row keys matches the order of seq_nr. When building ranges, do not use decimal strings, the language's Display, or `prefix + 0xff` (agreed 2026-10-16, P-55).
 
-Only in the case of `start = max(1, seqNr) < h` in the event retrieval at head position h, build the journal range with exclusive bounds, from `P || U64BE(start)` to `P || U64BE(h)`. h is not included in this range, and h's envelope is added from the fetched head. The branches for when there is no head, when start > h, and when start = h are made before building the range (chapter 6).
+Only in the case of `start = max(1, seqNr) < h` in the event retrieval at head position h, build the journal range from `P || U64BE(start)` inclusive to `P || U64BE(h)` exclusive. h is not included in this range, and h's envelope is added from the fetched head. The branches for when there is no head, when start > h, and when start = h are made before building the range (chapter 6).
 
 <a id="4-封筒と履歴の削除状態を固定する"></a>
 
