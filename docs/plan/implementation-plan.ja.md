@@ -445,6 +445,40 @@ FNV-1a 64 の 4 件（hash.md の K-1）は、5 章のとおり、ハッシュ�
 
 コーディネーターは 2026-10-26 に takt 0.72.0 で java の SQLite を始めた。残りの組はまだ実装されていない。
 
+### 30 組の実装がそろった（2026-10-28）
+
+2026-10-27 までに、残っていた 15 組をすべて実装し、各言語の main にマージした。上の「完了の条件」をすべて満たしたので、このマイルストーンを閉じる。ライブラリの公開はまだしていない。メモリと DynamoDB は、6 言語とも前から実装済みである。
+
+| 言語 | SQLite | Spanner | Bigtable |
+|:--|:--|:--|:--|
+| rs | 実装済み（前から） | [rs#344](https://github.com/j5ik2o/event-store-adapter-rs/pull/344) | 実装済み（前から） |
+| js | [js#1103](https://github.com/j5ik2o/event-store-adapter-js/pull/1103) | 実装済み（前から） | [js#1104](https://github.com/j5ik2o/event-store-adapter-js/pull/1104) |
+| java | [java#773](https://github.com/j5ik2o/event-store-adapter-java/pull/773) | [java#778](https://github.com/j5ik2o/event-store-adapter-java/pull/778) | [java#779](https://github.com/j5ik2o/event-store-adapter-java/pull/779) |
+| kotlin | [kotlin#884](https://github.com/j5ik2o/event-store-adapter-kotlin/pull/884) | 同左 | 同左 |
+| scala | [scala#902](https://github.com/j5ik2o/event-store-adapter-scala/pull/902) | 同左 | 同左 |
+| go | [go#467](https://github.com/j5ik2o/event-store-adapter-go/pull/467) | [go#469](https://github.com/j5ik2o/event-store-adapter-go/pull/469) | [go#473](https://github.com/j5ik2o/event-store-adapter-go/pull/473) |
+
+適合試験の成功の件数は次のとおりである。30 組すべてで、失敗 0・未検証 0 である。SQLite は実際のファイル、DynamoDB・Spanner・Bigtable はエミュレーターで実行した。scala は Scala 2.13.18 と 3.6.4 の両方で同じ件数である。
+
+| 言語 | メモリ | DynamoDB | SQLite | Spanner | Bigtable |
+|:--|--:|--:|--:|--:|--:|
+| rs | 64 | 104 | 66 | 77 | 85 |
+| js | 67 | 106 | 68 | 79 | 87 |
+| java | 66 | 106 | 67 | 79 | 87 |
+| kotlin | 66 | 106 | 67 | 79 | 87 |
+| scala | 66 | 106 | 67 | 79 | 87 |
+| go | 66 | 106 | 68 | 79 | 87 |
+
+件数の差は、どれも言語の型による正当な対象外で、理由を付けて記録してある。rs は `SeqNr` が `u64` で負の数を表せないため、どの保存先でも 2 件少ない。java・kotlin・scala の SQLite は、公開する設定で変更フィードを求めることを表せない 1 件が「表現不能」になる。
+
+| 項目 | 決めたこと | 決めた人 |
+|:--|:--|:--|
+| 言語をまたぐ確認 | 6 言語の適合試験の結果を保存先ごとに比べ、件数の差が言語の型による既知の理由だけであることを確かめた。これを言語をまたぐ確認とする。`tools/interop` を SQLite・Spanner・Bigtable に広げる 6 × 6 の読み書きの確認は、今回はしない | オーナー（2026-10-28） |
+| 次の作業 | 公開の準備に進む。java を先に出し、kotlin・scala を java の正式版へ切り替えてから出す。各言語の版は、公開の直前にオーナーの承認を取る | オーナー（2026-10-28） |
+| 後で検討する課題 | (1) Spanner で中断（ABORTED）したトランザクションを、待たずにすぐ再試行している（java・js）。(2) java の SQLite・Spanner・Bigtable の非同期版が、呼び出し元のスレッドで I/O を行って完了済みの Future を返す（kotlin・scala はこれを包む）。どちらも今の仕様に定めがなく、公開する型は変わらない。次のマイルストーンの候補とする | コーディネーター（オーナーに報告） |
+
+kotlin と scala の main は、java の正式版が出るまで、java の main から配られる開発版 `5.0.2-SNAPSHOT` に依存する。
+
 ## 11. リスクと対策
 
 | リスク | 対策 |
