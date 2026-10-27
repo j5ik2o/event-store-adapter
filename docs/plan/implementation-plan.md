@@ -469,6 +469,41 @@ Completion conditions (conditions for the future; they do not describe the curre
 
 As of 2026-10-26, the coordinator started java's SQLite with takt 0.72.0. The remaining combinations are not yet implemented.
 
+<a id="30-組の実装がそろった2026-10-28"></a>
+### All 30 Combinations Implemented (2026-10-28)
+
+By 2026-10-27, all 15 remaining combinations were implemented and merged into the main branch of each language. All the "Completion conditions" above are met, so this milestone is closed. The libraries are not yet published. Memory and DynamoDB were already implemented in all six languages.
+
+| Language | SQLite | Spanner | Bigtable |
+|:--|:--|:--|:--|
+| rs | Implemented (before) | [rs#344](https://github.com/j5ik2o/event-store-adapter-rs/pull/344) | Implemented (before) |
+| js | [js#1103](https://github.com/j5ik2o/event-store-adapter-js/pull/1103) | Implemented (before) | [js#1104](https://github.com/j5ik2o/event-store-adapter-js/pull/1104) |
+| java | [java#773](https://github.com/j5ik2o/event-store-adapter-java/pull/773) | [java#778](https://github.com/j5ik2o/event-store-adapter-java/pull/778) | [java#779](https://github.com/j5ik2o/event-store-adapter-java/pull/779) |
+| kotlin | [kotlin#884](https://github.com/j5ik2o/event-store-adapter-kotlin/pull/884) | Same | Same |
+| scala | [scala#902](https://github.com/j5ik2o/event-store-adapter-scala/pull/902) | Same | Same |
+| go | [go#467](https://github.com/j5ik2o/event-store-adapter-go/pull/467) | [go#469](https://github.com/j5ik2o/event-store-adapter-go/pull/469) | [go#473](https://github.com/j5ik2o/event-store-adapter-go/pull/473) |
+
+The numbers of passed conformance cases are as follows. All 30 combinations finish with 0 failures and 0 unverified. SQLite runs against real files, and DynamoDB, Spanner, and Bigtable run against the emulators. scala has the same numbers on both Scala 2.13.18 and 3.6.4.
+
+| Language | Memory | DynamoDB | SQLite | Spanner | Bigtable |
+|:--|--:|--:|--:|--:|--:|
+| rs | 64 | 104 | 66 | 77 | 85 |
+| js | 67 | 106 | 68 | 79 | 87 |
+| java | 66 | 106 | 67 | 79 | 87 |
+| kotlin | 66 | 106 | 67 | 79 | 87 |
+| scala | 66 | 106 | 67 | 79 | 87 |
+| go | 66 | 106 | 68 | 79 | 87 |
+
+Every difference in the numbers is a legitimate exclusion caused by the language's types, and is recorded with its reason. rs has 2 fewer cases on every storage backend because `SeqNr` is `u64` and cannot hold a negative number. For SQLite in java, kotlin, and scala, 1 case is "unrepresentable" because the public configuration cannot express a request for a change feed.
+
+| Item | Decision | Decided by |
+|:--|:--|:--|
+| Cross-language check | We compared the conformance results of the six languages per storage backend and confirmed that the only differences in the numbers come from the known reasons caused by the language's types. This comparison is the cross-language check. A 6 × 6 read/write check that extends `tools/interop` to SQLite, Spanner, and Bigtable is not done this time | Owner (2026-10-28) |
+| Next work | Move on to preparing the releases. Release java first, and release kotlin and scala after switching them to java's official version. The version of each language is approved by the owner right before it is published | Owner (2026-10-28) |
+| Issues to consider later | (1) Spanner retries an aborted (ABORTED) transaction immediately, without waiting (java and js). (2) java's asynchronous SQLite, Spanner, and Bigtable stores do their I/O on the caller's thread and return a completed Future (kotlin and scala wrap them). Neither is covered by the current specification, and neither changes the public types. They are candidates for the next milestone | Coordinator (reported to the owner) |
+
+Until java's official version is released, the main branches of kotlin and scala depend on the development version `5.0.2-SNAPSHOT` published from java's main branch.
+
 <a id="11-リスクと対策"></a>
 ## 11. Risks and Countermeasures
 
