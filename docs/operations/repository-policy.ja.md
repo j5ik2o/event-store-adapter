@@ -168,18 +168,18 @@ takt を使うリポジトリは、次の配置にそろえる。テンプレー
 |:--|:--|:--|
 | 1 | main の CI | `https://github.com/j5ik2o/<リポジトリ>/actions/workflows/ci.yml/badge.svg?branch=main&event=push`。リンク先は `main` で絞った実行の一覧 |
 | 2 | 公開している版 | shields.io の crates.io（rs）、npm（js）、Maven Central（java・kotlin。scala は `_2.13` と `_3` の 2 つ）、最新の semver のタグ（go） |
-| 3 | API の文書 | docs.rs（rs）、npm の型（js）、`javadoc` と名付けた Maven Central の版のバッジから javadoc.io へのリンク（java・kotlin・scala）、pkg.go.dev（go） |
+| 3 | API の文書 | docs.rs（rs）、npm の型（js）、`javadoc` と名付けた Maven Central の版のバッジから javadoc.io へのリンク（java・scala）、pkg.go.dev（go）。kotlin は、公開する javadoc の jar に API の文書が入るまで置かない（5.1.0 の jar は空） |
 | 4 | 言語ごとの必要な版 | `rust-version` の MSRV（rs）、`engines.node`（js）、Java 11 以上（java・kotlin・scala）、Kotlin の版（kotlin）、Scala 2.13 \| 3（scala）、`go.mod` の `go` の行（go） |
 | 5 | 共通契約 v5 | ハブのタグ `contract-v5` へのリンク |
 | 6 | 対応する保存先 | メモリ・DynamoDB・SQLite・Spanner・Bigtable |
-| 7 | Renovate | |
+| 7 | Renovate | `https://img.shields.io/badge/renovate-enabled-brightgreen.svg`。リンク先は `https://renovatebot.com` |
 | 8 | ライセンス | `MIT OR Apache-2.0`。README の License の節へのリンク |
 
 - CI のバッジに、古い書き方 `/workflows/<名前>/badge.svg` を使わない。どのブランチの実行でも最後のものを映すので、Renovate の変更提案が失敗すると、main が正常でも「failing」になる（2026-10-28 の rs）。
 - バッジは shields.io か、そのサービスの公式のもの（GitHub Actions・docs.rs・pkg.go.dev）を使う。配信をやめた配信元は使わない。`maven-badges.herokuapp.com`（404）と `tokei.rs`（応答なし）は 2026-10-28 に外した。
-- バッジを足したり変えたりする前に、画像を取得して、`unknown`・`not found`・`invalid` ではなく、版や `passing` が出ることを確かめる。shields.io や GitHub は、対象がないときも「ない」と書いた画像を 200 で返すので、200 だけでは足りない。javadoc.io の自前のバッジは、2026-10-28 に新しい版で `unknown` と出たので、javadoc のバッジは shields.io の Maven Central の版に `javadoc` と名付けて使う。
+- バッジを足したり変えたりする前に、画像を取得して、期待する値が出ることを確かめる。版のバッジは版、CI は `passing`、ほかのバッジは決めた名前と値である。`unknown`・`not found`・`invalid` が出てはいけない。リンク先に中身があること（たとえば javadoc の jar が空でないこと）も確かめる。shields.io や GitHub は、対象がないときも「ない」と書いた画像を 200 で返すので、200 だけでは足りない。javadoc.io の自前のバッジは、2026-10-28 に新しい版で `unknown` と出たので、javadoc のバッジは shields.io の Maven Central の版に `javadoc` と名付けて使う。
 
-ライセンスは、2026-10-28 のオーナーの決定で、6 言語とも MIT と Apache-2.0 の二重（MIT OR Apache-2.0）にする。各リポジトリは `LICENSE-MIT` と `LICENSE-APACHE` を置き、公開する記述に両方を書く（Cargo の `license = "MIT OR Apache-2.0"`、npm の `"license": "MIT OR Apache-2.0"`、POM と sbt の `licenses` に両方）。README の License の節にも両方を書く。2026-10-28 より前に公開した版は、公開したときの記述のままである。
+ライセンスは、2026-10-28 のオーナーの決定で、6 言語とも MIT と Apache-2.0 の二重（MIT OR Apache-2.0）にする。各リポジトリは `LICENSE-MIT` と `LICENSE-APACHE` を置き、公開する記述に両方を書く（Cargo の `license = "MIT OR Apache-2.0"`、npm の `"license": "MIT OR Apache-2.0"`、POM と sbt の `licenses` に両方）。README の License の節にも両方を書く。`go.mod` にはライセンスを書く欄がないので、go は 2 つのライセンスのファイルと README だけで示す。pkg.go.dev は、そのファイルからライセンスを判定する。2026-10-28 より前に公開した版は、公開したときの記述のままである。
 
 ## 適合状況（2026-10-23）
 
