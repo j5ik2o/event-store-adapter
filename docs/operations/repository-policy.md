@@ -174,6 +174,28 @@ Repositories that use takt align to the following layout. The templates are in `
 
 - In the run on 2026-10-26, when takt used its default v1 connection method against OpenCode 2.1.1, it failed with `OpenCode CLI opencode v2.1.1 is incompatible with TAKT’s v1 transport. Set TAKT_OPENCODE_VERSION=v1 or v2 and TAKT_OPENCODE_PATH to a matching CLI.`. On a machine that uses this version of OpenCode, pass the environment variable `TAKT_OPENCODE_VERSION=v2` and `TAKT_OPENCODE_PATH`, pointing to the OpenCode executable of that version, when starting takt. Do not modify `run-takt.sh`. Decide the executable's path per machine and do not write it in the repository. The default connection method was v1 up to takt 0.68.0, and in 0.72.0 the default is v2. On a machine with OpenCode 2.x, the specification is no longer required (passing `TAKT_OPENCODE_VERSION=v2` and `TAKT_OPENCODE_PATH` explicitly also works). On a machine that uses OpenCode 1.x, pass `TAKT_OPENCODE_VERSION=v1` and `TAKT_OPENCODE_PATH`, pointing to the OpenCode 1.x executable.
 
+<a id="9-readme-のバッジとライセンス"></a>
+## 9. README Badges and License
+
+Every language repository puts one row of badges right below the title of `README.md` and `README.ja.md`. In js, `packages/library/README.md` and `packages/library/README.ja.md`, which npm shows, carry the same row. The English and Japanese files have the same row, in this order:
+
+| Order | Badge | Source |
+|:--|:--|:--|
+| 1 | CI of main | `https://github.com/j5ik2o/<repository>/actions/workflows/ci.yml/badge.svg?branch=main&event=push`, linking to the workflow runs filtered by `main` |
+| 2 | Published version | shields.io: crates.io (rs), npm (js), Maven Central (java and kotlin; scala shows `_2.13` and `_3` as two badges), the latest semver tag (go) |
+| 3 | API documentation | docs.rs (rs), npm types (js), javadoc.io linked from a Maven Central version badge labelled `javadoc` (java and scala), pkg.go.dev (go). kotlin has none until its published javadoc jar contains API documentation (the 5.1.0 jar is empty) |
+| 4 | Language-specific requirements | MSRV from `rust-version` (rs), `engines.node` (js), Java 11+ (java, kotlin, and scala), the Kotlin version (kotlin), Scala 2.13 \| 3 (scala), the `go` directive of `go.mod` (go) |
+| 5 | Common contract v5 | Links to the hub's tag `contract-v5` |
+| 6 | Supported storage backends | memory, DynamoDB, SQLite, Spanner, and Bigtable |
+| 7 | Renovate | `https://img.shields.io/badge/renovate-enabled-brightgreen.svg`, linking to `https://renovatebot.com` |
+| 8 | License | `MIT OR Apache-2.0`, linking to the License section of the README |
+
+- Do not use the old CI badge form `/workflows/<name>/badge.svg`. It shows the latest run of any branch, so a failing Renovate pull request turns it to "failing" even when main is green (rs on 2026-10-28).
+- Use shields.io or the official badge of the service (GitHub Actions, docs.rs, pkg.go.dev). Hosts that no longer serve badges are not used: `maven-badges.herokuapp.com` (404) and `tokei.rs` (no response) were removed on 2026-10-28.
+- Before adding or changing a badge, fetch the image and confirm that it shows the expected value: a version for version badges, `passing` for CI, and the expected label and value for the other badges. It must not show `unknown`, `not found`, or `invalid`. Also confirm that the linked page has the content (for example, that a javadoc jar is not empty). A response of 200 alone is not enough, because shields.io and GitHub return an image that says the target is missing. javadoc.io's own badge showed `unknown` for new versions on 2026-10-28, so the javadoc badge uses the Maven Central version of shields.io with the label `javadoc`.
+
+The owner decided on 2026-10-28 that all six languages are dual-licensed under MIT OR Apache-2.0. Each repository has `LICENSE-MIT` and `LICENSE-APACHE`, its package metadata declares both (Cargo `license = "MIT OR Apache-2.0"`, npm `"license": "MIT OR Apache-2.0"`, and both licenses in the POM and in sbt's `licenses`), and the License section of the README states both. `go.mod` has no field for a license, so go states it only by the two license files and the README; pkg.go.dev detects the license from those files. Versions published before 2026-10-28 keep the metadata they were published with.
+
 <a id="適合状況2026-10-23"></a>
 ## Conformance Status (2026-10-23)
 
