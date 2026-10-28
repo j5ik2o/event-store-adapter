@@ -160,6 +160,27 @@ takt を使うリポジトリは、次の配置にそろえる。テンプレー
 
 - 2026-10-26 の実行で、OpenCode 2.1.1 に対して takt が既定の v1 の接続方式を使うと、`OpenCode CLI opencode v2.1.1 is incompatible with TAKT’s v1 transport. Set TAKT_OPENCODE_VERSION=v1 or v2 and TAKT_OPENCODE_PATH to a matching CLI.` と失敗した。この版の OpenCode を使うマシンでは、takt の起動時に環境変数 `TAKT_OPENCODE_VERSION=v2` と、その版の OpenCode の実行ファイルを指す `TAKT_OPENCODE_PATH` を渡す。`run-takt.sh` は改変しない。実行ファイルのパスはマシンごとに決め、リポジトリに書かない。接続方式の既定は takt 0.68.0 までは v1 で、0.72.0 では v2 になった。OpenCode 2.x のマシンでは指定が不要になった（`TAKT_OPENCODE_VERSION=v2` と `TAKT_OPENCODE_PATH` を明示しても動く）。OpenCode 1.x を使うマシンでは、`TAKT_OPENCODE_VERSION=v1` と、1.x の実行ファイルを指す `TAKT_OPENCODE_PATH` を渡す。
 
+## 9. README のバッジとライセンス
+
+各言語のリポジトリは、`README.md` と `README.ja.md` の題名のすぐ下に、バッジを 1 行並べる。js では、npm が表示する `packages/library/README.md` と `packages/library/README.ja.md` にも同じ行を置く。英語版と日本語版で同じ行を、次の順に並べる。
+
+| 順 | バッジ | 出どころ |
+|:--|:--|:--|
+| 1 | main の CI | `https://github.com/j5ik2o/<リポジトリ>/actions/workflows/ci.yml/badge.svg?branch=main&event=push`。リンク先は `main` で絞った実行の一覧 |
+| 2 | 公開している版 | shields.io の crates.io（rs）、npm（js）、Maven Central（java・kotlin。scala は `_2.13` と `_3` の 2 つ）、最新の semver のタグ（go） |
+| 3 | API の文書 | docs.rs（rs）、npm の型（js）、`javadoc` と名付けた Maven Central の版のバッジから javadoc.io へのリンク（java・kotlin・scala）、pkg.go.dev（go） |
+| 4 | 言語ごとの必要な版 | `rust-version` の MSRV（rs）、`engines.node`（js）、Java 11 以上（java・kotlin・scala）、Kotlin の版（kotlin）、Scala 2.13 \| 3（scala）、`go.mod` の `go` の行（go） |
+| 5 | 共通契約 v5 | ハブのタグ `contract-v5` へのリンク |
+| 6 | 対応する保存先 | メモリ・DynamoDB・SQLite・Spanner・Bigtable |
+| 7 | Renovate | |
+| 8 | ライセンス | `MIT OR Apache-2.0`。README の License の節へのリンク |
+
+- CI のバッジに、古い書き方 `/workflows/<名前>/badge.svg` を使わない。どのブランチの実行でも最後のものを映すので、Renovate の変更提案が失敗すると、main が正常でも「failing」になる（2026-10-28 の rs）。
+- バッジは shields.io か、そのサービスの公式のもの（GitHub Actions・docs.rs・pkg.go.dev）を使う。配信をやめた配信元は使わない。`maven-badges.herokuapp.com`（404）と `tokei.rs`（応答なし）は 2026-10-28 に外した。
+- バッジを足したり変えたりする前に、画像を取得して、`unknown`・`not found`・`invalid` ではなく、版や `passing` が出ることを確かめる。shields.io や GitHub は、対象がないときも「ない」と書いた画像を 200 で返すので、200 だけでは足りない。javadoc.io の自前のバッジは、2026-10-28 に新しい版で `unknown` と出たので、javadoc のバッジは shields.io の Maven Central の版に `javadoc` と名付けて使う。
+
+ライセンスは、2026-10-28 のオーナーの決定で、6 言語とも MIT と Apache-2.0 の二重（MIT OR Apache-2.0）にする。各リポジトリは `LICENSE-MIT` と `LICENSE-APACHE` を置き、公開する記述に両方を書く（Cargo の `license = "MIT OR Apache-2.0"`、npm の `"license": "MIT OR Apache-2.0"`、POM と sbt の `licenses` に両方）。README の License の節にも両方を書く。2026-10-28 より前に公開した版は、公開したときの記述のままである。
+
 ## 適合状況（2026-10-23）
 
 2026-10-03 の時点で、1〜4 章と 8 章は、6 リポジトリすべてで適合していた。必須チェックは `CI Success` だけで、strict が有効（会話の解決の必須は無効）、マージは squash のみ、CI の全ジョブに `timeout-minutes` があり、workflow で動く AI レビューと独自のスレッドのゲートはない。同日に足した 1 章の「公開の workflow」には、java・kotlin・js・scala・rs が適合している（scala は #853、js は手動実行の CI を除く #990、rs は #239 も含む）。go はパッケージの登録先に公開しないので対象外。8 章の takt の版は、同日に 6 リポジトリとも 0.68.0 にそろえ、Renovate では更新しない設定にした（rs #240、js #992、java #686、scala #854、kotlin #822、go #383）。
