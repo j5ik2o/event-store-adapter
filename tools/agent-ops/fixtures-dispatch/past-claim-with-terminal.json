@@ -1,0 +1,10 @@
+{
+  "claims": [
+    {
+      "track": "agent-ops-tool",
+      "terminal": "term_missing",
+      "worktree": "/Users/j5ik2o/orca/workspaces/event-store-adapter/agent-ops-dispatch",
+      "title": "agent-ops tool"
+    }
+  ]
+}
