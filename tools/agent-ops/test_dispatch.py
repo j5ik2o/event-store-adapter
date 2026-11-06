@@ -80,7 +80,51 @@ class DispatchTests(unittest.TestCase):
             result.stderr,
         )
 
+    def test_plan_rejects_a_non_string_phase(self):
+        plan = {
+            "goal": "Reject a phase that is not a string.",
+            "tracks": [
+                {
+                    "id": "alpha",
+                    "phase": 1,
+                    "worktree": "wt-alpha",
+                    "scope": ["tools/agent-ops"],
+                    "verification": "cmd",
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory(prefix="dispatch-phase-") as directory:
+            path = Path(directory) / "plan.json"
+            path.write_text(json.dumps(plan), encoding="utf-8")
+            result = self.run_dispatch("plan", path)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("track alpha: phase must be a non-empty string", result.stderr)
+
     # --- claims ---
+
+    def test_truncated_terminal_list_is_refused(self):
+        terminals = {
+            "ok": True,
+            "result": {
+                "terminals": [
+                    {"handle": "term_any", "worktreePath": "/tmp/wt", "title": "any"}
+                ],
+                "truncated": True,
+            },
+        }
+        with tempfile.TemporaryDirectory(prefix="dispatch-truncated-") as directory:
+            path = Path(directory) / "terminals.json"
+            path.write_text(json.dumps(terminals), encoding="utf-8")
+            result = self.run_dispatch(
+                "claims",
+                FIXTURES / "correct-claims.json",
+                "--terminals",
+                path,
+            )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("returned a truncated list", result.stderr)
+        self.assertIn("fetch the full list before judging claims", result.stderr)
+        self.assertNotIn("not listed by Orca", result.stderr)
 
     def test_past_claim_without_terminal_fails(self):
         result = self.run_dispatch(
