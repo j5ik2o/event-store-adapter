@@ -13,7 +13,10 @@ worktrees, overlapping scopes, and duplicate verification commands.
 `dispatch.py claims CLAIMS.json --from-orca` checks the terminals a report claims
 against `orca terminal list --json`. Every claim must name a handle that Orca
 lists, in the named worktree, with the named title. Use `--terminals FILE`
-instead of `--from-orca` to check a saved copy.
+instead of `--from-orca` to check a saved copy. If the terminal list is
+truncated, the check refuses to judge instead of calling a real terminal
+missing; `--from-orca` requests the full list, and `--terminals` must be a full
+capture.
 
 Plan shape:
 

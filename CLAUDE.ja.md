@@ -53,6 +53,7 @@ takt はエージェントとして Orca に認識されないので、指示の
    - 指示書を `-t "$(cat <指示書>)"` で渡さない。takt は `-t` の文字列をそのまま PR のタイトルとコミットのメッセージ（`takt: <全文>`）にするので、長い指示書では PR のタイトルが長すぎて PR を作れない（2026-10-06 の試運転で、push の後に PR の作成だけが失敗した）。`-i` なら、PR のタイトルは `[#<番号>] <Issue のタイトル>`、コミットは `feat: <Issue のタイトル> (#<番号>)` になる（2026-10-06 に ideo-plus/takt-workflows#65 で、PR まで自動で作られることを確かめた）。squash でマージするときに、指揮役が Conventional Commits のタイトルに付け直す。
    - 出力はファイルにリダイレクトしない。takt は `.takt/runs/<run>/` に記録を残す。最後の `echo "takt-exit: $?"` で、端末に takt の終了コードを残す。端末は閉じないので、終わった後も `orca terminal read` で出力を読める。
    - 起動の直後に `orca terminal read` で、`run-takt: TAKT_CONFIG_DIR:` がワークツリーの `.takt/home` を指していることを確かめる。`~/.takt/` は読ませず、書き換えもしない。
+   - 起動と主張は別である。起動の前に「委任の証拠」の計画の検査を、報告の前に主張の検査を実行する。Orca が一覧に出さない端末ハンドルは、起動ではない。
 4. `orca orchestration dispatch --task <課題> --to <端末>` で、課題を端末に結び付ける。注入（`--inject`）はしない。
 5. 監督: 実行中は `orca terminal read --terminal <端末>` と takt の実行記録（`.takt/runs/`）で、段の切り替わり・使ったモデル・エラーを見る。段の切り替わりは、実行記録の `logs/*.jsonl` の `step_start`・`step_complete`・`workflow_complete`・`workflow_abort` で分かる。終わりは、`orca terminal read` の出力に `takt-exit:` が出たことで判断する。範囲の外の作業や長引きを見つけたら、`orca terminal send --terminal <端末> --text $'\x03' --interrupt` で止め、範囲を絞って起動し直す。同じマシンで別の takt が動いていることがあるので、プロセスを直接止めるときは、ブランチ名などで自分の takt だと確かめてからにする。
 6. 受け入れ: 差分・成果物・CI を指示書の受け入れの条件と照らして確かめる。結果は `orca orchestration task-update --id <課題> --status completed|failed --result <要約>` で記録する。その後、端末（`orca terminal close`）とワークツリーを閉じる（下の「後片付け」）。
