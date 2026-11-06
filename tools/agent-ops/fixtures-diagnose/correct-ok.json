@@ -1,0 +1,23 @@
+{
+  "tool": "ollama",
+  "host": "Mac.lan",
+  "surface": "local-shell",
+  "path_entries": [
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    "/usr/bin",
+    "/usr/sbin"
+  ],
+  "which": "/opt/homebrew/bin/ollama",
+  "resolved": "/opt/homebrew/Cellar/ollama/0.41.0/bin/ollama",
+  "resolved_exists": true,
+  "processes": [
+    {
+      "pid": 1201,
+      "command": "ollama serve",
+      "exe": "/opt/homebrew/Cellar/ollama/0.41.0/bin/ollama",
+      "exe_exists": true
+    }
+  ],
+  "version_output": "ollama version is 0.41.0"
+}
