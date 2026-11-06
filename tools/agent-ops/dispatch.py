@@ -23,7 +23,7 @@ from pathlib import Path
 OK_PLAN = "dispatch plan: OK ({count} tracks)"
 OK_CLAIMS = "dispatch claims: OK ({count} claims)"
 
-PLAN_FIELDS = ("id", "phase", "worktree", "scope", "verification")
+PLAN_FIELDS = ("id", "worktree", "scope", "verification")
 CLAIM_FIELDS = ("track", "terminal", "worktree", "title")
 
 
@@ -98,6 +98,10 @@ def check_plan(document: object) -> list[str]:
         if not isinstance(scope, list) or not all(isinstance(path, str) and path for path in scope):
             raise DispatchError(f"{where}.scope must be a list of non-empty strings")
 
+        phase = track.get("phase")
+        if not isinstance(phase, str) or not phase:
+            violations.append(f"track {track_id}: phase must be a non-empty string")
+
         if track_id in seen_ids:
             violations.append(f"track {track_id}: duplicate id")
         else:
@@ -162,8 +166,18 @@ def terminals_from(document: object) -> list:
         raise DispatchError("`orca terminal list --json` reported ok=false")
     result = document.get("result")
     if isinstance(result, dict) and isinstance(result.get("terminals"), list):
+        if result.get("truncated") is True:
+            raise DispatchError(
+                "`orca terminal list --json` returned a truncated list;"
+                " fetch the full list before judging claims"
+            )
         return result["terminals"]
     if isinstance(document.get("terminals"), list):
+        if document.get("truncated") is True:
+            raise DispatchError(
+                "`orca terminal list --json` returned a truncated list;"
+                " fetch the full list before judging claims"
+            )
         return document["terminals"]
     raise DispatchError(
         "terminals JSON is not the output of `orca terminal list --json` (result.terminals)"
@@ -224,7 +238,7 @@ def read_terminals(path: Path | None, from_orca: bool) -> object:
     if from_orca:
         try:
             completed = subprocess.run(
-                ["orca", "terminal", "list", "--json"],
+                ["orca", "terminal", "list", "--json", "--limit", "10000"],
                 capture_output=True,
                 text=True,
                 check=False,
