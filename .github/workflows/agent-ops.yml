@@ -1,0 +1,28 @@
+# Checks for the coordinator's tools under tools/agent-ops.
+# This is not the group CI: it only runs the tool tests, and it is not a
+# required check or part of branch protection.
+name: agent-ops
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-ops-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Agent operation checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run the checks
+        run: python3 -m unittest discover -s tools/agent-ops -p 'test_*.py'
