@@ -1,0 +1,19 @@
+{
+  "goal": "Check a dispatch plan whose tracks have distinct worktrees, scopes, and verifications.",
+  "tracks": [
+    {
+      "id": "agent-ops-tool",
+      "phase": "implement",
+      "worktree": "event-store-adapter-agent-ops",
+      "scope": ["tools/agent-ops/"],
+      "verification": "python3 -m unittest discover -s tools/agent-ops -p 'test_*.py'"
+    },
+    {
+      "id": "agent-ops-docs",
+      "phase": "review",
+      "worktree": "event-store-adapter-agent-ops-docs",
+      "scope": ["docs/operations/"],
+      "verification": "grep -n 'dispatch' docs/operations/repository-policy.md"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "goal": "Replay the past mistake where two tracks were each told to run the finished full test suite.",
+  "tracks": [
+    {
+      "id": "agent-ops-tool",
+      "phase": "implement",
+      "worktree": "event-store-adapter-agent-ops",
+      "scope": ["tools/agent-ops/"],
+      "verification": "python3 -m unittest discover -s tools -p 'test_*.py'"
+    },
+    {
+      "id": "agent-ops-review",
+      "phase": "review",
+      "worktree": "event-store-adapter-agent-ops-review",
+      "scope": ["docs/"],
+      "verification": "python3 -m unittest discover -s tools -p 'test_*.py'"
+    }
+  ]
+}
