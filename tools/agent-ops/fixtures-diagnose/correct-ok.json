@@ -11,6 +11,7 @@
   "which": "/opt/homebrew/bin/ollama",
   "resolved": "/opt/homebrew/Cellar/ollama/0.41.0/bin/ollama",
   "resolved_exists": true,
+  "which_resolved": "/opt/homebrew/Cellar/ollama/0.41.0/bin/ollama",
   "processes": [
     {
       "pid": 1201,

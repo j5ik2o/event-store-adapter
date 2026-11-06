@@ -45,10 +45,14 @@ OBSERVATION_KEYS = (
     "which",
     "resolved",
     "resolved_exists",
+    "which_resolved",
     "processes",
     "version_output",
 )
 PROCESS_KEYS = ("pid", "command", "exe", "exe_exists")
+# 古い観測には無い。無い観測は「which の解決先を確認していない」ものとして扱い、
+# ok とは言わない（保守側に倒す）。
+OPTIONAL_OBSERVATION_KEYS = ("which_resolved",)
 
 
 @dataclass(frozen=True)
@@ -92,10 +96,12 @@ def verdict(observation: Mapping[str, Any]) -> Verdict:
     which = observation.get("which")
     resolved = observation.get("resolved")
     resolved_exists = bool(observation.get("resolved_exists"))
+    which_resolved = observation.get("which_resolved")
     processes = list(observation.get("processes") or [])
 
-    # PATH から引けて、その実体も確認できたときだけ「動く」と言える。
-    if which and resolved and resolved_exists:
+    # PATH の引き当てと、そこから解決した実体が同じものを指し、その実体が
+    # 存在するときだけ「動く」と言える。どちらか一方だけでは足りない。
+    if which and resolved and resolved_exists and which_resolved == resolved:
         return _verdict(
             VERDICT_OK,
             f"{tool}: found on PATH as {resolved}",
@@ -117,20 +123,21 @@ def verdict(observation: Mapping[str, Any]) -> Verdict:
             f"{tool}: the executable of a running process no longer exists ({details})",
         )
 
+    # PATH では引けない（または which の解決先が実体ではない）が、既知のパスか
+    # プロセスの実行ファイルに実体がある。PATH の層だけを見て「無い」とは言わない。
+    existing = _existing_paths(observation)
+    if existing:
+        return _verdict(
+            VERDICT_PATH_RESOLUTION_FAILURE,
+            f"{tool}: not resolvable through PATH, but the executable exists at {', '.join(existing)}",
+        )
+
     # PATH の引き当てはあったのに実体を確認できない食い違い。実体がどこかにある
     # かもしれないので「無い」とは言わない。
     if which:
         return _verdict(
             VERDICT_INCONSISTENT,
             f"{tool}: PATH lookup returned {which}, but no executable entity was verified at {resolved or which}",
-        )
-
-    # PATH では引けないが、既知のパスかプロセスの実行ファイルに実体がある。
-    existing = _existing_paths(observation)
-    if existing:
-        return _verdict(
-            VERDICT_PATH_RESOLUTION_FAILURE,
-            f"{tool}: not resolvable through PATH, but the executable exists at {', '.join(existing)}",
         )
 
     # PATH で引けず、実体もなく、プロセスも動いていない。この状態だけが「無い」。
@@ -155,17 +162,27 @@ def known_path_entries() -> list[str]:
     return entries
 
 
-def _resolve(tool: str, which: str | None, path_entries: list[str]) -> tuple[str | None, bool]:
-    candidates: list[str] = []
-    if which:
-        candidates.append(which)
-    candidates.extend(os.path.join(entry, tool) for entry in path_entries)
-    for candidate in candidates:
+def _resolve(
+    tool: str, which: str | None, path_entries: list[str]
+) -> tuple[str | None, bool, str | None]:
+    """(resolved, resolved_exists, which_resolved) を返す。
+
+    which の指す先に実体があれば、その realpath を resolved と which_resolved の
+    両方に入れる。which が壊れているときは which_resolved を None のままにし、
+    resolved には既知のパスで見つかった実体を入れる（無ければ壊れたパスを返し、
+    実体なしとする）。PATH 側と実体側の食い違いを消さずに残すため。
+    """
+
+    if which and os.path.exists(which):
+        which_resolved = os.path.realpath(which)
+        return which_resolved, True, which_resolved
+    for entry in path_entries:
+        candidate = os.path.join(entry, tool)
         if os.path.exists(candidate):
-            return os.path.realpath(candidate), True
+            return os.path.realpath(candidate), True, None
     if which:
-        return os.path.realpath(which), False
-    return None, False
+        return os.path.realpath(which), False, None
+    return None, False, None
 
 
 def _process_exe(pid: int) -> str | None:
@@ -253,9 +270,9 @@ def observe(tool: str) -> dict[str, Any]:
 
     path_entries = known_path_entries()
     which = shutil.which(tool)
-    resolved, resolved_exists = _resolve(tool, which, path_entries)
+    resolved, resolved_exists, which_resolved = _resolve(tool, which, path_entries)
     processes = _processes(tool)
-    executable = which or (resolved if resolved_exists else None)
+    executable = which_resolved or (resolved if resolved_exists else None)
     return {
         "tool": tool,
         "host": socket.gethostname(),
@@ -264,6 +281,7 @@ def observe(tool: str) -> dict[str, Any]:
         "which": which,
         "resolved": resolved,
         "resolved_exists": resolved_exists,
+        "which_resolved": which_resolved,
         "processes": processes,
         "version_output": _version_output(executable),
     }
@@ -275,7 +293,11 @@ def load_observation(path: Path) -> dict[str, Any]:
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError(f"{path}: observation must be a JSON object")
-    missing = [key for key in OBSERVATION_KEYS if key not in data]
+    missing = [
+        key
+        for key in OBSERVATION_KEYS
+        if key not in data and key not in OPTIONAL_OBSERVATION_KEYS
+    ]
     if missing:
         raise ValueError(f"{path}: missing key(s): {', '.join(missing)}")
     if not isinstance(data["tool"], str) or not data["tool"]:
@@ -287,8 +309,8 @@ def load_observation(path: Path) -> dict[str, Any]:
         isinstance(entry, str) for entry in data["path_entries"]
     ):
         raise ValueError(f"{path}: path_entries must be a list of strings")
-    for key in ("which", "resolved", "version_output"):
-        if data[key] is not None and not isinstance(data[key], str):
+    for key in ("which", "resolved", "version_output", "which_resolved"):
+        if key in data and data[key] is not None and not isinstance(data[key], str):
             raise ValueError(f"{path}: {key} must be a string or null")
     if not isinstance(data["resolved_exists"], bool):
         raise ValueError(f"{path}: resolved_exists must be a boolean")

@@ -11,6 +11,7 @@
   "which": null,
   "resolved": "/opt/homebrew/bin/ollama",
   "resolved_exists": true,
+  "which_resolved": null,
   "processes": [],
   "version_output": null
 }

@@ -70,9 +70,30 @@ class VerdictFromFixturesTest(unittest.TestCase):
         self.assertEqual(result.name, diagnose.VERDICT_NOT_INSTALLED)
         self.assertEqual(result.exit_code, 1)
 
+    def test_broken_which_with_entity_elsewhere_is_not_ok(self):
+        observation = {
+            "tool": "ollama",
+            "host": "h",
+            "surface": "s",
+            "path_entries": ["/usr/bin"],
+            "which": "/usr/bin/ollama",
+            "resolved": "/opt/homebrew/bin/ollama",
+            "resolved_exists": True,
+            "processes": [],
+            "version_output": None,
+        }
+
+        result = diagnose.verdict(observation)
+
+        self.assertNotEqual(result.name, diagnose.VERDICT_OK)
+        self.assertEqual(result.name, diagnose.VERDICT_PATH_RESOLUTION_FAILURE)
+        self.assertEqual(result.exit_code, 1)
+        self.assertIn("/opt/homebrew/bin/ollama", result.message)
+
     def test_which_without_entity_is_inconsistent(self):
         observation = load_fixture("correct-ok.json")
         observation["resolved_exists"] = False
+        observation["processes"] = []
 
         result = diagnose.verdict(observation)
 
