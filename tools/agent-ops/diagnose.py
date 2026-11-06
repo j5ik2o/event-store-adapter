@@ -107,6 +107,14 @@ def verdict(observation: Mapping[str, Any]) -> Verdict:
             f"{tool}: found on PATH as {resolved}",
         )
 
+    # 旧形式の観測で、which も実体もあるのに「which の解決先」を観測していない
+    # もの。PATH と実体の層を突き合わせていないので ok とは言わない。
+    if which and resolved_exists and "which_resolved" not in observation:
+        return _verdict(
+            VERDICT_INCONSISTENT,
+            f"{tool}: PATH lookup returned {which} and an entity exists at {resolved}, but this observation has no PATH-resolution evidence, so it cannot be called ok",
+        )
+
     # 走っているプロセスの実行ファイルが消えているなら、PATH の引き当てとは
     # 別の話として、その PID と消えたパスを出す。
     missing = [

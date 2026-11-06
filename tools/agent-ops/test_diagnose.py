@@ -79,6 +79,7 @@ class VerdictFromFixturesTest(unittest.TestCase):
             "which": "/usr/bin/ollama",
             "resolved": "/opt/homebrew/bin/ollama",
             "resolved_exists": True,
+            "which_resolved": None,
             "processes": [],
             "version_output": None,
         }
@@ -89,6 +90,17 @@ class VerdictFromFixturesTest(unittest.TestCase):
         self.assertEqual(result.name, diagnose.VERDICT_PATH_RESOLUTION_FAILURE)
         self.assertEqual(result.exit_code, 1)
         self.assertIn("/opt/homebrew/bin/ollama", result.message)
+
+    def test_legacy_observation_without_path_resolution_is_inconsistent(self):
+        observation = load_fixture("correct-ok.json")
+        observation.pop("which_resolved")
+
+        result = diagnose.verdict(observation)
+
+        self.assertEqual(result.name, diagnose.VERDICT_INCONSISTENT)
+        self.assertEqual(result.exit_code, 1)
+        self.assertIn("PATH", result.message)
+        self.assertIn("evidence", result.message)
 
     def test_which_without_entity_is_inconsistent(self):
         observation = load_fixture("correct-ok.json")
