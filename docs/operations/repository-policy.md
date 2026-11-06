@@ -120,13 +120,14 @@ Placed on 2026-10-15. The owner decided the method and scope. This is because on
 
 - The base configuration is common to all repositories. Based on `config:recommended`, minor, patch, pin, digest, and devDependencies updates are merged automatically if the required checks pass.
 - Major updates are not merged automatically.
-- Renovate is not installed in this repository (the hub). It has no CI or branch protection, and the only things to update are the versions pinned under `tools/` (the conformance test tool, the interoperability tool, and the measurement records). These are pinned as records of measurements, so bumping a version would make them inconsistent with the records (the owner decided this on 2026-10-13 and closed PR #20).
+- Renovate is not installed in this repository (the hub). It has no branch protection, and its only CI is the `agent-ops` workflow that runs the tests under `tools/agent-ops` (added on 2026-11-06 by the owner's instruction). The only things to update are the versions pinned under `tools/` (the conformance test tool, the interoperability tool, and the measurement records). These are pinned as records of measurements, so bumping a version would make them inconsistent with the records (the owner decided this on 2026-10-13 and closed PR #20).
 - The coordinator periodically takes stock of Renovate PRs that remain open. Merge those whose CI passes. For those that do not, have a worker fix them, or record the reason for not acting in the block setting of `renovate.json` with a `description` (the same form as the block on the JUnit major update in java). Only escalate to the owner what needs a decision.
 
 <a id="6-エージェントによる運用"></a>
 ## 6. Operation by Agents
 
 - Changes to each repository are made by the session of this repository (the coordinator) instructing workers through Orca's orchestration. The owner interacts only with the coordinator.
+- Before accepting a launch claim, the coordinator checks it against Orca's terminal list. Before calling a tool unavailable, it checks the process, the executable, and the PATH separately. Both checks are in `tools/agent-ops/`.
 - The coordinator (the command post) runs on Opus 5.5 and concentrates on planning, decisions, and overseeing review. Actual work is delegated to models and harnesses other than Opus (Sonnet 5.5, and models of Ollama Cloud and OpenCode Go). As exceptions, the design of takt (planning and re-planning), the adjudication and final judgment of reviews, and steps with no assignment run on Opus 5.5 (the user instructed this on 2026-10-06; chapter 8). GPT-6.1-Sol is not assigned to regular steps from 2026-10-06. On 2026-10-07 the owner instructed that it be added as a switching candidate for usage limits. The means of actual work may be either Orca's orchestration or takt (the owner instructed this on 2026-10-05).
 - Workers go as far as creating a PR and do not merge. The coordinator merges, after checking the diff and the check results, in line with this policy.
 - Do not use aidlc. takt may be used.

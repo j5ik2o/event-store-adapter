@@ -16,6 +16,14 @@ The session in this repository acts as the coordinator for work across the event
 - The actual work is done by launching takt through Orca orchestration. Do not launch the worker agents (Codex, Claude Code, OpenCode) directly from Orca (the user instructed this on 2026-10-05). The coordinator supervises takt.
 - The use of models inside takt follows chapter 8 of the operations policy (the template is `tools/takt/runtime.yaml`). Design (planning and re-planning), arbitration, final judgment, and the default steps use Opus 5.5; tests, implementation, and fixes use Sonnet 5.5; and the parallel reviewers are fixed, one role each, to Sonnet 5.5, DeepSeek V4.1 Flash, and GLM 5.3 Flash.
 
+<a id="委任の証拠"></a>
+### Dispatch evidence
+
+- Before launching a set of workers, write the plan to a file and run `python3 tools/agent-ops/dispatch.py plan <plan.json>`. The plan gives each track its worktree, write scope, and verification command. The check rejects duplicate ids, duplicate worktrees, overlapping write scopes, and two tracks that run the same verification.
+- Before reporting that a worker was launched, write the claims to a file and run `python3 tools/agent-ops/dispatch.py claims <claims.json> --from-orca`. Each claim names the track, the Orca terminal handle, the worktree, and the terminal title. A handle that Orca does not list, or that runs in another worktree, is not evidence of a launch. Do not report the launch until this check passes.
+- The shapes of the plan and claims files are in [`tools/agent-ops/README.md`](tools/agent-ops/README.md).
+- When the owner directs direct workers rather than takt, launch each one in an Orca terminal named after its track with `ollama launch claude --model deepseek-v4.1-flash:cloud -- --dangerously-skip-permissions`, and use the same claims check. The terminal handle is the evidence, not the sentence in the report.
+
 <a id="ワークフローの選び方"></a>
 ### Choosing a workflow
 
@@ -63,7 +71,7 @@ Because takt is not recognized by Orca as an agent, there is no instruction inje
 
 - A work order contains the target, what to change, constraints, the write scope, the acceptance conditions, and the verification procedure.
 - The verification procedure must not contradict the constraints and acceptance conditions. When takt's planning step finds a contradiction, it ABORTs according to the abort conditions (in the trial run on 2026-10-06, the verification grep also matched a correct line that should have been kept, and it aborted). If there are lines to be kept, narrow the search target to a form that can be distinguished from them.
-- Write scopes must not overlap between workers. If workers using the same working tree would collide, separate the worktrees with Orca.
+- Write scopes must not overlap between workers. If workers using the same working tree would collide, separate the worktrees with Orca. The plan check in "Dispatch evidence" rejects an overlapping scope before launch.
 - When delegating operations on real hardware, write the range the user approved (the configuration to start, the arguments, the measurements, and the stop) in the work order. When an operation outside the range is needed, the worker must not decide by itself, and must stop and notify the coordinator. The coordinator asks the user.
 - GPT-family models (such as GPT-6.1-Sol inside takt) tend to pile on confirmations, aggregations, re-measurements, and record-making that were not requested, and make the work needlessly long. Write a time limit and abort conditions in the work order. Because takt cannot ask questions midway, write in the work order that when the limit is likely to be exceeded or an operation outside the scope is needed, it must stop and leave the reason.
 
@@ -72,9 +80,30 @@ Because takt is not recognized by Orca as an agent, there is no instruction inje
 
 - When work is delegated to takt, the requester (the coordinator) supervises it.
 - Do not simply trust takt's completion or the description of the PR it created. Compare the diff, deliverables, logs, and numbers against the acceptance conditions in the work order, and confirm yourself that the result is as instructed before accepting.
+- Before accepting a report that names terminals, run the claims check in "Dispatch evidence"; a claim that Orca cannot match is not evidence.
 - Even for interim reports, check whether they stay within the approved range and the write scope.
 - If the conditions are not met, either have the same worker fix it, or do not accept it and report to the user.
 - If you find work outside the scope or a prolonged run in the terminal output and takt's run records, stop it immediately and narrow the scope.
+
+<a id="ツールの有無の診断"></a>
+## Diagnosing a tool
+
+- When a terminal reports a command as missing, do not conclude from `command -v` or a file check run in another shell. Run `python3 tools/agent-ops/diagnose.py <tool> --json` in that terminal. It reports the host, the surface (`ORCA_TERMINAL_HANDLE`), the PATH lookup, the resolved entity, the running processes and their executable paths, and the version output separately.
+- `not-installed` is valid only when the PATH lookup, the known paths, and the process list agree that nothing exists. `binary-missing-process-running` and `path-resolution-failure` are launch problems to fix, not proof that the tool is absent. Report the verdict and its evidence.
+
+<a id="ルールと強制"></a>
+## Rule and enforcement
+
+The rules in this file and what enforces them. A rule with no check is a judgment call, checked at acceptance.
+
+| Rule | Enforced by |
+|:--|:--|
+| Do not claim a launch without Orca evidence | `tools/agent-ops/dispatch.py claims ... --from-orca` |
+| Do not give two tracks the same worktree or an overlapping write scope | `tools/agent-ops/dispatch.py plan ...` |
+| Do not run a verification another track already ran | `tools/agent-ops/dispatch.py plan ...` |
+| Do not conclude a tool is unavailable from one surface | `tools/agent-ops/diagnose.py ...` |
+| `AGENTS.md` is editable by humans only | No check; the file is absent in this hub and the instruction stands |
+| The coordinator does not do the work itself | No check; judgment at acceptance |
 
 <a id="後片付け"></a>
 ## Cleanup
