@@ -11,7 +11,7 @@
 - 各言語 repo の main CI は直近 **success**。2026-11-08 06:19 JST 時点で js / go / rs は 19:26〜19:28 JST、scala は 03:32 JST、kotlin は 04:11 JST、java は 04:54 JST の main CI（CI / ci）が success。新しい main 実行はなく、failed もない。common repo には CI がない。
 - **現在の実作業**: ESA 側はなし。Renovate は 2026-11-07 19:33 の加藤さんの決定で使用量削減のため **off**。既存 Renovate PR の修正・リベース・整理・クローズは禁止（WIP 超過の解消目的でも）。マージしてよいのは CI 全緑かつ未対応コメントなしのものだけ。cqrs-es M2 の rs / js / java / go は v5 移行・RMU 復旧・M2 後続まで完了（rs #605 / js #841 / java #629 / go #685 が MERGED）。java #627 も CLOSED。kotlin は M3 と M3 後続が完了。新たに scala の M4 後続 #8（RMU の復旧）に対して PR #9 が open（checks はすべて success・CLEAN、他担当が未マージ）。hub #13 / #3 は open のまま。
 - **次のマイルストーン**: `cqrs-es-example` の **M2**（ESA v5 移行と RMU 復旧）は rs / js / java / go で完了。M2 後続の本番適用も rs #605 / js #841 / java #629 / go #685 が MERGED で完了。hub #13 と #3 は open のまま。次は scala の M4 後続 #8（PR #9）が進行中。ハブの HAND_OFF は PR #15 が 04:48 JST に MERGED `80857d3`（[docs/HAND_OFF.md](https://github.com/j5ik2o/cqrs-es-example/blob/main/docs/HAND_OFF.md)）。
-- **WIP（Renovate を除く）**: 実装 PR は scala 1（#9）のみで、他は 0。Renovate は rs 5 / java 3 / js 3 が open だが、off と「WIP に数えない」方針のため WIP には含めず、修正・リベース・整理・クローズもしない。加藤さんの指示があるまで当方は新規 PR を作らない（HAND_OFF の定期更新 PR はこの禁止の対象外）。
+- **WIP（Renovate を除く）**: Renovate を除く open PR は scala 1（#9）のみで、他は 0。Renovate は rs 5 / java 3 / js 3 が open だが、off と「WIP に数えない」方針のため WIP には含めず、修正・リベース・整理・クローズもしない。加藤さんの指示があるまで当方は新規 PR を作らない（HAND_OFF の定期更新 PR はこの禁止の対象外）。
 - **ESA 側の次の節目**: 30 保存先の実装完了（2026-10-28）後の「公開の準備」。java を先に正式版として出し、kotlin・scala を java の正式版へ切り替えてから出す。各版は公開直前にオーナー承認を取る。まだ着手していない。
 - **残置 worktree**: `java-769-notification-thread`（B 案の未コミット差分）と `rs-349-review`（untracked の aidlc 監査ファイル）。クリーン確認ができないため保持している。詳細は「3. Orca の現況」。
 - **PR #83** は CLOSED。再開・再実装しない。
@@ -46,7 +46,7 @@
   - README と `docs/` に起動方法、ポート、環境変数、e2e の実行方法を書く。
   - Renovate の未処理更新を説明できる状態にする（Renovate は 19:33 に off。既存 PR の整理はしない）。
 - 現況（acceptance-criteria §9 と 2026-11-08 06:19 JST の実測）: Go は v5 移行・RMU 復旧・M2 後続 #683 / #684 まで完了（#685 が MERGED `e26b6fb`、#684 は CLOSED）。rs は #603 RMU 復旧、#605 M2 後続（SQS ワーカー運用と監視）が MERGED で #600 / #604 は CLOSED。v5 移行も #601 / #602 で完了。Java は #618〜#622 で v5 移行、#624 RMU 復旧、#626 / #629 の本番資産が MERGED で #625 / #627 は CLOSED。JS は #831〜#835 で v5 移行、#837 RMU 復旧、#839 DLQ/SQS、#841 Lambda RMU と SQS 復旧ワーカーが MERGED で #838 / #840 は CLOSED。hub #13 は全言語の RMU 復旧 Issue が CLOSED になった後も open。Kotlin は M3 の PR #4 / #5 / #6 / #8 が MERGED で、Issue #1〜#3 / #7 は CLOSED、open Issue / PR はない。Scala は M4 後続 #8（RMU の復旧）に対して PR #9 が open で、lint / test / e2e はすべて success、mergeable は CLEAN（他担当が未マージ）。
-- M2 中の Renovate: 2026-11-07 19:33 に使用量削減のため **off**。既存 Renovate PR の修正・リベース・整理・クローズは禁止（WIP 超過の解消目的でも）。マージは CI 全緑＋未対応コメントなしのものだけ。判断は acceptance-criteria §10.h 待ちだが、当面は上記を優先する。1 リポジトリあたり WIP の実装 PR は 3 本まで（Renovate は数えない）。
+- M2 中の Renovate: 2026-11-07 19:33 に使用量削減のため **off**。既存 Renovate PR の修正・リベース・整理・クローズは禁止（WIP 超過の解消目的でも）。マージは CI 全緑＋未対応コメントなしのものだけ。判断は acceptance-criteria §10.h 待ちだが、当面は上記を優先する。1 リポジトリあたり open PR は 3 本まで（Renovate を除く）。
 
 ### 1.3 判断待ち（オーナー）
 
@@ -115,9 +115,9 @@ open PR はすべて 0。非 Dashboard の open Issue も 0。open Issue は次�
 - Issue: [#8 [M4 後続] scala: RMU の復旧（起動時 Scan・Trimmed 再同期・DLQ）](https://github.com/j5ik2o/cqrs-es-example-scala/issues/8)
 - PR: [#9 feat: RMU の復旧（再試行・復旧タスク・再同期）を実装する](https://github.com/j5ik2o/cqrs-es-example-scala/pull/9)（open、lint / test / e2e は success、mergeable CLEAN。他担当が未マージ）
 
-WIP（Renovate を除く実装 PR 数、上限3本）:
+WIP（Renovate を除く open PR 数、上限3本）:
 
-| repo | 実装 PR | Renovate | 状態 |
+| repo | open PR（Renovate 除く） | Renovate | 状態 |
 |---|---:|---:|---|
 | rs | 0 | 5 | Renovate のみ（off、待機） |
 | js | 0 | 3 | Renovate のみ（off、待機） |
@@ -127,7 +127,7 @@ WIP（Renovate を除く実装 PR 数、上限3本）:
 | scala | 1 | 0 | M4 後続 #9 が open（checks success、CLEAN） |
 | hub | 0 | 0 | 範囲内 |
 
-WIP は Renovate を数えない。実装 PR は scala #9 のみ。Renovate（rs 5 / java 3 / js 3）は off のため触らず新規 PR も作らない。scala #9 は他担当の実装 PR で、当方は操作しない。
+WIP は Renovate を除くすべての open PR を数える。該当は scala #9 のみ。Renovate（rs 5 / java 3 / js 3）は off のため触らず新規 PR も作らない。scala #9 は他担当の PR で、当方は操作しない。
 
 ## 3. Orca の現況（worktree / 端末 / 担当）
 
@@ -165,8 +165,8 @@ PR #83 は CLOSED。再開・再実装しない。以下は PR #83 関連の別�
 
 ## 4. 加藤さんの決定と禁止事項
 
-- **WIP は repo ごと（Renovate は数えない）**。異なる repo を同じ worktree で同時に編集しない。cqrs-es は 1 repo あたり実装 PR 3 本まで。
-  - 現状（Renovate を除く）: 実装 PR は scala 1（#9、checks success・CLEAN）のみで、他は 0。Renovate は rs 5 / java 3 / js 3 が open だが WIP に数えず、off のため修正・リベース・整理・クローズをせず、新規 PR も作らない。rs #591 は判断待ち（paths-ignore）。
+- **WIP は repo ごと（Renovate を除く）**。異なる repo を同じ worktree で同時に編集しない。cqrs-es は 1 repo あたり open PR 3 本まで（Renovate を除く）。
+  - 現状（Renovate を除く）: open PR は scala 1（#9、checks success・CLEAN）のみで、他は 0。Renovate は rs 5 / java 3 / js 3 が open だが WIP に数えず、off のため修正・リベース・整理・クローズをせず、新規 PR も作らない。rs #591 は判断待ち（paths-ignore）。
 - **Renovate は off**（2026-11-07 19:33、使用量削減）。既存 Renovate PR の修正・リベース・整理・クローズは禁止（WIP 超過の解消目的でも）。マージは CI 全緑かつ未対応コメントなしのものだけ（Grok Bot 側のコメントも確認する）。
 - **Bugbot の確認を必須**とする。未対応の Bugbot 指摘・レビューコメントが残る PR はマージしない。
 - **AGENTS.md は人間専用**。追加・変更・削除をしない。リンク修正だけでも触らない。
@@ -201,7 +201,7 @@ PR #83 は CLOSED。再開・再実装しない。以下は PR #83 関連の別�
    - 完了条件は §1.2。特に **head の Streams 購読、`(aggregate_id, seq_nr)` の重複除去、journal からの飛び補完、`read_model_positions` の記録**を満たす。
    - ハブの HAND_OFF は PR #15 が 04:48 に MERGED `80857d3`。ESA 側の本ファイルは 06:19 に更新した。
    - WIP（Renovate を除く）は scala 1（#9）のみ。Renovate は rs 5 / java 3 / js 3 が open だが off のため触らず、新規 PR も作らない。rs #591 は判断待ち（paths-ignore）。
-   - 当方は実装に着手しない。加藤さんの追加指示なしに M2 の実装を始めない。1 repo あたり実装 PR 3 本まで（Renovate を除く）。Bugbot 確認必須。テスト・CI を弱めない。
+   - 当方は実装に着手しない。加藤さんの追加指示なしに M2 の実装を始めない。1 repo あたり open PR 3 本まで（Renovate を除く）。Bugbot 確認必須。テスト・CI を弱めない。
 3. **ESA の公開準備（オーナー承認待ち）**
    - java を先に正式版、kotlin・scala を java の正式版へ切り替え。各版は公開直前にオーナー承認。
 4. **HAND_OFF の更新**
