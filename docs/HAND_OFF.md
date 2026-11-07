@@ -1,6 +1,6 @@
 # コーディネーター引き継ぎ（HAND_OFF）
 
-- 最終更新: **2026-11-07 19:46 JST**
+- 最終更新: **2026-11-07 20:56 JST**
 - 更新者: コーディネーター
 - 更新方針: マイルストーンの完了または大きな方針変更のたび、およびそれとは別に最長1時間おきに更新する。HAND_OFF の PR は同時に1本までとし、前の PR がマージされるまで次を作らない。
 - 使い方: 次の担当は、会話履歴や端末の下書きに依存せず、このファイルだけで現在地と次の作業を再開できるようにする。数値と状態は更新時点の実測であり、次の更新時に再確認する。
@@ -8,9 +8,9 @@
 ## 0. 現況サマリ
 
 - **ESA 7repo**（common, js, java, kotlin, scala, go, rs）: open PR は **0**、非 Dashboard の open Issue も **0**。open Issue は常設の Renovate Dependency Dashboard **6件のみ**。
-- 各言語 repo の main CI は直近 **success**。2026-11-07 19:46 JST 時点では java に新しい main 実行が進行中（失敗なし）、js / kotlin / scala / go / rs は success。common repo には CI がない。
-- **現在の実作業**: なし。Renovate は 2026-11-07 19:33 の加藤さんの決定で使用量削減のため **off**。既存 Renovate PR の修正・リベース・整理・クローズは禁止（WIP 超過の解消目的でも）。マージしてよいのは CI 全緑かつ未対応コメントなしのものだけ。WIP 超過が Renovate だけであれば待機する（「立て直し」ではない）。**cqrs-es go の M2 は完了**（#678 / #679 / #573 MERGED、#670 / #671 CLOSED、M2 マイルストーン closed）。
-- **次のマイルストーン**: `cqrs-es-example` の **M2**（rs → js → java → go の ESA v5 移行）。**go は先行して完了**。残りは rs / js / java で、まだ未着手。ハブの HAND_OFF は PR #11 で 19:20 時点に更新済み（[docs/HAND_OFF.md](https://github.com/j5ik2o/cqrs-es-example/blob/main/docs/HAND_OFF.md)）。
+- 各言語 repo の main CI は直近 **success**。2026-11-07 20:56 JST 時点で js / java / kotlin / go / rs は 19:26〜19:28 JST の main CI（CI / ci）が success、scala は 15:55 JST の実行が success。いずれも Snapshot は success。failed の main 実行はない。common repo には CI がない。
+- **現在の実作業**: なし（19:46 から状態変化なし）。Renovate は 2026-11-07 19:33 の加藤さんの決定で使用量削減のため **off**。既存 Renovate PR の修正・リベース・整理・クローズは禁止（WIP 超過の解消目的でも）。マージしてよいのは CI 全緑かつ未対応コメントなしのものだけ。WIP 超過が Renovate だけであれば待機する（「立て直し」ではない）。**cqrs-es go の M2 は完了**（#678 / #679 / #573 MERGED、#670 / #671 CLOSED、M2 マイルストーン closed）。
+- **次のマイルストーン**: `cqrs-es-example` の **M2**（rs → js → java → go の ESA v5 移行）。**go は先行して完了**。残りは rs / js / java で、まだ未着手。ハブの HAND_OFF は PR #12 で 20:00 JST 時点（19:46 の状態＋Renovate 停止方針）に更新済み（[docs/HAND_OFF.md](https://github.com/j5ik2o/cqrs-es-example/blob/main/docs/HAND_OFF.md)）。
 - **WIP**: cqrs-es は rs 5 / java 3 / js 3 / go 0。java・js は上限 3 本ちょうど、rs は 5 本で超過。超過分・上限分はすべて既存 Renovate PR で、Renovate off のため修正・リベース・整理・クローズをしない。加藤さんの指示があるまで待機し、新規 PR は作らない。**go は 0 本**（M2 完了）。
 - **ESA 側の次の節目**: 30 保存先の実装完了（2026-10-28）後の「公開の準備」。java を先に正式版として出し、kotlin・scala を java の正式版へ切り替えてから出す。各版は公開直前にオーナー承認を取る。まだ着手していない。
 - **残置 worktree**: `java-769-notification-thread`（B 案の未コミット差分）と `rs-349-review`（untracked の aidlc 監査ファイル）。クリーン確認ができないため保持している。詳細は「3. Orca の現況」。
@@ -45,7 +45,7 @@
   - 検査の無効化・失敗の握りつぶしをしない。
   - README と `docs/` に起動方法、ポート、環境変数、e2e の実行方法を書く。
   - Renovate の未処理更新を説明できる状態にする（Renovate は 19:33 に off。既存 PR の整理はしない）。
-- 現況（acceptance-criteria §9 と 2026-11-07 19:46 JST の実測）: Go は M2 完了（#678 head Streams、#679 e2e、#573 Renovate が MERGED。#670 / #671 は CLOSED、M2 マイルストーン closed）。Java / JS / Rust は旧 ESA のままで v5 未対応。Java は `editMessage` がなく、e2e でもコメントアウトされている。JS / Rust は head Streams 購読が旧実装。Scala はドメイン層のみ、Kotlin は README のみ。rs / js / java の M2 実装は未着手。
+- 現況（acceptance-criteria §9 と 2026-11-07 20:56 JST の実測）: Go は M2 完了（#678 head Streams、#679 e2e、#573 Renovate が MERGED。#670 / #671 は CLOSED、M2 マイルストーン closed）。Java / JS / Rust は旧 ESA のままで v5 未対応。Java は `editMessage` がなく、e2e でもコメントアウトされている。JS / Rust は head Streams 購読が旧実装。Scala はドメイン層のみ、Kotlin は README のみ。rs / js / java の M2 実装は未着手。
 - M2 中の Renovate: 2026-11-07 19:33 に使用量削減のため **off**。既存 Renovate PR の修正・リベース・整理・クローズは禁止（WIP 超過の解消目的でも）。マージは CI 全緑＋未対応コメントなしのものだけ。判断は acceptance-criteria §10.h 待ちだが、当面は上記を優先する。1 リポジトリあたり WIP の PR は 3 本まで。
 
 ### 1.3 判断待ち（オーナー）
@@ -64,7 +64,7 @@ ESA 側の後で検討する課題（次のマイルストーン候補、オー�
 - Spanner で ABORTED したトランザクションを待たずに再試行している（java・js）。
 - java の SQLite / Spanner / Bigtable の非同期版が、呼び出し元のスレッドで I/O を行って完了済みの Future を返す（kotlin・scala はこれを包む）。
 
-## 2. リポジトリごとの open PR / Issue（2026-11-07 19:46 JST）
+## 2. リポジトリごとの open PR / Issue（2026-11-07 20:56 JST）
 
 ### 2.1 ESA 7repo
 
@@ -193,7 +193,7 @@ PR #83 は CLOSED。再開・再実装しない。以下は PR #83 関連の別�
 2. **cqrs-es M2（次のマイルストーン、加藤さんの着手指示待ち）**
    - 計画順は rs → js → java → go。**go は先行して完了**（#678 / #679 / #573 MERGED、#670 / #671 CLOSED、M2 マイルストーン closed）。残りは **rs → js → java** で、まだ未着手。
    - 完了条件は §1.2。特に **head の Streams 購読、`(aggregate_id, seq_nr)` の重複除去、journal からの飛び補完、`read_model_positions` の記録**を満たす。
-   - ハブの HAND_OFF は PR #11 で 19:20 時点に更新済み。ESA 側の本ファイルも 19:46 に更新した。
+   - ハブの HAND_OFF は PR #12 で 20:00 時点に更新済み。ESA 側の本ファイルも 20:56 に更新した。
    - rs 5 は超過、java 3 / js 3 は上限ちょうど、go は 0 本。いずれも既存 Renovate PR で、Renovate off のため触らず待機する。新規 PR は作らない。rs #591 は判断待ち（paths-ignore）。
    - 1 repo あたり WIP 3 本まで。Bugbot 確認必須。テスト・CI を弱めない。
 3. **ESA の公開準備（オーナー承認待ち）**
@@ -207,4 +207,4 @@ PR #83 は CLOSED。再開・再実装しない。以下は PR #83 関連の別�
 
 ## 6. 最終更新
 
-- 2026-11-07 19:46 JST
+- 2026-11-07 20:56 JST
