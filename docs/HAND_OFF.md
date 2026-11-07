@@ -1,6 +1,6 @@
 # コーディネーター引き継ぎ（HAND_OFF）
 
-- 最終更新: **2026-11-07 16:12 JST**
+- 最終更新: **2026-11-07 17:19 JST**
 - 更新者: コーディネーター
 - 更新方針: マイルストーンの完了または大きな方針変更のたび、およびそれとは別に最長1時間おきに更新する。HAND_OFF の PR は同時に1本までとし、前の PR がマージされるまで次を作らない。
 - 使い方: 次の担当は、会話履歴や端末の下書きに依存せず、このファイルだけで現在地と次の作業を再開できるようにする。数値と状態は更新時点の実測であり、次の更新時に再確認する。
@@ -8,9 +8,10 @@
 ## 0. 現況サマリ
 
 - **ESA 7repo**（common, js, java, kotlin, scala, go, rs）: open PR は **0**。open Issue は常設の Renovate Dependency Dashboard **6件のみ**。
-- 各言語 repo の main CI は **success**（2026-11-07 16:11 JST 時点）。common repo には CI がない。
-- **現在の実作業**: Renovate の依存 PR を1本ずつ処理するだけ。他の新規着手は加藤さんの指示待ち。
-- **次のマイルストーン**: `cqrs-es-example` の **M2**（rs → js → java → go の ESA v5 移行）。M2 の実装 PR はまだなく、追跡 Issue が open。
+- 各言語 repo の main CI は **success**（2026-11-07 17:19 JST 時点）。common repo には CI がない。
+- **現在の実作業**: Renovate の依存 PR を1本ずつ処理するだけ。他の新規着手は加藤さんの指示待ち。cqrs-es go の **#678** は別担当が CI e2e を進行中。
+- **次のマイルストーン**: `cqrs-es-example` の **M2**（rs → js → java → go の ESA v5 移行）。go の **#678**（RMU head Streams / #669、CI e2e 進行中）が最初の実装 PR。他は未着手。
+- **WIP 超過**: cqrs-es の rs 5 / java 5 / js 6 が 1 repo あたりの上限 3 本を超過。新規 PR を増やさず、既存 Renovate PR の整理を優先する（加藤さんの指示待ち）。go は #678 + #573 の 2 本。
 - **ESA 側の次の節目**: 30 保存先の実装完了（2026-10-28）後の「公開の準備」。java を先に正式版として出し、kotlin・scala を java の正式版へ切り替えてから出す。各版は公開直前にオーナー承認を取る。まだ着手していない。
 - **残置 worktree**: `java-769-notification-thread`（B 案の未コミット差分）と `rs-349-review`（untracked の aidlc 監査ファイル）。クリーン確認ができないため保持している。詳細は「3. Orca の現況」。
 - **PR #83** は CLOSED。再開・再実装しない。
@@ -44,7 +45,7 @@
   - 検査の無効化・失敗の握りつぶしをしない。
   - README と `docs/` に起動方法、ポート、環境変数、e2e の実行方法を書く。
   - Renovate の PR を整理し、未処理の更新を説明できる状態にする。
-- 現況（acceptance-criteria §9 の記載）: Go / Java / JS / Rust は旧 ESA のままで v5 未対応。Java は `editMessage` がなく、e2e でもコメントアウトされている。JS / Rust は head Streams 購読が旧実装。Scala はドメイン層のみ、Kotlin は README のみ。M2 の実装 Issue は open だが、実装 PR はまだない。
+- 現況（acceptance-criteria §9 の記載）: Go / Java / JS / Rust は旧 ESA のままで v5 未対応。Java は `editMessage` がなく、e2e でもコメントアウトされている。JS / Rust は head Streams 購読が旧実装。Scala はドメイン層のみ、Kotlin は README のみ。M2 の実装 Issue は open。go #678（RMU head Streams / #669）が e2e 進行中で、他は未着手。
 - M2 中の Renovate: ESA のメジャー更新は自動マージしない。判断は acceptance-criteria §10.h 待ち（推奨は patch のみ自動、minor/major は手動、ESA はすべて手動）。1 リポジトリあたり WIP の PR は 3 本まで。
 
 ### 1.3 判断待ち（オーナー）
@@ -63,7 +64,7 @@ ESA 側の後で検討する課題（次のマイルストーン候補、オー�
 - Spanner で ABORTED したトランザクションを待たずに再試行している（java・js）。
 - java の SQLite / Spanner / Bigtable の非同期版が、呼び出し元のスレッドで I/O を行って完了済みの Future を返す（kotlin・scala はこれを包む）。
 
-## 2. リポジトリごとの open PR / Issue（2026-11-07 16:11 JST）
+## 2. リポジトリごとの open PR / Issue（2026-11-07 17:19 JST）
 
 ### 2.1 ESA 7repo
 
@@ -102,7 +103,7 @@ open PR はすべて 0。open Issue は次の常設 Dashboard のみ。閉じな
 `cqrs-es-example-go`:
 
 - Issue: [#672 [M1 後続] staticcheck の既存指摘 41 件](https://github.com/j5ik2o/cqrs-es-example-go/issues/672)、[#671 Renovate PR を整理する](https://github.com/j5ik2o/cqrs-es-example-go/issues/671)、[#670 e2e を整える](https://github.com/j5ik2o/cqrs-es-example-go/issues/670)、[#669 Read Model Updater を v5 に適合させる](https://github.com/j5ik2o/cqrs-es-example-go/issues/669)、[#668 Read API を v5 に適合させる](https://github.com/j5ik2o/cqrs-es-example-go/issues/668)、[#32 Windows 11/WSL2 support](https://github.com/j5ik2o/cqrs-es-example-go/issues/32)、[#29 Deploy to AWS](https://github.com/j5ik2o/cqrs-es-example-go/issues/29)、[#7 Dependency Dashboard](https://github.com/j5ik2o/cqrs-es-example-go/issues/7)
-- PR: [#573 mysql Docker tag v26](https://github.com/j5ik2o/cqrs-es-example-go/pull/573)
+- PR: [#678 RMU を集約 head Streams 購読へ切り替える](https://github.com/j5ik2o/cqrs-es-example-go/pull/678)（#669、CI e2e 進行中）、[#573 mysql Docker tag v26](https://github.com/j5ik2o/cqrs-es-example-go/pull/573)
 
 `cqrs-es-example-kotlin`:
 
@@ -110,6 +111,18 @@ open PR はすべて 0。open Issue は次の常設 Dashboard のみ。閉じな
 - PR: なし
 
 `cqrs-es-example-scala`: open Issue / PR なし。
+
+WIP（open PR 数、上限3本）:
+
+| repo | open PR | 状態 |
+|---|---:|---|
+| rs | 5 | **超過** |
+| js | 6 | **超過** |
+| java | 5 | **超過** |
+| go | 2 | 範囲内（#678 + #573） |
+| kotlin | 0 | 範囲内 |
+| scala | 0 | 範囲内 |
+| hub | 0 | 範囲内 |
 
 ## 3. Orca の現況（worktree / 端末 / 担当）
 
@@ -135,6 +148,7 @@ PR #83 は CLOSED。再開・再実装しない。以下は PR #83 関連の別�
 
 - ハブ `cqrs-es-example`: `term_ef396ce5-c56b-4441-94b1-bd8b142d5435`（Claude、コーディネーション）、`term_4680cda7-808d-4887-98f0-2da8ff8d0b8e`（shell）
 - `cqrs-es-example-go`: `term_af94f730-218c-4527-9f13-e62067336a63`
+  - M2 の RMU head Streams 作業: worktree `m2-go-rmu-head-streams`（branch 同名、in-progress）。#678 / #669。端末 `term_7d24356a-96dd-46d2-8f01-f7086050faf6`（Claude、CI e2e 進行中）。他担当のため触らない。
 - `cqrs-es-example-java`: `term_cb059c36-a7ad-469d-8a8a-2bc678b8f894`
 - `cqrs-es-example-js`: `term_39976e11-4982-402d-be21-07dbc999ede4`
 - `cqrs-es-example-rs`: `term_625a3beb-f065-4e44-9053-7ee55f1e161b`
@@ -147,6 +161,7 @@ PR #83 は CLOSED。再開・再実装しない。以下は PR #83 関連の別�
 ## 4. 加藤さんの決定と禁止事項
 
 - **WIP は repo ごと**。異なる repo を同じ worktree で同時に編集しない。cqrs-es は 1 repo あたり open PR 3 本まで。
+  - 現状: rs 5 / java 5 / js 6 が上限超過。新規 PR を作らず、既存 Renovate PR のマージ・整理を優先する。go は 2 本で範囲内。
 - **Bugbot の確認を必須**とする。未対応の Bugbot 指摘・レビューコメントが残る PR はマージしない。
 - **AGENTS.md は人間専用**。追加・変更・削除をしない。リンク修正だけでも触らない。
 - **docker prune 禁止**。他担当の image / container を削除しない。自分の probe 画像だけを、正確な ID / 参照を確認して個別に片付ける。
@@ -175,6 +190,8 @@ PR #83 は CLOSED。再開・再実装しない。以下は PR #83 関連の別�
 2. **cqrs-es M2（次のマイルストーン、加藤さんの着手指示待ち）**
    - rs → js → java → go の順。各 repo の M2 Issue（§2.2）を単位に進める。
    - 完了条件は §1.2。特に **head の Streams 購読、`(aggregate_id, seq_nr)` の重複除去、journal からの飛び補完、`read_model_positions` の記録**を満たす。
+   - go #678（RMU head Streams / #669）は別担当が CI e2e を進行中。e2e 完了、レビュー、未対応コメントなしを確認してマージ判断する。
+   - rs 5 / java 5 / js 6 は WIP 超過のため、新規 PR を増やさず、既存 Renovate PR のマージ・整理を優先する。
    - 1 repo あたり WIP 3 本まで。Bugbot 確認必須。テスト・CI を弱めない。
 3. **ESA の公開準備（オーナー承認待ち）**
    - java を先に正式版、kotlin・scala を java の正式版へ切り替え。各版は公開直前にオーナー承認。
@@ -187,4 +204,4 @@ PR #83 は CLOSED。再開・再実装しない。以下は PR #83 関連の別�
 
 ## 6. 最終更新
 
-- 2026-11-07 16:12 JST
+- 2026-11-07 17:19 JST
