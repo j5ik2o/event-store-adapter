@@ -8,7 +8,7 @@
 ## 0. 現況サマリ
 
 - **ESA 7repo**（common, js, java, kotlin, scala, go, rs）: open PR は **0**、非 Dashboard の open Issue も **0**。open Issue は常設の Renovate Dependency Dashboard **6件のみ**。
-- 各言語 repo の main CI は直近 **success**。2026-11-08 08:18 JST 時点で js / go / rs は 19:26〜19:28 JST、java は 04:54 JST、scala は 07:34 JST の main CI（CI / ci）が success。kotlin は 08:14 JST の main 実行が queued（未完了、失敗ではない）。failed の main 実行はない。common repo には CI がない。
+- 各言語 repo の main CI は直近 **success**。2026-11-08 08:18 JST 時点で js / go / rs は 19:26〜19:28 JST、java は 04:54 JST、scala は 07:34 JST の main CI（CI / ci）が success。kotlin は 08:14 JST の main 実行が queued だったが、その後 success で完了（08:34 JST 時点の実測）。failed の main 実行はない。common repo には CI がない。
 - **現在の実作業**: ESA 側はなし。Renovate は 2026-11-07 19:33 の加藤さんの決定で使用量削減のため **off**。既存 Renovate PR の修正・リベース・整理・クローズは禁止（WIP 超過の解消目的でも）。マージしてよいのは CI 全緑かつ未対応コメントなしのものだけ。cqrs-es は rs / js / java / go / kotlin / scala の 6 言語で RMU 復旧まで完了。後続は go #687（staticcheck の CI 実行）、kotlin #12 / scala #13（Lambda/SQS デプロイ資産）が open。hub の追跡は #3 のみで、hub HAND_OFF は PR #17 が open（他担当、更新中）。詳細は cqrs 側の HAND_OFF を参照。
 - **次のマイルストーン**: `cqrs-es-example` の **M2**（ESA v5 移行と RMU 復旧）は rs / js / java / go で完了。6 言語の RMU 復旧 A 案も揃った。残る作業は go #687（staticcheck）、kotlin #12 / scala #13（デプロイ資産）と hub #3 の完了確認。ハブの HAND_OFF は PR #17 が open（更新中）（[docs/HAND_OFF.md](https://github.com/j5ik2o/cqrs-es-example/blob/main/docs/HAND_OFF.md)）。
 - **WIP（Renovate を除く）**: 各 repo 1 本ずつで、go #687 / kotlin #12 / scala #13 / hub #17 の合計 4 本（repo ごとの上限 3 本は超えていない）。Renovate は rs 5 / java 3 / js 3 が open だが、off と「WIP に数えない」方針のため WIP には含めず、修正・リベース・整理・クローズもしない。加藤さんの指示があるまで当方は新規 PR を作らない（HAND_OFF の定期更新 PR はこの禁止の対象外）。
