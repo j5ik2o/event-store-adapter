@@ -26,7 +26,7 @@
 - 公開・リリース・force push は、オーナーの明示承認がない限り禁止。
 - 参照: [docs/plan/implementation-plan.ja.md](plan/implementation-plan.ja.md) の「30 組の実装がそろった（2026-10-28）」。
 
-### 1.2 cqrs-es: M2（go は完了、rs / js / java は未着手）
+### 1.2 cqrs-es: M2（v5 移行は全言語完了、RMU 復旧は rs のみ実装中）
 
 - 対象: `cqrs-es-example` ハブと、`cqrs-es-example-rs` / `-js` / `-java` / `-go`。順序は **rs → js → java → go**（rs が最初、go が最後）。
 - M3 で Kotlin を新規作成、M4 で Scala を作り直す。
