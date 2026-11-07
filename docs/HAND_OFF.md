@@ -1,6 +1,6 @@
 # コーディネーター引き継ぎ（HAND_OFF）
 
-- 最終更新: **2026-11-08 01:25 JST**
+- 最終更新: **2026-11-08 02:21 JST**
 - 更新者: コーディネーター
 - 更新方針: マイルストーンの完了または大きな方針変更のたび、およびそれとは別に最長1時間おきに更新する。HAND_OFF の PR は同時に1本までとし、前の PR がマージされるまで次を作らない。
 - 使い方: 次の担当は、会話履歴や端末の下書きに依存せず、このファイルだけで現在地と次の作業を再開できるようにする。数値と状態は更新時点の実測であり、次の更新時に再確認する。
@@ -8,10 +8,10 @@
 ## 0. 現況サマリ
 
 - **ESA 7repo**（common, js, java, kotlin, scala, go, rs）: open PR は **0**、非 Dashboard の open Issue も **0**。open Issue は常設の Renovate Dependency Dashboard **6件のみ**。
-- 各言語 repo の main CI は直近 **success**。2026-11-08 01:25 JST 時点で js / go / rs は 19:26〜19:28 JST、scala は 22:49 JST、kotlin は 23:42 JST、java は 00:27 JST の main CI（CI / ci）が success。failed の main 実行はない。common repo には CI がない。
-- **現在の実作業**: ESA 側はなし。Renovate は 2026-11-07 19:33 の加藤さんの決定で使用量削減のため **off**。既存 Renovate PR の修正・リベース・整理・クローズは禁止（WIP 超過の解消目的でも）。マージしてよいのは CI 全緑かつ未対応コメントなしのものだけ。WIP 超過が Renovate だけであれば待機する（「立て直し」ではない）。cqrs-es M2 の v5 移行は rs / js / java / go すべて完了。RMU 復旧は js #837 / java #624 / go #681 が MERGED で各 Issue は CLOSED、rs #600 が実装中。hub #13 は rs 完了まで open。
-- **次のマイルストーン**: `cqrs-es-example` の **M2**（rs → js → java → go の ESA v5 移行と RMU 復旧）。go / java / js は v5 移行と RMU 復旧が完了。rs は v5 移行が完了（#601 Read API と #602 e2e が MERGED）し、RMU 復旧 #600 が実装中（PR 未作成）。hub #13 と #3 は open のまま。ハブの HAND_OFF は PR #14 が 01:22 JST に MERGED `583b5e9`（[docs/HAND_OFF.md](https://github.com/j5ik2o/cqrs-es-example/blob/main/docs/HAND_OFF.md)）。
-- **WIP**: cqrs-es は rs 5 / java 3 / js 3 / go 0。すべて既存 Renovate PR。rs は 5 本で上限超過だが Renovate のみのため待機し、修正・リベース・整理・クローズをしない。加藤さんの指示があるまで当方は新規 PR を作らない。**go は 0 本**（v5 移行・RMU 復旧とも完了）。
+- 各言語 repo の main CI は直近 **success**。2026-11-08 02:21 JST 時点で js / go / rs は 19:26〜19:28 JST、scala は 22:49 JST、kotlin は 23:42 JST、java は 00:27 JST の main CI（CI / ci）が success。新しい main 実行はなく、failed もない。common repo には CI がない。
+- **現在の実作業**: ESA 側はなし。Renovate は 2026-11-07 19:33 の加藤さんの決定で使用量削減のため **off**。既存 Renovate PR の修正・リベース・整理・クローズは禁止（WIP 超過の解消目的でも）。マージしてよいのは CI 全緑かつ未対応コメントなしのものだけ。WIP 超過が Renovate だけであれば待機する（「立て直し」ではない）。cqrs-es M2 の v5 移行は rs / js / java / go すべて完了。RMU 復旧は js #837 / java #624 / go #681 が MERGED で各 Issue は CLOSED、rs は #600 の PR #603 が e2e 実行中。M2 後続として本番 DLQ/SQS 資産の Issue が追加された（js #838 / java #625 / go #682）。hub #13 は rs 完了まで open。
+- **次のマイルストーン**: `cqrs-es-example` の **M2**（rs → js → java → go の ESA v5 移行と RMU 復旧）。go / java / js は v5 移行と RMU 復旧が完了。rs は v5 移行が完了（#601 Read API と #602 e2e が MERGED）し、RMU 復旧 #600 は PR #603 が e2e 実行中。hub #13 と #3 は open のまま。M2 後続の本番適用 Issue（js #838 / java #625 / go #682）は未着手。ハブの HAND_OFF は PR #14 が 01:22 JST に MERGED `583b5e9`（[docs/HAND_OFF.md](https://github.com/j5ik2o/cqrs-es-example/blob/main/docs/HAND_OFF.md)）。
+- **WIP**: cqrs-es は rs 6 / java 3 / js 3 / go 0。rs は Renovate 5 本＋M2 の #603、java・js は Renovate のみ。Renovate 分（rs 5 / java 3 / js 3）は off のため修正・リベース・整理・クローズをしない。加藤さんの指示があるまで当方は新規 PR を作らない。**go は 0 本**（v5 移行・RMU 復旧とも完了）。
 - **ESA 側の次の節目**: 30 保存先の実装完了（2026-10-28）後の「公開の準備」。java を先に正式版として出し、kotlin・scala を java の正式版へ切り替えてから出す。各版は公開直前にオーナー承認を取る。まだ着手していない。
 - **残置 worktree**: `java-769-notification-thread`（B 案の未コミット差分）と `rs-349-review`（untracked の aidlc 監査ファイル）。クリーン確認ができないため保持している。詳細は「3. Orca の現況」。
 - **PR #83** は CLOSED。再開・再実装しない。
@@ -45,7 +45,7 @@
   - 検査の無効化・失敗の握りつぶしをしない。
   - README と `docs/` に起動方法、ポート、環境変数、e2e の実行方法を書く。
   - Renovate の未処理更新を説明できる状態にする（Renovate は 19:33 に off。既存 PR の整理はしない）。
-- 現況（acceptance-criteria §9 と 2026-11-08 01:25 JST の実測）: Go は v5 移行と RMU 復旧が完了（#678 head Streams、#679 e2e、#681 RMU 復旧が MERGED）。rs は #601 Read API が MERGED `f958c54`、#602 e2e が MERGED `e5d2227` で v5 移行が完了。#548 / #550 は CLOSED。RMU 復旧 #600 が実装中（PR 未作成）。Java は #618〜#622 で v5 移行と e2e が完了、#624 RMU 復旧が MERGED `c73b03c`。#583〜#587 / #623 は CLOSED。JS は #831〜#835 で v5 移行と e2e が完了、#837 RMU 復旧が MERGED `f7de1cf`。#825〜#829 / #836 は CLOSED。hub #13 は rs #600 の完了待ち。Scala はドメイン層のみ、Kotlin は README のみ。
+- 現況（acceptance-criteria §9 と 2026-11-08 02:21 JST の実測）: Go は v5 移行と RMU 復旧が完了（#678 / #679 / #681 MERGED）。rs は #601 Read API `f958c54`、#602 e2e `e5d2227` で v5 移行が完了し、RMU 復旧 #600 は PR #603 が e2e 実行中（他ジョブは success）。Java は #618〜#622 で v5 移行と e2e が完了、#624 RMU 復旧が MERGED `c73b03c`。JS は #831〜#835 で v5 移行と e2e が完了、#837 RMU 復旧が MERGED `f7de1cf`。M2 後続として、js #838（payload 復号失敗の DLQ 化と SQS 通知）、java #625（Lambda/SQS デプロイ資産と運用手順）、go #682（本番適用）が open。hub #13 は rs #600 の完了待ち。Scala はドメイン層のみ、Kotlin は README のみ（M3 の #1 は CLOSED、#2 / #3 が open）。
 - M2 中の Renovate: 2026-11-07 19:33 に使用量削減のため **off**。既存 Renovate PR の修正・リベース・整理・クローズは禁止（WIP 超過の解消目的でも）。マージは CI 全緑＋未対応コメントなしのものだけ。判断は acceptance-criteria §10.h 待ちだが、当面は上記を優先する。1 リポジトリあたり WIP の PR は 3 本まで。
 
 ### 1.3 判断待ち（オーナー）
@@ -64,7 +64,7 @@ ESA 側の後で検討する課題（次のマイルストーン候補、オー�
 - Spanner で ABORTED したトランザクションを待たずに再試行している（java・js）。
 - java の SQLite / Spanner / Bigtable の非同期版が、呼び出し元のスレッドで I/O を行って完了済みの Future を返す（kotlin・scala はこれを包む）。
 
-## 2. リポジトリごとの open PR / Issue（2026-11-08 01:25 JST）
+## 2. リポジトリごとの open PR / Issue（2026-11-08 02:21 JST）
 
 ### 2.1 ESA 7repo
 
@@ -87,27 +87,27 @@ open PR はすべて 0。非 Dashboard の open Issue も 0。open Issue は次�
 
 `cqrs-es-example-rs`:
 
-- Issue: [#600 RMU の復旧（再試行・DLQ・再同期）を実装する](https://github.com/j5ik2o/cqrs-es-example-rs/issues/600)（実装中、PR 未作成）、[#551 Renovate PR を整理する](https://github.com/j5ik2o/cqrs-es-example-rs/issues/551)、[#8 Dependency Dashboard](https://github.com/j5ik2o/cqrs-es-example-rs/issues/8)（#547〜#550 は CLOSED）
-- PR: [#597 Terraform aws v6](https://github.com/j5ik2o/cqrs-es-example-rs/pull/597)、[#592 aws_lambda_events v1](https://github.com/j5ik2o/cqrs-es-example-rs/pull/592)、[#591 mysql Docker tag v26](https://github.com/j5ik2o/cqrs-es-example-rs/pull/591)（判断待ち・paths-ignore）、[#590 Helm mysql v14](https://github.com/j5ik2o/cqrs-es-example-rs/pull/590)、[#582 sqlx 0.9.0](https://github.com/j5ik2o/cqrs-es-example-rs/pull/582)（#601 は `f958c54`、#602 は `e5d2227` で MERGED）
+- Issue: [#600 RMU の復旧（再試行・DLQ・再同期）を実装する](https://github.com/j5ik2o/cqrs-es-example-rs/issues/600)（PR #603 で進行中）、[#551 Renovate PR を整理する](https://github.com/j5ik2o/cqrs-es-example-rs/issues/551)、[#8 Dependency Dashboard](https://github.com/j5ik2o/cqrs-es-example-rs/issues/8)（#547〜#550 は CLOSED）
+- PR: [#603 RMU の復旧（再試行・DLQ・再同期）を実装する（#600）](https://github.com/j5ik2o/cqrs-es-example-rs/pull/603)（M2、e2e 実行中）、[#597 Terraform aws v6](https://github.com/j5ik2o/cqrs-es-example-rs/pull/597)、[#592 aws_lambda_events v1](https://github.com/j5ik2o/cqrs-es-example-rs/pull/592)、[#591 mysql Docker tag v26](https://github.com/j5ik2o/cqrs-es-example-rs/pull/591)（判断待ち・paths-ignore）、[#590 Helm mysql v14](https://github.com/j5ik2o/cqrs-es-example-rs/pull/590)、[#582 sqlx 0.9.0](https://github.com/j5ik2o/cqrs-es-example-rs/pull/582)（#601 は `f958c54`、#602 は `e5d2227` で MERGED）
 
 `cqrs-es-example-js`:
 
-- Issue: [#830 Renovate PR を整理する](https://github.com/j5ik2o/cqrs-es-example-js/issues/830)、[#4 Dependency Dashboard](https://github.com/j5ik2o/cqrs-es-example-js/issues/4)（#825〜#829 / #836 は CLOSED）
+- Issue: [#838 [M2 後続] payload 復号失敗の DLQ 化と SQS 通知トランスポート](https://github.com/j5ik2o/cqrs-es-example-js/issues/838)、[#830 Renovate PR を整理する](https://github.com/j5ik2o/cqrs-es-example-js/issues/830)、[#4 Dependency Dashboard](https://github.com/j5ik2o/cqrs-es-example-js/issues/4)（#825〜#829 / #836 は CLOSED）
 - PR: [#819 functions-framework v5](https://github.com/j5ik2o/cqrs-es-example-js/pull/819)、[#812 @types/node](https://github.com/j5ik2o/cqrs-es-example-js/pull/812)、[#811 yargs v18](https://github.com/j5ik2o/cqrs-es-example-js/pull/811)（M2 は #831 `834fe15`、#832 `108ceee`、#833 `72e704b`、#834 `437f230`、#835 `bd6d933`、#837 `f7de1cf` で MERGED）
 
 `cqrs-es-example-java`:
 
-- Issue: [#588 Renovate PR を整理する](https://github.com/j5ik2o/cqrs-es-example-java/issues/588)、[#4 Dependency Dashboard](https://github.com/j5ik2o/cqrs-es-example-java/issues/4)（#583〜#587 / #623 は CLOSED）
+- Issue: [#625 [M2 後続] RMU 復旧の Lambda/SQS デプロイ資産と運用手順](https://github.com/j5ik2o/cqrs-es-example-java/issues/625)、[#588 Renovate PR を整理する](https://github.com/j5ik2o/cqrs-es-example-java/issues/588)、[#4 Dependency Dashboard](https://github.com/j5ik2o/cqrs-es-example-java/issues/4)（#583〜#587 / #623 は CLOSED）
 - PR: [#616 Spring Boot v4](https://github.com/j5ik2o/cqrs-es-example-java/pull/616)、[#608 java-jdk v25](https://github.com/j5ik2o/cqrs-es-example-java/pull/608)、[#559 Gradle v9](https://github.com/j5ik2o/cqrs-es-example-java/pull/559)（#400 は `a4a1035`、#618 `b8d1a91`、#619 `914f7d1`、#620 `8fd6020`、#621 `ed3540a`、#622 `8547e1c`、#624 `c73b03c` で MERGED）
 
 `cqrs-es-example-go`:
 
-- Issue: [#672 [M1 後続] staticcheck の既存指摘 41 件](https://github.com/j5ik2o/cqrs-es-example-go/issues/672)、[#32 Windows 11/WSL2 support](https://github.com/j5ik2o/cqrs-es-example-go/issues/32)、[#29 Deploy to AWS](https://github.com/j5ik2o/cqrs-es-example-go/issues/29)、[#7 Dependency Dashboard](https://github.com/j5ik2o/cqrs-es-example-go/issues/7)（#680 は CLOSED）
+- Issue: [#682 [M2 後続] RMU 復旧の本番適用（Lambda イベントソースマッピング / SQS ワーカー）](https://github.com/j5ik2o/cqrs-es-example-go/issues/682)、[#672 [M1 後続] staticcheck の既存指摘 41 件](https://github.com/j5ik2o/cqrs-es-example-go/issues/672)、[#32 Windows 11/WSL2 support](https://github.com/j5ik2o/cqrs-es-example-go/issues/32)、[#29 Deploy to AWS](https://github.com/j5ik2o/cqrs-es-example-go/issues/29)、[#7 Dependency Dashboard](https://github.com/j5ik2o/cqrs-es-example-go/issues/7)（#680 は CLOSED）
 - PR: なし（#678 / #679 / #681 / #573 は MERGED。M2 マイルストーンは closed）。
 
 `cqrs-es-example-kotlin`:
 
-- Issue: [#1 骨格と command 側を実装する（ESA-kotlin 5.1.0）](https://github.com/j5ik2o/cqrs-es-example-kotlin/issues/1)、[#2 query/Read API と RMU を実装する](https://github.com/j5ik2o/cqrs-es-example-kotlin/issues/2)、[#3 docker-compose + LocalStack e2e と CI を整える](https://github.com/j5ik2o/cqrs-es-example-kotlin/issues/3)
+- Issue: [#2 query/Read API と RMU を実装する](https://github.com/j5ik2o/cqrs-es-example-kotlin/issues/2)、[#3 docker-compose + LocalStack e2e と CI を整える](https://github.com/j5ik2o/cqrs-es-example-kotlin/issues/3)（#1 は CLOSED）
 - PR: なし
 
 `cqrs-es-example-scala`: open Issue / PR なし。
@@ -116,7 +116,7 @@ WIP（open PR 数、上限3本）:
 
 | repo | open PR | 状態 |
 |---|---:|---|
-| rs | 5 | 上限超過（既存 Renovate、待機） |
+| rs | 6 | **超過**（Renovate 5 + M2 #603） |
 | js | 3 | 上限ちょうど（既存 Renovate、待機） |
 | java | 3 | 上限ちょうど（既存 Renovate、待機） |
 | go | 0 | 完了（v5 移行・RMU 復旧とも完了） |
@@ -124,7 +124,7 @@ WIP（open PR 数、上限3本）:
 | scala | 0 | 範囲内 |
 | hub | 0 | 範囲内 |
 
-超過・上限分はすべて既存 Renovate PR で、off のため触らず新規 PR も作らない。rs #600 は RMU 復旧の実装 Issue で、PR はまだない。
+超過・上限分のうち Renovate は既存 PR で、off のため触らず新規 PR も作らない。rs #603 は M2 の実装 PR で別担当が進行中。
 
 ## 3. Orca の現況（worktree / 端末 / 担当）
 
@@ -163,7 +163,7 @@ PR #83 は CLOSED。再開・再実装しない。以下は PR #83 関連の別�
 ## 4. 加藤さんの決定と禁止事項
 
 - **WIP は repo ごと**。異なる repo を同じ worktree で同時に編集しない。cqrs-es は 1 repo あたり open PR 3 本まで。
-  - 現状: rs 5 / java 3 / js 3 / go 0（v5 移行・RMU 復旧とも完了）。すべて既存 Renovate PR。rs は上限超過だが Renovate のみのため待機し、修正・リベース・整理・クローズをせず、新規 PR も作らない。rs #591 は判断待ち（paths-ignore）。
+  - 現状: rs 6（Renovate 5 + M2 #603）、java 3 / js 3 が上限ちょうど、go 0（v5 移行・RMU 復旧とも完了）。Renovate 分（rs 5 / java 3 / js 3）は off のため修正・リベース・整理・クローズをせず、新規 PR も作らない。WIP 超過が Renovate だけの場合は待機する（「立て直し」ではない）。rs #591 は判断待ち（paths-ignore）。
 - **Renovate は off**（2026-11-07 19:33、使用量削減）。既存 Renovate PR の修正・リベース・整理・クローズは禁止（WIP 超過の解消目的でも）。マージは CI 全緑かつ未対応コメントなしのものだけ（Grok Bot 側のコメントも確認する）。
 - **Bugbot の確認を必須**とする。未対応の Bugbot 指摘・レビューコメントが残る PR はマージしない。
 - **AGENTS.md は人間専用**。追加・変更・削除をしない。リンク修正だけでも触らない。
@@ -192,10 +192,10 @@ PR #83 は CLOSED。再開・再実装しない。以下は PR #83 関連の別�
    - WIP 超過が Renovate だけであれば待機する。Dependency Dashboard は閉じない。
 2. **cqrs-es M2（進行中・当方は待機）**
    - 計画順は rs → js → java → go。**go は完了**（#678 / #679 / #681 / #573 MERGED、#670 / #671 / #680 CLOSED、M2 マイルストーン closed）。
-   - rs は v5 移行が完了（#601 Read API `f958c54`、#602 e2e `e5d2227`）。RMU 復旧 #600 が実装中で PR はまだない。java / js / go は v5 移行と RMU 復旧が完了。
+   - rs は RMU 復旧 #600 の PR #603 が e2e 実行中。java / js / go は v5 移行と RMU 復旧が完了。M2 後続の本番適用 Issue（js #838 / java #625 / go #682）は未着手。
    - 完了条件は §1.2。特に **head の Streams 購読、`(aggregate_id, seq_nr)` の重複除去、journal からの飛び補完、`read_model_positions` の記録**を満たす。
-   - ハブの HAND_OFF は PR #14 が 01:22 に MERGED `583b5e9`。ESA 側の本ファイルは 01:25 に更新した。
-   - WIP は rs 5 / java 3 / js 3 / go 0。すべて Renovate で off のため触らず、新規 PR も作らない。rs #591 は判断待ち（paths-ignore）。
+   - ハブの HAND_OFF は PR #14 が 01:22 に MERGED `583b5e9`。ESA 側の本ファイルは 02:21 に更新した。
+   - WIP は rs 6（Renovate 5 + #603）/ java 3 / js 3 / go 0。Renovate 分は off のため触らず、新規 PR も作らない。rs #591 は判断待ち（paths-ignore）。
    - 当方は実装に着手しない。加藤さんの追加指示なしに M2 の実装を始めない。1 repo あたり WIP 3 本まで。Bugbot 確認必須。テスト・CI を弱めない。
 3. **ESA の公開準備（オーナー承認待ち）**
    - java を先に正式版、kotlin・scala を java の正式版へ切り替え。各版は公開直前にオーナー承認。
@@ -208,4 +208,4 @@ PR #83 は CLOSED。再開・再実装しない。以下は PR #83 関連の別�
 
 ## 6. 最終更新
 
-- 2026-11-08 01:25 JST
+- 2026-11-08 02:21 JST
