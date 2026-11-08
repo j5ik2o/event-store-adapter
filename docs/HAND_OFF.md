@@ -1,19 +1,19 @@
 # コーディネーター引き継ぎ（HAND_OFF）
 
-- 最終更新: **2026-11-08 10:42 JST**
+- 最終更新: **2026-11-08 10:50 JST**
 - 更新者: コーディネーター
 - 更新方針: マイルストーンの完了または大きな方針変更のたび、およびそれとは別に最長1時間おきに更新する。HAND_OFF の PR は同時に1本までとし、前の PR がマージされるまで次を作らない。
 - 使い方: 次の担当は、会話履歴や端末の下書きに依存せず、このファイルだけで現在地と次の作業を再開できるようにする。数値と状態は更新時点の実測であり、次の更新時に再確認する。
 
 ## 0. 現況サマリ
 
-- **ESA 7repo**（common, js, java, kotlin, scala, go, rs）: open PR は **0**、非 Dashboard の open Issue も **0**。open Issue は常設の Renovate Dependency Dashboard **6件のみ**。
+- **ESA 7repo**（common, js, java, kotlin, scala, go, rs）: open PR は **0**。非 Dashboard の open Issue は **Java #805 / Kotlin #903 / Scala #916 の 3 件**（JVM 系ドライバ分割）。その他の open Issue は常設の Renovate Dependency Dashboard **6件のみ**。
 - 各言語 repo の main CI は **failed なし**。2026-11-08 10:09 JST 時点で js / go / rs は 19:26〜19:28 JST、java は 08:27 JST の直近実行が success、scala も success。kotlin は新しい実行が queued（ランナー待ち、失敗ではない）。common repo には CI がない。
-- **現在の実作業**: ESA 側はなし。Renovate は 2026-11-07 19:33 の加藤さんの決定で使用量削減のため **off**。既存 Renovate PR の修正・リベース・整理・クローズは禁止（WIP 超過の解消目的でも）。マージしてよいのは CI 全緑かつ未対応コメントなしのものだけ。cqrs-es は 6 言語の RMU 復旧と後続（デプロイ資産・staticcheck・運用手順・障害注入 e2e）まで完了。hub #20（`9d78adc`）と #21（`ffc1264`）、kotlin #14 / #16（`f1925bf` / `9200537`）、scala #15（`550de5d`）が MERGED。open の実装 PR はなく、hub の追跡は #3 のみ。詳細は cqrs 側の HAND_OFF を参照。
+- **現在の実作業**: §1.4 の JVM ドライバ分割。Java #805 から着手し、作業者 1 人で進める。Renovate は 2026-11-07 19:33 の加藤さんの決定で使用量削減のため **off**。既存 Renovate PR の修正・リベース・整理・クローズは禁止（WIP 超過の解消目的でも）。マージしてよいのは CI 全緑かつ未対応コメントなしのものだけ。cqrs-es は 6 言語の RMU 復旧と後続（デプロイ資産・staticcheck・運用手順・障害注入 e2e）まで完了。hub #20（`9d78adc`）と #21（`ffc1264`）、kotlin #14 / #16（`f1925bf` / `9200537`）、scala #15（`550de5d`）が MERGED。open の実装 PR はなく、hub の追跡は #3 のみ。詳細は cqrs 側の HAND_OFF を参照。
 - **次のマイルストーン**: `cqrs-es-example` の **M2**（ESA v5 移行と RMU 復旧）は rs / js / java / go で完了。6 言語の RMU 復旧 A 案と後続も完了。残るのは hub #3 の完了確認のみ。ハブの HAND_OFF は PR #21 まで MERGED（[docs/HAND_OFF.md](https://github.com/j5ik2o/cqrs-es-example/blob/main/docs/HAND_OFF.md)）。
 - **WIP（Renovate を除く）**: **0**。Renovate は rs 5 / java 3 / js 3 が open だが、off と「WIP に数えない」方針のため WIP には含めず、修正・リベース・整理・クローズもしない。加藤さんの指示があるまで当方は新規 PR を作らない（HAND_OFF の定期更新 PR はこの禁止の対象外）。
-- **ESA 側の次の節目**: 30 保存先の実装完了（2026-10-28）後の「公開の準備」。java を先に正式版として出し、kotlin・scala を java の正式版へ切り替えてから出す。各版は公開直前にオーナー承認を取る。ただし §1.4 の Java 系保存先ドライバ分割の方針が確定するまで保留する。
-- **Java 系の保存先ドライバ分割（2026-11-08 10:41 加藤さん）**: Java / Kotlin / Scala は保存先（DynamoDB・Spanner・Bigtable・SQLite）ごとにドライバを分ける方向。理由は特に Java で配布物が大きくなるため。アーキテクトに設計依頼中で、加藤さんの裁定が出るまで実装・公開・リリースをしない。詳細は §1.4。
+- **ESA 側の次の節目**: 30 保存先の実装完了（2026-10-28）後の「公開の準備」。java を先に正式版として出し、kotlin・scala を java の正式版へ切り替えてから出す。各版は公開直前にオーナー承認を取る。JVM ドライバ分割（§1.4）の完了後に公開準備へ進む。
+- **Java 系の保存先ドライバ分割（2026-11-08 10:47 裁定済み）**: Java / Kotlin / Scala を core（memory を含む）・dynamodb・spanner・bigtable・sqlite の 5 成果物に分ける。Java から着手し、issue は Java #805 / Kotlin #903 / Scala #916。作業者 1 人、repo あたり open PR 3 本まで。publish / release は毎回加藤さんの承認が必要で、行わない。詳細は §1.4。
 - **残置 worktree**: `java-769-notification-thread`（B 案の未コミット差分）と `rs-349-review`（untracked の aidlc 監査ファイル）。クリーン確認ができないため保持している。詳細は「3. Orca の現況」。
 - **PR #83** は CLOSED。再開・再実装しない。
 
@@ -65,28 +65,28 @@ ESA 側の後で検討する課題（次のマイルストーン候補、オー�
 - Spanner で ABORTED したトランザクションを待たずに再試行している（java・js）。
 - java の SQLite / Spanner / Bigtable の非同期版が、呼び出し元のスレッドで I/O を行って完了済みの Future を返す（kotlin・scala はこれを包む）。
 
-### 1.4 方針: Java / Kotlin / Scala の保存先ドライバ分割（2026-11-08 10:41 加藤さん）
+### 1.4 方針: Java / Kotlin / Scala の保存先ドライバ分割（2026-11-08 10:47 裁定）
 
-- **方針**: ESA の Java・Kotlin・Scala は、保存先（DynamoDB・Spanner・Bigtable・SQLite）ごとにドライバを分ける方向。理由は、特に Java で配布物が大きくなるため。
-- **背景**: 5.1.0 の POM では `google-cloud-spanner` と `google-cloud-bigtable` が compile、`sqlite-jdbc` が runtime で、DynamoDB だけを使う利用者にもすべて入る。cqrs-es の Lambda 配布物の肥大（kotlin README 138MB、scala 約 120MB）の共通要因。rs は cargo feature、js は任意の peerDependencies と `./spanner` などの入口、go は保存先ごとのパッケージで分割済みで、Java 系だけが全部入り。
-- **未決（加藤さんの裁定待ち）**:
-  - 成果物を保存先ごとに分けるか、1 つの JAR のままドライバを任意依存にするか。
-  - 全部入りを残して 5.2.0 とするか、v6 とするか（spec P-48 との関係）。
-  - Kotlin / Scala の `EventStore.ofSpanner` / `ofBigtable` / `ofSqlite` の置き場所。
-- **進め方**: アーキテクトに設計を依頼中。加藤さんの裁定が出るまで、実装・公開・リリースをしない。
+- **裁定**: アーキテクト推奨案で進める（2026-11-08 10:47 加藤さん）。
+- **方針**: ESA の Java・Kotlin・Scala を、**core（memory を含む）・dynamodb・spanner・bigtable・sqlite の 5 つの成果物**に分ける。各ドライバの SDK はその保存先のモジュールだけが持ち、`api` で公開する。パッケージ名・クラス名は変えない。
+  - 既存 artifact `event-store-adapter-java` / `-kotlin` / `-scala` は、全モジュールに依存するだけの中身のないまとめ用として残し、**5.2.0** にする。同じクラスをまとめ用と各モジュールの両方に入れない。
+  - Kotlin / Scala の `EventStore.ofSpanner` / `ofBigtable` / `ofSqlite` / `ofDynamoDB` は、今の場所に同じシグネチャで残して `@Deprecated` を付ける。core から ESA Java の各保存先モジュールへの依存はコンパイル時だけにする（Kotlin は `compileOnly`、Scala は `Provided`）。新しい入口（例: `DynamoDbEventStores.of`）を各保存先モジュールに足す。
+- **背景**: 5.1.0 の POM では `google-cloud-spanner` と `google-cloud-bigtable` が compile、`sqlite-jdbc` が runtime で、DynamoDB だけを使う利用者にもすべて入る。cqrs-es の Lambda 配布物の肥大（kotlin README 138MB、scala 約 120MB）の共通要因。rs は cargo feature、js は任意の peerDependencies と `./spanner` などの入口、go は保存先ごとのパッケージで分割済みで、Java 系だけが全部入りだった。
+- **公開前の必須確認**: Kotlin / Scala で core + dynamodb だけをクラスパスに置き、`EventStore` の companion / object を初期化して DynamoDB を読み書きするテストを CI に入れる。JVM の設定は変えず、バイトコード検証も通常どおり動かす。通らなければ実装を止めて報告する。
+- **進め方**: 順番は **Java → Kotlin・Scala**（Kotlin / Scala は Java 5.2.0 に依存するため後）。issue を Java #805 / Kotlin #903 / Scala #916 に起票済み。Java から着手し、作業者 1 人、repo あたり open PR 3 本まで（Renovate を除く）。publish / release は毎回加藤さんの承認が必要で、**絶対にしない**。
 - **別件**: cqrs 側の GraphQL 切り出しはこの方針とは別件。
 
-## 2. リポジトリごとの open PR / Issue（2026-11-08 10:09 JST）
+## 2. リポジトリごとの open PR / Issue（2026-11-08 10:50 JST）
 
 ### 2.1 ESA 7repo
 
-open PR はすべて 0。非 Dashboard の open Issue も 0。open Issue は次の常設 Dashboard のみ。閉じない。
+open PR はすべて 0。非 Dashboard の open Issue は JVM 系ドライバ分割の 3 件（Java #805 / Kotlin #903 / Scala #916）。その他の open Issue は次の常設 Dashboard のみ。閉じない。
 
 - common `event-store-adapter`: なし
 - js: [#4 Dependency Dashboard](https://github.com/j5ik2o/event-store-adapter-js/issues/4)
-- java: [#4 Dependency Dashboard](https://github.com/j5ik2o/event-store-adapter-java/issues/4)
-- kotlin: [#4 Dependency Dashboard](https://github.com/j5ik2o/event-store-adapter-kotlin/issues/4)
-- scala: [#4 Dependency Dashboard](https://github.com/j5ik2o/event-store-adapter-scala/issues/4)
+- java: [#4 Dependency Dashboard](https://github.com/j5ik2o/event-store-adapter-java/issues/4)、[#805 JVM 系の保存先ドライバ分割: Java を 5 成果物に分ける](https://github.com/j5ik2o/event-store-adapter-java/issues/805)
+- kotlin: [#4 Dependency Dashboard](https://github.com/j5ik2o/event-store-adapter-kotlin/issues/4)、[#903 JVM 系の保存先ドライバ分割: Kotlin を Java 5.2.0 の分割に追従させる](https://github.com/j5ik2o/event-store-adapter-kotlin/issues/903)
+- scala: [#4 Dependency Dashboard](https://github.com/j5ik2o/event-store-adapter-scala/issues/4)、[#916 JVM 系の保存先ドライバ分割: Scala を Java 5.2.0 の分割に追従させる](https://github.com/j5ik2o/event-store-adapter-scala/issues/916)
 - go: [#3 Dependency Dashboard](https://github.com/j5ik2o/event-store-adapter-go/issues/3)
 - rs: [#12 Dependency Dashboard](https://github.com/j5ik2o/event-store-adapter-rs/issues/12)
 
@@ -171,7 +171,7 @@ PR #83 は CLOSED。再開・再実装しない。以下は PR #83 関連の別�
 
 ## 4. 加藤さんの決定と禁止事項
 
-- **Java 系の保存先ドライバ分割を進める**（2026-11-08 10:41 加藤さん）。Java / Kotlin / Scala は DynamoDB・Spanner・Bigtable・SQLite ごとにドライバを分ける方向で、理由は特に Java の配布物肥大。成果物の分け方、5.2.0 / v6（spec P-48 との関係）、Kotlin / Scala の `EventStore.ofSpanner` / `ofBigtable` / `ofSqlite` の置き場所は未決。アーキテクトの設計と加藤さんの裁定を待ち、裁定まで実装・公開・リリースをしない。
+- **Java 系の保存先ドライバ分割を進める**（2026-11-08 10:47 裁定）。Java / Kotlin / Scala を core（memory を含む）・dynamodb・spanner・bigtable・sqlite の 5 成果物に分ける。各ドライバの SDK はその保存先のモジュールだけが `api` で持ち、パッケージ名・クラス名は変えない。既存 artifact は全モジュール依存のまとめ用として 5.2.0 で残す。Kotlin / Scala の `EventStore.of...` は同じ場所・同じシグネチャで `@Deprecated`、core からの依存は compileOnly / Provided、新しい入口を各保存先モジュールに足す。Java → Kotlin・Scala の順で、issue #805 / #903 / #916、作業者 1 人、repo あたり open PR 3 本まで。publish / release は毎回加藤さんの承認が必要で、行わない。
 - **WIP は repo ごと（Renovate を除く）**。異なる repo を同じ worktree で同時に編集しない。cqrs-es は 1 repo あたり open PR 3 本まで（Renovate を除く）。
   - 現状（Renovate を除く）: open PR は 0。Renovate は rs 5 / java 3 / js 3 が open だが WIP に数えず、off のため修正・リベース・整理・クローズをせず、新規 PR も作らない。rs #591 は判断待ち（paths-ignore）。
 - **Renovate は off**（2026-11-07 19:33、使用量削減）。既存 Renovate PR の修正・リベース・整理・クローズは禁止（WIP 超過の解消目的でも）。マージは CI 全緑かつ未対応コメントなしのものだけ（Grok Bot 側のコメントも確認する）。
@@ -212,7 +212,8 @@ PR #83 は CLOSED。再開・再実装しない。以下は PR #83 関連の別�
    - 当方は実装に着手しない。加藤さんの追加指示なしに M2 の実装を始めない。1 repo あたり open PR 3 本まで（Renovate を除く）。Bugbot 確認必須。テスト・CI を弱めない。
 3. **ESA の公開準備（オーナー承認待ち）**
    - java を先に正式版、kotlin・scala を java の正式版へ切り替え。各版は公開直前にオーナー承認。
-   - §1.4 の Java 系保存先ドライバ分割の方針が確定するまで公開準備は保留。設計依頼中で、加藤さんの裁定後に再開する。
+   - §1.4 の裁定に従い、Java #805 → Kotlin #903 → Scala #916 の順でドライバ分割を進める。作業者 1 人、repo あたり open PR 3 本まで（Renovate を除く）。
+   - 公開準備は分割完了後。publish / release は毎回加藤さんの承認が必要で、行わない。
 4. **HAND_OFF の更新**
    - マイルストーン完了・大きな方針変更のたび、および最長1時間おき。更新 PR は1本ずつ。
 5. **残置 worktree の整理**
@@ -222,4 +223,4 @@ PR #83 は CLOSED。再開・再実装しない。以下は PR #83 関連の別�
 
 ## 6. 最終更新
 
-- 2026-11-08 10:42 JST
+- 2026-11-08 10:50 JST
