@@ -169,6 +169,13 @@ PR #83 は CLOSED。再開・再実装しない。以下は PR #83 関連の別�
 
 `deps-*` や `sbt-git-*` などの completed worktree が各 repo に残っている。他担当由来のものを含むため、削除は所有者とクリーン状態を確認してから行う。無条件の一括削除はしない。
 
+### 3.5 JVM ドライバ分割（進行中・作業者1人）
+
+- java `jvm-driver-split`（`/Users/j5ik2o/orca/workspaces/event-store-adapter-java/jvm-driver-split`、branch `codex/jvm-driver-split`、issue #805）
+  - 端末: `term_a2cebfe5-8d27-4078-8313-e15717d0f7ce`（Claude / deepseek-v4.1-flash:cloud）
+  - 状態: 作業中。publish / release / signing は行わない。
+- Kotlin #903 / Scala #916 は Java 5.2.0 の後。まだ worktree / 端末は作らない。
+
 ## 4. 加藤さんの決定と禁止事項
 
 - **Java 系の保存先ドライバ分割を進める**（2026-11-08 10:47 裁定）。Java / Kotlin / Scala を core（memory を含む）・dynamodb・spanner・bigtable・sqlite の 5 成果物に分ける。各ドライバの SDK はその保存先のモジュールだけが `api` で持ち、パッケージ名・クラス名は変えない。既存 artifact は全モジュール依存のまとめ用として 5.2.0 で残す。Kotlin / Scala の `EventStore.of...` は同じ場所・同じシグネチャで `@Deprecated`、core からの依存は compileOnly / Provided、新しい入口を各保存先モジュールに足す。Java → Kotlin・Scala の順で、issue #805 / #903 / #916、作業者 1 人、repo あたり open PR 3 本まで。publish / release は毎回加藤さんの承認が必要で、行わない。
