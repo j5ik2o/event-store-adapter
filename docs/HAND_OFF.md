@@ -1,6 +1,6 @@
 # コーディネーター引き継ぎ（HAND_OFF）
 
-- 最終更新: **2026-11-08 10:50 JST**
+- 最終更新: **2026-11-08 11:15 JST**
 - 更新者: コーディネーター
 - 更新方針: マイルストーンの完了または大きな方針変更のたび、およびそれとは別に最長1時間おきに更新する。HAND_OFF の PR は同時に1本までとし、前の PR がマージされるまで次を作らない。
 - 使い方: 次の担当は、会話履歴や端末の下書きに依存せず、このファイルだけで現在地と次の作業を再開できるようにする。数値と状態は更新時点の実測であり、次の更新時に再確認する。
@@ -8,10 +8,10 @@
 ## 0. 現況サマリ
 
 - **ESA 7repo**（common, js, java, kotlin, scala, go, rs）: open PR は **0**。非 Dashboard の open Issue は **Java #805 / Kotlin #903 / Scala #916 の 3 件**（JVM 系ドライバ分割）。その他の open Issue は常設の Renovate Dependency Dashboard **6件のみ**。
-- 各言語 repo の main CI は **failed なし**。2026-11-08 10:09 JST 時点で js / go / rs は 19:26〜19:28 JST、java は 08:27 JST の直近実行が success、scala も success。kotlin は新しい実行が queued（ランナー待ち、失敗ではない）。common repo には CI がない。
-- **現在の実作業**: §1.4 の JVM ドライバ分割。Java #805 から着手し、作業者 1 人で進める。Renovate は 2026-11-07 19:33 の加藤さんの決定で使用量削減のため **off**。既存 Renovate PR の修正・リベース・整理・クローズは禁止（WIP 超過の解消目的でも）。マージしてよいのは CI 全緑かつ未対応コメントなしのものだけ。cqrs-es は 6 言語の RMU 復旧と後続（デプロイ資産・staticcheck・運用手順・障害注入 e2e）まで完了。hub #20（`9d78adc`）と #21（`ffc1264`）、kotlin #14 / #16（`f1925bf` / `9200537`）、scala #15（`550de5d`）が MERGED。open の実装 PR はなく、hub の追跡は #3 のみ。詳細は cqrs 側の HAND_OFF を参照。
+- 各言語 repo の main CI は **failed なし**。2026-11-08 11:15 JST 時点で確認できる最新は、js / go / rs が 19:26〜19:28 JST、java が 08:27 JST の実行で success、scala も success。kotlin は新しい実行が queued（ランナー待ち、失敗ではない）。common repo には CI がない。
+- **現在の実作業**: §1.4 の JVM ドライバ分割。Java #805 を作業者 1 人で進めており、5 モジュール分割はコンパイルと POM まで確認済み。`./gradlew build` が 10:52 から実行中（Spanner conformance まで進行、未完了）。**build が成功した場合に** core + dynamodb だけの初期化・読み書き CI テストを追加し、PR 化する。build が失敗した場合はテスト追加・PR 作成に進まず、原因を直すか停止して報告する。Renovate は 2026-11-07 19:33 の加藤さんの決定で使用量削減のため **off**。既存 Renovate PR の修正・リベース・整理・クローズは禁止（WIP 超過の解消目的でも）。マージしてよいのは CI 全緑かつ未対応コメントなしのものだけ。cqrs-es は 6 言語の RMU 復旧と後続まで完了。hub #20（`9d78adc`）と #21（`ffc1264`）、kotlin #14 / #16（`f1925bf` / `9200537`）、scala #15（`550de5d`）が MERGED。open の実装 PR はなく、hub の追跡は #3 のみ。
 - **次のマイルストーン**: `cqrs-es-example` の **M2**（ESA v5 移行と RMU 復旧）は rs / js / java / go で完了。6 言語の RMU 復旧 A 案と後続も完了。残るのは hub #3 の完了確認のみ。ハブの HAND_OFF は PR #21 まで MERGED（[docs/HAND_OFF.md](https://github.com/j5ik2o/cqrs-es-example/blob/main/docs/HAND_OFF.md)）。
-- **WIP（Renovate を除く）**: **0**。Renovate は rs 5 / java 3 / js 3 が open だが、off と「WIP に数えない」方針のため WIP には含めず、修正・リベース・整理・クローズもしない。加藤さんの指示があるまで当方は新規 PR を作らない（HAND_OFF の定期更新 PR はこの禁止の対象外）。
+- **WIP（Renovate を除く）**: **0**。Renovate は rs 5 / java 3 / js 3 が open だが、off と「WIP に数えない」方針のため WIP には含めず、修正・リベース・整理・クローズもしない。加藤さんの指示があるまで当方は新規 PR を作らない。ただし **Java #805 の実装 PR は 10:47 の裁定と 11:15 の指示で許可済み**（条件: build 成功と core + dynamodb の CI テスト追加）。HAND_OFF の定期更新 PR もこの禁止の対象外。
 - **ESA 側の次の節目**: 30 保存先の実装完了（2026-10-28）後の「公開の準備」。java を先に正式版として出し、kotlin・scala を java の正式版へ切り替えてから出す。各版は公開直前にオーナー承認を取る。JVM ドライバ分割（§1.4）の完了後に公開準備へ進む。
 - **Java 系の保存先ドライバ分割（2026-11-08 10:47 裁定済み）**: Java / Kotlin / Scala を core（memory を含む）・dynamodb・spanner・bigtable・sqlite の 5 成果物に分ける。Java から着手し、issue は Java #805 / Kotlin #903 / Scala #916。作業者 1 人、repo あたり open PR 3 本まで。publish / release は毎回加藤さんの承認が必要で、行わない。詳細は §1.4。
 - **残置 worktree**: `java-769-notification-thread`（B 案の未コミット差分）と `rs-349-review`（untracked の aidlc 監査ファイル）。クリーン確認ができないため保持している。詳細は「3. Orca の現況」。
@@ -73,7 +73,8 @@ ESA 側の後で検討する課題（次のマイルストーン候補、オー�
   - Kotlin / Scala の `EventStore.ofSpanner` / `ofBigtable` / `ofSqlite` / `ofDynamoDB` は、今の場所に同じシグネチャで残して `@Deprecated` を付ける。core から ESA Java の各保存先モジュールへの依存はコンパイル時だけにする（Kotlin は `compileOnly`、Scala は `Provided`）。新しい入口（例: `DynamoDbEventStores.of`）を各保存先モジュールに足す。
 - **背景**: 5.1.0 の POM では `google-cloud-spanner` と `google-cloud-bigtable` が compile、`sqlite-jdbc` が runtime で、DynamoDB だけを使う利用者にもすべて入る。cqrs-es の Lambda 配布物の肥大（kotlin README 138MB、scala 約 120MB）の共通要因。rs は cargo feature、js は任意の peerDependencies と `./spanner` などの入口、go は保存先ごとのパッケージで分割済みで、Java 系だけが全部入りだった。
 - **公開前の必須確認**: Kotlin / Scala で core + dynamodb だけをクラスパスに置き、`EventStore` の companion / object を初期化して DynamoDB を読み書きするテストを CI に入れる。JVM の設定は変えず、バイトコード検証も通常どおり動かす。通らなければ実装を止めて報告する。
-- **進め方**: 順番は **Java → Kotlin・Scala**（Kotlin / Scala は Java 5.2.0 に依存するため後）。issue を Java #805 / Kotlin #903 / Scala #916 に起票済み。Java から着手し、作業者 1 人、repo あたり open PR 3 本まで（Renovate を除く）。publish / release は毎回加藤さんの承認が必要で、**絶対にしない**。
+- **進め方**: 順番は **Java → Kotlin・Scala**（Kotlin / Scala は Java 5.2.0 に依存するため後）。issue を Java #805 / Kotlin #903 / Scala #916 に起票済み。Java から着手し、作業者 1 人、repo あたり open PR 3 本まで（Renovate を除く）。**Java #805 の PR 作成は 10:47 の裁定と 11:15 の指示で許可済み**で、条件は build 成功と core + dynamodb の CI テスト追加。build 失敗時はテスト追加・PR 作成に進まず停止して報告する。publish / release は毎回加藤さんの承認が必要で、**絶対にしない**。
+- **進捗（11:15）**: Java の 5 モジュール分割はコンパイルと POM まで確認済み。`./gradlew build` が 10:52 から実行中（Spanner conformance まで進行、未完了）。build 成功後に core + dynamodb だけの初期化・読み書き CI テストを追加し、PR を作る。
 - **別件**: cqrs 側の GraphQL 切り出しはこの方針とは別件。
 
 ## 2. リポジトリごとの open PR / Issue（2026-11-08 10:50 JST）
@@ -173,7 +174,7 @@ PR #83 は CLOSED。再開・再実装しない。以下は PR #83 関連の別�
 
 - java `jvm-driver-split`（`/Users/j5ik2o/orca/workspaces/event-store-adapter-java/jvm-driver-split`、branch `codex/jvm-driver-split`、issue #805）
   - 端末: `term_a2cebfe5-8d27-4078-8313-e15717d0f7ce`（Claude / deepseek-v4.1-flash:cloud）
-  - 状態: 作業中。publish / release / signing は行わない。
+  - 状態: 作業中。5 モジュール分割はコンパイルと POM まで確認済み。10:52 から `./gradlew build` 実行中（Spanner conformance まで進行、未完了）。build 成功後に core + dynamodb だけの初期化・読み書き CI テストを追加し PR 化する。publish / release / signing は行わない。
 - Kotlin #903 / Scala #916 は Java 5.2.0 の後。まだ worktree / 端末は作らない。
 
 ## 4. 加藤さんの決定と禁止事項
@@ -191,7 +192,7 @@ PR #83 は CLOSED。再開・再実装しない。以下は PR #83 関連の別�
 - **main への直 push は禁止**。ブランチから PR を作る。
 - **PR のタイトル・本文は日本語**、**コミットは英語の Conventional Commit**。
 - **HAND_OFF の PR は同時に1本まで**。前の PR がマージされるまで次を作らない。
-- **現在の新規着手はしない**。Renovate は off、既存 Renovate PR は読み取り専用。加藤さんの追加指示なしに M2 の実装や他 repo の作業を始めない。HAND_OFF の定期更新 PR は例外として本方針に従い作成する。
+- **現在の新規着手はしない**。Renovate は off、既存 Renovate PR は読み取り専用。加藤さんの追加指示なしに M2 の実装や他 repo の作業を始めない。例外は §1.4 の Java #805（10:47 の裁定と 11:15 の指示で進行中、build 成功と CI テスト追加が PR の条件）と HAND_OFF の定期更新 PR。
 - **マージ条件**: 全チェック緑、未対応コメントなし、非ドラフト、conflict なし。squash で英語 Conventional subject を `--subject` に明示し、`--match-head-commit` を付ける。BEHIND なら update-branch → 再 CI 後に同じ条件で判断する。
 - **マージ後**: main CI を確認する。Issue は実際に main へ修正が入り、追跡作業が消えたことを確認してから閉じる。Dependency Dashboard は閉じない。
 - **テスト・監査・CI を弱めない**。allow、ignore、検査削除、タイムアウト延長やリトライだけで緑にしない。失敗は原因を直す。
@@ -230,4 +231,4 @@ PR #83 は CLOSED。再開・再実装しない。以下は PR #83 関連の別�
 
 ## 6. 最終更新
 
-- 2026-11-08 10:50 JST
+- 2026-11-08 11:15 JST
