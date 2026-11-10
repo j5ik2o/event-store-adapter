@@ -9,7 +9,7 @@ python3 -B -m unittest discover -s tools/pm -p test_boundary_corpus.py -v
 
 The runner prints the evidence directory. To choose a location, pass `--output /path/to/new/run`. The directory must not exist. Keep it to inspect inputs, exact commands, stdout, stderr, exit codes, generated manifests, source SHA256 values, results, and the evidence SHA256 manifest. It creates local files only inside that directory. It never imports existing test modules.
 
-Relative output locations are resolved from the caller's working directory before fixtures run. If an executed target emits invalid JSON or malformed retention evidence, the case remains a contract mismatch; those observations do not become incomplete execution.
+Relative output locations are resolved from the caller's working directory before fixtures run. If an executed target emits invalid JSON or malformed retention evidence, the case remains a contract mismatch; those observations do not become incomplete execution. A target that exits before calling the fake `gh` has zero recorded calls and remains a contract mismatch.
 
 To rerun one contrast, select its exact ID. Repeat `--case` to select several. A selected run establishes only those cases.
 
@@ -48,7 +48,7 @@ python3 -B tools/pm/boundary_corpus.py --case pr-invalid_marker \
   --historical-dir /path/to/sources
 ```
 
-Use all full SHAs declared in the JSON for a full comparison. The corpus records source hashes but does not authenticate supplied sources against GitHub. Acquisition is a separate network operation. Missing sources are incomplete. Historical runs must match a specific observed regression signature or legal control. An arbitrary old failure does not pass. On Python 3.9 the old huge integer is misclassified as API-consistent; on Python 3.15 it raises a digit-limit ValueError. Old recursion must specifically produce a RecursionError with no JSON. These are exceptions to the normal structured-output expectations, restricted to historical comparisons.
+Use all full SHAs declared in the JSON for a full comparison. The corpus records source hashes but does not authenticate supplied sources against GitHub. Acquisition is a separate network operation. Missing sources are incomplete. Historical runs must match a specific observed regression signature or legal control. An arbitrary old failure does not pass. For the old huge integer, a saved capability probe runs with the same child interpreter and environment as the target. If that runtime accepts 5000 digits, the old CLI must misclassify the patch as API-consistent; otherwise it must raise a digit-limit ValueError. This includes backported limits and limits disabled or raised through the environment; parent-only interpreter flags are not assumed to reach the child. Old recursion must specifically produce a RecursionError with no JSON. These are exceptions to the normal structured-output expectations, restricted to historical comparisons.
 
 ## Scope and implementation evidence
 

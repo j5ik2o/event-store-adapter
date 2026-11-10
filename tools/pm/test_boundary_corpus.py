@@ -17,7 +17,7 @@ class CorpusTests(unittest.TestCase):
             output = Path(tmp) / 'run'
             proc = subprocess.run([sys.executable, '-B', str(Path(corpus.__file__)),
                                    '--output', str(output)], capture_output=True, text=True)
-            report = json.loads((output / 'results.json').read_text())
+            report = json.loads((output / 'results.json').read_text(encoding='utf-8'))
             self.assertTrue(report['cases'])
             self.assertFalse([r for r in report['cases'] if r['state'] in ('fail', 'incomplete')], report)
             unsupported = [r for r in report['cases'] if r['state'] == 'unsupported']
@@ -25,7 +25,7 @@ class CorpusTests(unittest.TestCase):
             self.assertEqual(report['state'], 'incomplete' if unsupported else 'pass')
             self.assertEqual({r['case'] for r in unsupported},
                              {'artifact-absolute_path', 'artifact-json_escape'} if unsupported else set())
-            manifest = json.loads((output / 'manifest.json').read_text())
+            manifest = json.loads((output / 'manifest.json').read_text(encoding='utf-8'))
             self.assertIn('ci-job_id/cli.stdout', manifest)
             self.assertFalse(report['external_GET'])
 
@@ -34,7 +34,7 @@ class CorpusTests(unittest.TestCase):
             proc = subprocess.run([sys.executable, '-B', str(Path(corpus.__file__).resolve()),
                                    '--case', 'ci-integer', '--output', 'evidence/run'],
                                   cwd=tmp, capture_output=True, text=True)
-            report = json.loads((Path(tmp) / 'evidence/run/results.json').read_text())
+            report = json.loads((Path(tmp) / 'evidence/run/results.json').read_text(encoding='utf-8'))
             self.assertEqual(proc.returncode, 0, report)
             self.assertEqual(report['state'], 'pass')
             self.assertEqual(Path(json.loads(proc.stdout)['results']),
@@ -45,21 +45,21 @@ class CorpusTests(unittest.TestCase):
             with self.subTest(stdout=stdout), tempfile.TemporaryDirectory() as tmp:
                 directory = Path(tmp)
                 script = directory / 'runner.py'
-                script.write_text(Path(corpus.__file__).read_text())
-                data = json.loads(Path(corpus.__file__).with_suffix('.json').read_text())
+                script.write_text(Path(corpus.__file__).read_text(encoding='utf-8'), encoding='utf-8')
+                data = json.loads(Path(corpus.__file__).with_suffix('.json').read_text(encoding='utf-8'))
                 data['cases'] = [c for c in data['cases'] if c['id'] == 'ci-late_body']
-                script.with_suffix('.json').write_text(json.dumps(data))
+                script.with_suffix('.json').write_text(json.dumps(data), encoding='utf-8')
                 (directory / 'ci_status.py').write_text(
-                    'import sys\nsys.stdout.write(' + repr(stdout) + ')\nsys.exit(2)\n')
+                    'import sys\nsys.stdout.write(' + repr(stdout) + ')\nsys.exit(2)\n', encoding='utf-8')
                 output = directory / 'run'
                 proc = subprocess.run([sys.executable, '-B', str(script), '--output', str(output)],
                                       capture_output=True, text=True)
-                report = json.loads((output / 'results.json').read_text())
+                report = json.loads((output / 'results.json').read_text(encoding='utf-8'))
                 self.assertEqual(proc.returncode, 1, proc.stderr)
                 self.assertEqual(report['state'], 'fail')
                 self.assertTrue(report['cases'][0]['failures'])
                 self.assertIn('ci-late_body/cli.stdout',
-                              json.loads((output / 'manifest.json').read_text()))
+                              json.loads((output / 'manifest.json').read_text(encoding='utf-8')))
 
     def test_target_exit_before_gh_keeps_contract_mismatches(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -95,7 +95,7 @@ class CorpusTests(unittest.TestCase):
                                ('stdout', 'not json'), ('stderr', 'Traceback')]:
                 broken = dict(result, **{key: value})
                 self.assertTrue(corpus.check(broken, expected, output), broken)
-            output.write_text('must not exist')
+            output.write_text('must not exist', encoding='utf-8')
             self.assertTrue(corpus.check(result, expected, output))
 
     def test_known_failure_requires_raw_evidence_and_counts(self):
@@ -122,7 +122,7 @@ class CorpusTests(unittest.TestCase):
             proc = subprocess.run([sys.executable, '-B', corpus.__file__, '--case', 'does-not-exist',
                                    '--output', str(output)], capture_output=True)
             self.assertEqual(proc.returncode, 2)
-            self.assertEqual(json.loads((output / 'results.json').read_text())['state'], 'incomplete')
+            self.assertEqual(json.loads((output / 'results.json').read_text(encoding='utf-8'))['state'], 'incomplete')
 
     def test_historical_integer_contract_uses_the_target_runtime(self):
         old_source = """import json, pathlib, sys
@@ -135,7 +135,7 @@ else:
     print(json.dumps({'api_consistent': True, 'files': [{'state': 'validated-api-patch'}]}))
 sys.exit(1)
 """
-        data = json.loads(Path(corpus.__file__).with_suffix('.json').read_text())
+        data = json.loads(Path(corpus.__file__).with_suffix('.json').read_text(encoding='utf-8'))
         case = next(c for c in data['cases'] if c['id'] == 'pr-huge_hunk_integer')
         for limit, parent_flags in [('0', []), ('6000', []), ('4300', []),
                                     ('4300', ['-X', 'int_max_str_digits=0'])]:
@@ -150,7 +150,7 @@ sys.exit(1)
                                        '--case', case['id'], '--historical-dir',
                                        str(directory / 'sources'), '--output', str(output)],
                                       env=env, capture_output=True, text=True)
-                report = json.loads((output / 'results.json').read_text())
+                report = json.loads((output / 'results.json').read_text(encoding='utf-8'))
                 self.assertEqual(proc.returncode, 0, report)
                 self.assertEqual(report['state'], 'pass')
 
@@ -169,7 +169,7 @@ sys.exit(1)
             proc = subprocess.run([sys.executable, '-B', corpus.__file__, '--case', 'ci-integer',
                                    '--historical-dir', str(Path(tmp) / 'missing'),
                                    '--output', str(output)], capture_output=True)
-            report = json.loads((output / 'results.json').read_text())
+            report = json.loads((output / 'results.json').read_text(encoding='utf-8'))
             self.assertEqual(proc.returncode, 2)
             self.assertEqual(report['cases'][0]['state'], 'incomplete')
             self.assertFalse(report['full_corpus'])
@@ -179,13 +179,13 @@ sys.exit(1)
                             'target': 'unknown', 'recipe': 'unknown'}]):
             with self.subTest(cases=cases), tempfile.TemporaryDirectory() as tmp:
                 script = Path(tmp) / 'runner.py'
-                script.write_text(Path(corpus.__file__).read_text())
-                script.with_suffix('.json').write_text(json.dumps({'cases': cases}))
+                script.write_text(Path(corpus.__file__).read_text(encoding='utf-8'), encoding='utf-8')
+                script.with_suffix('.json').write_text(json.dumps({'cases': cases}), encoding='utf-8')
                 output = Path(tmp) / 'run'
                 proc = subprocess.run([sys.executable, '-B', str(script), '--output', str(output)],
                                       capture_output=True)
                 self.assertEqual(proc.returncode, 2, proc.stderr)
-                self.assertEqual(json.loads((output / 'results.json').read_text())['state'], 'incomplete')
+                self.assertEqual(json.loads((output / 'results.json').read_text(encoding='utf-8'))['state'], 'incomplete')
 
 
 if __name__ == '__main__':

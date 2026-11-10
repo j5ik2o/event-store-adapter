@@ -57,8 +57,8 @@ if args[:1] != ['api'] or '--method' not in args or args[args.index('--method')+
     sys.exit(91)
 with (p/'calls.jsonl').open('a') as f:
     f.write(json.dumps(args)+'\\n')
-n = len((p/'calls.jsonl').read_text().splitlines())
-responses = json.loads((p/'responses.json').read_text())
+n = len((p/'calls.jsonl').read_text(encoding='utf-8').splitlines())
+responses = json.loads((p/'responses.json').read_text(encoding='utf-8'))
 if n > len(responses):
     sys.exit(92)
 print(json.dumps(responses[n-1]))
@@ -83,7 +83,7 @@ print(json.dumps(responses[n-1]))
         if recipe == 'deep':
             payload = json.dumps(raw)
             payload = payload.replace('"name": "example"', '"name": "example", "extra": ' + '[' * 1100 + '0' + ']' * 1100)
-            (directory / 'example.json').write_text(payload)
+            (directory / 'example.json').write_text(payload, encoding='utf-8')
         return ['--ledger', str(directory / 'ledger.json'), '--inventory',
                 str(directory / 'input.json'), '--records-dir', str(directory)], env, output
     root = directory
@@ -185,13 +185,25 @@ def retention(result, fixture):
     return problems
 
 
+def accepts_historical_integer(python, directory, env):
+    probe = directory / 'integer-probe.py'
+    probe.write_text("import json\ntry:\n    int('9' * 5000)\nexcept ValueError:\n"
+                     "    accepts = False\nelse:\n    accepts = True\n"
+                     "print(json.dumps({'accepts': accepts}))\n", encoding='utf-8')
+    result = invoke(python, probe, [], directory, env, 'integer-probe')
+    report = json.loads(result['stdout'])
+    if (result['exit'] != 0 or result['stderr'] or not isinstance(report, dict)
+            or type(report.get('accepts')) is not bool):
+        raise ValueError('historical integer capability probe failed')
+    return report['accepts']
+
+
 def run_case(case, directory, python, script, historical=False):
     args, env, output = prepare(case, directory, python)
     result = invoke(python, script, args, directory, env, 'cli')
     expected = case['old_expect'] if historical else case['expect']
     if expected.get('special') == 'huge_integer':
-        # Python 3.9 accepts huge int conversion; newer Python rejects it before the fix.
-        if sys.version_info[:2] == (3, 9):
+        if accepts_historical_integer(python, directory, env):
             expected = {'exit': 1, 'fields': {'api_consistent': True,
                         'files/0/state': 'validated-api-patch'}, 'stderr': 'empty', 'output': False}
         else:
@@ -203,14 +215,15 @@ def run_case(case, directory, python, script, historical=False):
                          'evidence': 'not_assessed'}, 'stderr': 'empty', 'output': True}, output)
         if producer:
             return producer
-        save(directory / 'generated.json', json.loads(output.read_text()))
+        save(directory / 'generated.json', json.loads(output.read_text(encoding='utf-8')))
         result = invoke(python, script, ['verify', str(output), '--contract', args[1]],
                         directory, env, 'reader')
     problems = check(result, expected, output)
     if expected.get('retain'):
         problems.extend(retention(result, case['fixture']))
     if case['target'] == 'pr_file_diff':
-        calls = (directory / 'calls.jsonl').read_text().splitlines()
+        call_log = directory / 'calls.jsonl'
+        calls = call_log.read_text(encoding='utf-8').splitlines() if call_log.exists() else []
         if len(calls) != 3 and not historical:
             problems.append('fake gh did not serve all three saved responses')
     return problems
@@ -226,7 +239,7 @@ def main():
     if root.exists():
         parser.error('--output must name a new directory')
     root.mkdir(parents=True, exist_ok=False)
-    cases = json.loads(Path(__file__).with_suffix('.json').read_text())['cases']
+    cases = json.loads(Path(__file__).with_suffix('.json').read_text(encoding='utf-8'))['cases']
     ids = [c['id'] for c in cases]
     if (len(set(ids)) != len(ids) or any(not re.fullmatch(r'[a-z][a-z0-9_-]*', i) for i in ids)
             or any(not re.fullmatch(r'[0-9a-f]{40}', c['old_sha']) for c in cases)
