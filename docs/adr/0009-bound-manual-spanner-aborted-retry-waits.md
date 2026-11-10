@@ -78,7 +78,7 @@ For next retry ordinal k starting at 1, use equal jitter in integer milliseconds
 | 5 | 800 | 400..800 |
 | 6 and later | 1000 | 500..1000 |
 
-With L=5 and no hints, requested waits total 775..1550ms if all retry opportunities are used. With accepted server hints, at most `L * 60000` ms is requested, calculated without overflow for diagnostics. This is not a wall-clock deadline. RPCs, hooks, rollback, cleanup, scheduler delays, and a blocked event loop can add time. This proposal introduces no total operation deadline and never resets an SDK RPC deadline. The caller's existing client settings still govern SDK operations.
+With L=5 and no hints, selected retry delays total 775..1550ms if all retry opportunities are used. With accepted server hints, their sum is at most `L * 60000` ms, calculated without overflow for diagnostics. This sum counts each selected delay once. Timer requests after early wake-ups can have a larger sum. This is not a wall-clock deadline. RPCs, hooks, rollback, cleanup, scheduler delays, and a blocked event loop can add time. This proposal introduces no total operation deadline and never resets an SDK RPC deadline. The caller's existing client settings still govern SDK operations.
 
 The 50ms initial cap gives a positive pause while limiting added latency for a transient abort. Doubling spreads later retries over a wider interval. The 1000ms cap limits fallback latency for high retry limits. Equal jitter retains a nonzero lower bound. These are policy judgments to review, not benchmark results or copies of either SDK's defaults.
 
@@ -88,14 +88,15 @@ The 50ms initial cap gives a positive pause while limiting added latency for a t
 | --- | --- |
 | Eligible pre-commit ABORTED | Cleanup, limit check, delay decision, wait, next transaction. |
 | Domain rejection or Java `EventStoreException` | Existing domain error, no wait or retry. |
-| Non-ABORTED transaction failure | Existing storage error, no wait or retry. |
+| Java non-ABORTED `SpannerException`, or JS failure reaching the generic transaction-error branch | Existing storage error, no wait or retry. |
+| Other Java `RuntimeException` escaping the try-with-resources attempt | Preserve existing propagation and suppression, no new storage-error conversion or retry. |
 | ABORTED beyond L | Existing exhaustion storage error, no extra wait. |
 | JS `getTransaction` failure, including code 10 | Existing transaction-start storage error, no wait or retry. |
 | `afterCommit` failure, including an ABORTED-shaped failure | Existing unknown-outcome storage error, no wait or retry. |
 
 Keep Java classification as ABORTED error code or `AbortedException`, after its domain-error catch. Keep JS classification as numeric code 10, after its committed and domain-rejection checks. This proposal does not expand retryable errors to INTERNAL, CANCELLED, or unknown outcomes.
 
-For Java, keep the try-with-resources boundary. Each attempt runs `begin`, body, `beforeCommit`, and commit. Manager close, including any SDK rollback and session release, finishes before a wait or another manager is created. Retain Java's existing exception suppression and cleanup-error precedence. Do not reclassify an unrelated cleanup error as ABORTED. On success, close precedes `afterCommit`, as today.
+For Java, keep the try-with-resources boundary. Each attempt runs `begin`, body, `beforeCommit`, and commit. Manager close, including any SDK rollback and session release, finishes before a wait or another manager is created. Retain Java's existing exception suppression and cleanup-error precedence. If a primary `RuntimeException` is neither `EventStoreException` nor `SpannerException`, preserve its propagation instead of wrapping it as `StorageException`. This includes failures from body, `beforeCommit`, or close. `afterCommit` retains its separate unknown-outcome mapping. Do not reclassify an unrelated cleanup error as ABORTED. On success, close precedes `afterCommit`, as today.
 
 For JS, an aborted attempt awaits best-effort rollback and executes `end()` in `finally` before the wait. Move the wait outside that `try/catch/finally`. Sleeping inside the catch would retain the transaction until the timer finishes. Keep the original failure if rollback fails. Keep existing behavior if `end()` itself throws. On success, `afterCommit` still runs after commit and before `end()`. Do not move it into the retry loop's failure path.
 

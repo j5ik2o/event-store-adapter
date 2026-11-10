@@ -76,7 +76,7 @@ JS は `cause.metadata.get("google.rpc.retryinfo-bin")` の順に binary を ada
 | 5 | 800 | 400..800 |
 | 6 以降 | 1000 | 500..1000 |
 
-L=5、hint なし、全再試行使用なら待機予約合計は 775..1550ms。受理した hint なら最大 L*60000ms を予約する。診断用の乗算も overflow させない。これは wall-clock deadline ではない。RPC・hook・rollback・解放・scheduler・event loop 停滞の時間は別に加わる。総時間 deadline は追加せず、SDK RPC deadline もリセットしない。既存 client 設定が SDK 動作を制御する。
+L=5、hint なし、全再試行使用なら選択した再試行待機時間の合計は 775..1550ms。受理した hint なら合計は最大 L*60000ms。診断用の乗算も overflow させない。各待機時間を一度ずつ数えた合計であり、早期 wake 後の timer 再予約を含む予約時間の合計はこれより大きくなり得る。これは wall-clock deadline ではない。RPC・hook・rollback・解放・scheduler・event loop 停滞の時間は別に加わる。総時間 deadline は追加せず、SDK RPC deadline もリセットしない。既存 client 設定が SDK 動作を制御する。
 
 初回 cap 50ms は一時的 abort の追加遅延を抑えつつ正の休止を与える選択。倍増は後の試行を広く分散する。cap 1000ms は大きな L の fallback 遅延を制限する。equal jitter は正の下限を保つ。いずれも設計判断であり、SDK 値のコピーや測定結果ではない。
 
@@ -86,14 +86,15 @@ L=5、hint なし、全再試行使用なら待機予約合計は 775..1550ms。
 | --- | --- |
 | commit 前の再試行可能な ABORTED | 解放、回数判定、待機判断、待機、次の transaction。 |
 | domain rejection・Java EventStoreException | 既存 domain エラー。待機・再試行なし。 |
-| 非 ABORTED | 既存 storage エラー。待機・再試行なし。 |
+| Java の非 ABORTED SpannerException、または JS の一般 transaction エラー分岐に到達する失敗 | 既存 storage エラー。待機・再試行なし。 |
+| try-with-resources の試行から伝播する、それ以外の Java RuntimeException | 既存の伝播と suppression を維持。新たな storage 変換・再試行なし。 |
 | L 超過の ABORTED | 既存上限超過 storage エラー。追加待機なし。 |
 | JS getTransaction 失敗、code 10 含む | 既存開始失敗 storage エラー。待機・再試行なし。 |
 | afterCommit 失敗、ABORTED 形状含む | 既存 outcome unknown storage エラー。待機・再試行なし。 |
 
 Java は domain catch の後で ABORTED code または AbortedException を判定する。JS は committed と domain rejection の後で数値 code 10 を判定する。INTERNAL・CANCELLED・成否不明へ再試行対象を広げない。
 
-Java は try-with-resources を維持する。begin、body、beforeCommit、commit の後、close と SDK rollback・session 解放が完了してから待つ。例外 suppression と解放エラーの既存優先順位を維持し、無関係な解放失敗を ABORTED に変えない。成功時は従来通り close の後で afterCommit。
+Java は try-with-resources を維持する。begin、body、beforeCommit、commit の後、close と SDK rollback・session 解放が完了してから待つ。例外 suppression と解放エラーの既存優先順位を維持する。主例外の RuntimeException が EventStoreException でも SpannerException でもなければ、StorageException へ包まず既存通り伝播させる。body・beforeCommit・close の失敗も含む。afterCommit は別の outcome unknown 分類を維持する。無関係な解放失敗を ABORTED に変えない。成功時は従来通り close の後で afterCommit。
 
 JS は ABORTED の best-effort rollback を await し、finally の end() を実行した後に待つ。待機を try/catch/finally の外に置く。catch 内で待つと timer 終了まで transaction を保持してしまう。rollback 失敗時は元失敗を保持し、end() 自体の throw は既存挙動を維持する。成功時は commit、afterCommit、end() の順序を変えない。
 
