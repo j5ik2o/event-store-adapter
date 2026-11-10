@@ -1,0 +1,144 @@
+{
+  "export": {
+    "schema_version": 1,
+    "source": "synthetic saved example",
+    "at": "2026-11-11T00:00:00+00:00",
+    "projectId": "project",
+    "parentThreadId": "pm",
+    "includeSubagents": true,
+    "filters": {},
+    "pages": [
+      {
+        "cursor": null,
+        "nextCursor": null,
+        "total": 2,
+        "projectId": "project",
+        "threads": [
+          {
+            "threadId": "pm",
+            "projectId": "project",
+            "parentThreadId": null,
+            "relationshipToParent": null,
+            "status": "idle",
+            "updatedAt": "2026-11-11T00:00:00+00:00"
+          },
+          {
+            "threadId": "child",
+            "projectId": "project",
+            "parentThreadId": "pm",
+            "relationshipToParent": "subagent",
+            "status": "completed",
+            "updatedAt": "2026-11-11T00:00:00+00:00"
+          }
+        ]
+      }
+    ],
+    "metadata": [
+      {
+        "threadId": "pm",
+        "projectId": "project",
+        "parentThreadId": null,
+        "relationshipToParent": null,
+        "status": "idle",
+        "updatedAt": "2026-11-11T00:00:00+00:00",
+        "worktreePath": "/example/common",
+        "branch": "main"
+      },
+      {
+        "threadId": "child",
+        "projectId": "project",
+        "parentThreadId": "pm",
+        "relationshipToParent": "subagent",
+        "status": "completed",
+        "updatedAt": "2026-11-11T00:00:00+00:00",
+        "worktreePath": "/example/監査 tree",
+        "branch": "audit"
+      }
+    ],
+    "auditPaths": [
+      "/example/監査 tree"
+    ]
+  },
+  "git": {
+    "source": "synthetic Git snapshot, not live evidence",
+    "at": "2026-11-11T00:00:00+00:00",
+    "repositories": [
+      {
+        "repo": "j5ik2o/event-store-adapter",
+        "root": "/example/common",
+        "listing": {
+          "value": "worktree /example/common\u0000HEAD aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\u0000branch refs/heads/main\u0000\u0000worktree /example/監査 tree\u0000HEAD aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\u0000branch refs/heads/audit\u0000\u0000"
+        },
+        "trees": [
+          {
+            "path": "/example/common",
+            "at": "2026-11-11T00:00:00+00:00",
+            "observations": {
+              "root": {
+                "value": "/example/common"
+              },
+              "origin": {
+                "value": "github.com/j5ik2o/event-store-adapter"
+              },
+              "head": {
+                "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              },
+              "branch": {
+                "value": "main"
+              },
+              "status": {
+                "value": ""
+              },
+              "log": {
+                "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 2026-11-11T00:00:00+00:00"
+              },
+              "upstream": {
+                "value": "refs/remotes/origin/main"
+              },
+              "unpushed": {
+                "value": "0"
+              }
+            }
+          },
+          {
+            "path": "/example/監査 tree",
+            "at": "2026-11-11T00:00:00+00:00",
+            "observations": {
+              "root": {
+                "value": "/example/監査 tree"
+              },
+              "origin": {
+                "value": "github.com/j5ik2o/event-store-adapter"
+              },
+              "head": {
+                "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              },
+              "branch": {
+                "value": "audit"
+              },
+              "status": {
+                "value": ""
+              },
+              "log": {
+                "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 2026-11-11T00:00:00+00:00"
+              },
+              "upstream": {
+                "value": "refs/remotes/origin/audit"
+              },
+              "unpushed": {
+                "value": "0"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "ledger": {
+    "repositories": [
+      {
+        "repo": "j5ik2o/event-store-adapter"
+      }
+    ]
+  }
+}
