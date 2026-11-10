@@ -1,6 +1,6 @@
 # コーディネーター引き継ぎ（HAND_OFF）
 
-- 最終更新: **2026-11-08 12:05 JST**
+- 最終更新: **2026-11-10 11:24 JST**
 - 更新者: コーディネーター
 - 更新方針: マイルストーンの完了または大きな方針変更のたび、およびそれとは別に最長1時間おきに更新する。HAND_OFF の PR は同時に1本までとし、前の PR がマージされるまで次を作らない。
 - 使い方: 次の担当は、会話履歴や端末の下書きに依存せず、このファイルだけで現在地と次の作業を再開できるようにする。数値と状態は更新時点の実測であり、次の更新時に再確認する。
@@ -9,7 +9,9 @@
 
 - **ESA 7repo**（common, js, java, kotlin, scala, go, rs）: open PR は **0**。非 Dashboard の open Issue は **Java #805 / Kotlin #903 / Scala #916 の 3 件**（JVM 系ドライバ分割）。その他の open Issue は常設の Renovate Dependency Dashboard **6件のみ**。
 - 各言語 repo の main CI は **failed なし**。2026-11-08 11:15 JST 時点で確認できる最新は、js / go / rs が 19:26〜19:28 JST、java が 08:27 JST の実行で success、scala も success。kotlin は新しい実行が queued（ランナー待ち、失敗ではない）。common repo には CI がない。
-- **現在の実作業**: なし。加藤さんの指示（2026-11-08 12:01）で Java #805 の作業者を停止した。5 モジュール分割・まとめ用 5.2.0・core + dynamodb の隔離テストと CI ステップまで実装し、`7068134` として `codex/jvm-driver-split` に push 済み（PR は未作成）。full build は停止時点で未完了（後述）。Renovate は 2026-11-07 19:33 の加藤さんの決定で使用量削減のため **off**。既存 Renovate PR の修正・リベース・整理・クローズは禁止。cqrs-es は 6 言語の RMU 復旧と後続まで完了。hub #20 / #21、kotlin #14 / #16、scala #15 が MERGED。open の実装 PR はなく、hub の追跡は #3 のみ。
+- **現在の実作業**: 共通契約 #107（確定したイベントを書き換えない・削除しない規則の明記、文書のみ）。加藤さんの指示（2026-11-08 12:01）で Java #805 の作業者を停止した。5 モジュール分割・まとめ用 5.2.0・core + dynamodb の隔離テストと CI ステップまで実装し、`7068134` として `codex/jvm-driver-split` に push 済み（PR は未作成）。full build は停止時点で未完了（後述）。Renovate は 2026-11-07 19:33 の加藤さんの決定で使用量削減のため **off**。既存 Renovate PR の修正・リベース・整理・クローズは禁止。cqrs-es は 6 言語の RMU 復旧と後続まで完了。hub #20 / #21、kotlin #14 / #16、scala #15 が MERGED。open の実装 PR はなく、hub の追跡は #3 のみ。
+- **共通契約 #107（2026-11-10）**: `docs/spec/core-contract.ja.md` と `.md` に W-10 を追加した。確定したイベントは書き換えず削除しないこと、訂正は新しい seq_nr の訂正イベントを追記することを定め、F-3 から参照した。書き換え API を足す場合に変える点（ジャーナルとヘッドを 1 トランザクションで更新、ヘッドの版番号、F-3 の改訂）は注記にした。rs・java・js・go の公開 API は 4 操作だけで、イベントの書き換え・削除の API を持たないことをコードで確認した。適合データの網羅表に W-10 の対象外理由を追加し、`tools/conformance/validate.py` と単体テスト（137 件）は通る。
+- **次の一手（#107）**: 共通 repo のドラフト PR 1 本をオーナーにレビューしてもらう。マージ、issue のクローズ、他言語 repo の変更はしない。PR: 未作成（この push の後に作る）。
 - **次のマイルストーン**: `cqrs-es-example` の **M2**（ESA v5 移行と RMU 復旧）は rs / js / java / go で完了。6 言語の RMU 復旧 A 案と後続も完了。残るのは hub #3 の完了確認のみ。ハブの HAND_OFF は PR #21 まで MERGED（[docs/HAND_OFF.md](https://github.com/j5ik2o/cqrs-es-example/blob/main/docs/HAND_OFF.md)）。
 - **WIP（Renovate を除く）**: **0**。Renovate は rs 5 / java 3 / js 3 が open だが、off と「WIP に数えない」方針のため WIP には含めず、修正・リベース・整理・クローズもしない。加藤さんの指示（12:01）により新しい issue には着手せず、作業者も起動しない。HAND_OFF の定期更新 PR と、停止済み Java #805 の再開（指示後）のみを例外とする。
 - **ESA 側の次の節目**: 30 保存先の実装完了（2026-10-28）後の「公開の準備」。java を先に正式版として出し、kotlin・scala を java の正式版へ切り替えてから出す。各版は公開直前にオーナー承認を取る。JVM ドライバ分割（§1.4）の完了後に公開準備へ進む。
