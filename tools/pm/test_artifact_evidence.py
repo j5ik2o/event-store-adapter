@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -115,6 +116,44 @@ class EvidenceCLI(unittest.TestCase):
         self.assertIn('limit', result['error'])
         self.manifest.write_text(json.dumps([row] * 257))
         self.assertIn('count limit', self.cli('verify', self.manifest, code=2)['error'])
+
+    def test_generation_rejects_serialized_manifest_over_reader_limit(self):
+        if not hasattr(os, 'pathconf') or os.pathconf(self.root, 'PC_PATH_MAX') < 3500:
+            self.skipTest('requires filesystem support for long Unicode paths')
+        directory = self.root
+        for _ in range(10):
+            directory /= 'あ' * 75
+            directory.mkdir()
+        self.contract = directory / 'task.json'
+        self.manifest = directory / 'manifest.json'
+        self.spec['required_files'] = [
+            {'path': f'f{i}.txt', 'role': ('script', 'raw', 'log', 'report')[i % 4]}
+            for i in range(256)]
+        for row in self.spec['required_files']:
+            (directory / row['path']).write_text('x')
+        self.save()
+        self.assertLess(self.contract.stat().st_size, 1024 * 1024)
+        result = self.cli('generate', self.contract, '--output', self.manifest, code=2)
+        self.assertFalse(result['inspection_complete'])
+        self.assertIn('JSON byte limit', result['error'])
+        self.assertFalse(self.manifest.exists())
+
+    def test_generation_rejects_expanded_paths_over_reader_limit(self):
+        if not hasattr(os, 'pathconf') or os.pathconf(self.root, 'PC_PATH_MAX') < 3500:
+            self.skipTest('requires filesystem support for long Unicode paths')
+        directory = self.root
+        for _ in range(14):
+            directory /= 'あ' * 75
+            directory.mkdir()
+        self.contract = directory / 'task.json'
+        self.manifest = directory / 'manifest.json'
+        for row in self.spec['required_files']:
+            (directory / row['path']).write_text('x')
+        self.save()
+        result = self.cli('generate', self.contract, '--output', self.manifest, code=2)
+        self.assertFalse(result['inspection_complete'])
+        self.assertIn('bounded string', result['error'])
+        self.assertFalse(self.manifest.exists())
 
     def test_file_and_total_byte_limits(self):
         self.generate()

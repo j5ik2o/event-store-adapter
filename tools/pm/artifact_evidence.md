@@ -70,6 +70,9 @@ python3 tools/pm/artifact_evidence.py verify "$example_dir/manifest.json" --cont
 It refuses to overwrite an existing manifest. It can generate a final inventory
 while the first deliverable is absent. Generation itself reports
 `evidence: not_assessed`; follow with `verify --contract` for acceptance.
+Generated absolute paths and serialized JSON must also fit the reader's limits.
+If path expansion or JSON escaping exceeds them, generation exits 2 before
+creating the output file.
 The manifest must be separate from the first deliverable and required files,
 and must not include itself. Preserve its hash externally if authenticity matters.
 

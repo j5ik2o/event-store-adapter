@@ -153,12 +153,14 @@ def run(args):
                 'final manifest must be separate from first and required evidence')
         files, total = [], 0
         for path in required:
+            path_value(str(path), args.output.parent)
             size, digest = fingerprint(path, MAX_TOTAL - total)
             total += size
             files.append({'path': str(path), 'bytes': size, 'sha256': digest})
-        with args.output.open('x', encoding='utf-8') as output:
-            json.dump({'schema_version': 1, 'complete': True, 'files': files}, output, indent=2)
-            output.write('\n')
+        serialized = json.dumps({'schema_version': 1, 'complete': True, 'files': files}, indent=2) + '\n'
+        require(len(serialized.encode('utf-8')) <= MAX_JSON, 'generated manifest JSON byte limit exceeded')
+        with args.output.open('x', encoding='utf-8', newline='\n') as output:
+            output.write(serialized)
         return {'task_id': task, 'generated_files': len(files), 'evidence': 'not_assessed',
                 'observation': progress(first, deadline)}, 0
     expected = manifest(args.manifest)
