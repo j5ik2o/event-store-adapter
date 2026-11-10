@@ -8,7 +8,7 @@
     },
     {
       "path": "COVERAGE.md",
-      "sha256": "42734424677b9c7bcea409948b306b7ece7645f445425bfd2e54101a3ce4ab1a"
+      "sha256": "59e9219795d1ce253b0ee0b74993bc04b61e7859a73a32d7681855401a453d71"
     },
     {
       "path": "README.md",
@@ -28,7 +28,7 @@
     },
     {
       "path": "coverage.json",
-      "sha256": "14962a70a918d813798951df7929e51ad4d89d6c2f719803a16875b735bafc52"
+      "sha256": "40003840dbd09dee5d2353961cecdf7ac7e3b5a92eced01296562b248ed017b1"
     },
     {
       "path": "dynamodb/configuration.json",

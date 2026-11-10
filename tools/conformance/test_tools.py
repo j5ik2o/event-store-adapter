@@ -43,7 +43,7 @@ class ConformanceToolsTests(unittest.TestCase):
         self.assertGreater(documents, 0)
         self.assertGreater(counts["scenarios"], 0)
         self.assertGreater(covered, 0)
-        self.assertEqual(excluded, 59)
+        self.assertEqual(excluded, 60)
         self.assertGreater(checked, 0)
 
     def test_manifest_cli_uses_only_standard_library_and_detects_change(self):
@@ -158,7 +158,7 @@ class ConformanceToolsTests(unittest.TestCase):
 
     def test_every_defined_rule_has_case_or_reason(self):
         _, _, defined = validate.specification_rules(validate.DEFAULT_SPEC_ROOT)
-        self.assertEqual(len(defined), 124)
+        self.assertEqual(len(defined), 125)
         rows = {}
         for line in (manifest.DEFAULT_ROOT / "COVERAGE.md").read_text(encoding="utf-8").splitlines():
             cells = [cell.strip() for cell in line.strip("|").split(" | ")]
