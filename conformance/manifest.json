@@ -8,11 +8,11 @@
     },
     {
       "path": "COVERAGE.md",
-      "sha256": "42734424677b9c7bcea409948b306b7ece7645f445425bfd2e54101a3ce4ab1a"
+      "sha256": "a1a55e8894f9e216ae81be9dcaa8585dca2c8c6a6f8e103d9a0f0025e939e6ea"
     },
     {
       "path": "README.md",
-      "sha256": "8ade5fe3d48a6323a3b835cca63749b8a27ae15ac701d6a1c5429e265e5b521c"
+      "sha256": "a6aaee13f2dcc96411fa3b7e4affc0ff815998cc172a91113f12e5c56ae146cc"
     },
     {
       "path": "bigtable/configuration.json",
@@ -56,7 +56,7 @@
     },
     {
       "path": "dynamodb/write-errors.json",
-      "sha256": "402288a8987d653ea9fa85c536beae8024c32e6b666322c22e63952131ede7e7"
+      "sha256": "ca8c01d1fa01b29c48e4ecab3dd14398a213fa9a8a25f1965757c64d995cae32"
     },
     {
       "path": "memory/configuration.json",
