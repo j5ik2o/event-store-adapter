@@ -1,0 +1,38 @@
+{
+  "contracts": {
+    "en": {
+      "headers": [
+        "Snapshot",
+        "Entry and dependency"
+      ],
+      "rows": 4,
+      "columns": 2,
+      "row": 3,
+      "column": 1,
+      "label": "JS main 4f4f5b800aea89b7e880a77cc90d76929dc889bc",
+      "expression": "^8.7.1 || ^9.0.0"
+    },
+    "ja": {
+      "headers": [
+        "自分で読取り・再取得した固定対象",
+        "入口と依存"
+      ],
+      "rows": 4,
+      "columns": 2,
+      "row": 3,
+      "column": 1,
+      "label": "JS main 4f4f5b800aea89b7e880a77cc90d76929dc889bc",
+      "expression": "^8.7.1 || ^9.0.0"
+    }
+  },
+  "examples": {
+    "en": {
+      "positive": "<table><thead><tr><th>Snapshot</th><th>Entry and dependency</th></tr></thead><tbody><tr><td>Java main</td><td>SDK 6.127.0</td></tr><tr><td>Java published</td><td>SDK 6.127.0</td></tr><tr><td><a href=\"https://example.org\">JS main 4f4f5b800aea89b7e880a77cc90d76929dc889bc</a></td><td>Optional peer <code>^8.7.1 || ^9.0.0</code>.</td></tr></tbody></table>",
+      "negative": "<table><thead><tr><th>Snapshot</th><th>Entry and dependency</th></tr></thead><tbody><tr><td>Java main</td><td>SDK 6.127.0</td></tr><tr><td>Java published</td><td>SDK 6.127.0</td></tr><tr><td><a href=\"https://example.org\">JS main 4f4f5b800aea89b7e880a77cc90d76929dc889bc</a></td><td>Optional peer `^8.7.1</td></tr></tbody></table>"
+    },
+    "ja": {
+      "positive": "<table><thead><tr><th>自分で読取り・再取得した固定対象</th><th>入口と依存</th></tr></thead><tbody><tr><td>Java main</td><td>SDK 6.127.0</td></tr><tr><td>Java published</td><td>SDK 6.127.0</td></tr><tr><td><a href=\"https://example.org\">JS main 4f4f5b800aea89b7e880a77cc90d76929dc889bc</a></td><td>Optional peer <code>^8.7.1 || ^9.0.0</code>.</td></tr></tbody></table>",
+      "negative": "<table><thead><tr><th>自分で読取り・再取得した固定対象</th><th>入口と依存</th></tr></thead><tbody><tr><td>Java main</td><td>SDK 6.127.0</td></tr><tr><td>Java published</td><td>SDK 6.127.0</td></tr><tr><td><a href=\"https://example.org\">JS main 4f4f5b800aea89b7e880a77cc90d76929dc889bc</a></td><td>Optional peer `^8.7.1</td></tr></tbody></table>"
+    }
+  }
+}
