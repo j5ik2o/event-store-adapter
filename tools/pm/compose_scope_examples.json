@@ -1,0 +1,5 @@
+{
+  "normal": {"argv": ["docker", "compose", "-p", "demo", "config", "--format", "json"], "compose_version": "synthetic", "config": {"name": "demo", "services": {"db": {"volumes": [{"type": "volume", "source": "data", "target": "/data"}]}}, "volumes": {"data": {"name": "demo_data"}}}},
+  "danger": {"argv": ["docker", "compose", "-p", "demo", "config", "--format", "json"], "compose_version": "synthetic", "config": {"name": "demo", "services": {"db": {"volumes": [{"type": "volume", "source": "data", "target": "/data"}]}}, "volumes": {"data": {"name": "demo_data"}}}},
+  "isolated": {"argv": ["docker", "compose", "-p", "demo_e2e", "config", "--format", "json"], "compose_version": "synthetic", "config": {"name": "demo_e2e", "services": {"db": {"volumes": [{"type": "volume", "source": "data", "target": "/data"}]}}, "volumes": {"data": {"name": "demo_e2e_data"}}}}
+}
