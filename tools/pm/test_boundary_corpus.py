@@ -81,6 +81,64 @@ class CorpusTests(unittest.TestCase):
             self.assertIn('fake gh did not serve all three saved responses', failures)
             self.assertEqual((output / 'pr-normal/cli.stdout').read_text(encoding='utf-8'), '{}\n')
 
+    def test_malformed_generated_manifest_reaches_the_reader(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            script = directory / 'runner.py'
+            script.write_text(Path(corpus.__file__).read_text(encoding='utf-8'), encoding='utf-8')
+            data = json.loads(Path(corpus.__file__).with_suffix('.json').read_text(encoding='utf-8'))
+            data['cases'] = [c for c in data['cases'] if c['id'] == 'artifact-roundtrip']
+            script.with_suffix('.json').write_text(json.dumps(data), encoding='utf-8')
+            reader = str(Path(corpus.__file__).with_name('artifact_evidence.py'))
+            (directory / 'artifact_evidence.py').write_text(
+                'import json, pathlib, runpy, sys\n'
+                'if sys.argv[1] == "generate":\n'
+                '    pathlib.Path(sys.argv[-1]).write_bytes(b"invalid manifest")\n'
+                '    print(json.dumps({"generated_files": 4, "evidence": "not_assessed"}))\n'
+                'else:\n    runpy.run_path(' + repr(reader) + ', run_name="__main__")\n',
+                encoding='utf-8')
+            output = directory / 'run'
+            proc = subprocess.run([sys.executable, '-B', str(script), '--output', str(output)],
+                                  capture_output=True, text=True)
+            report = json.loads((output / 'results.json').read_text(encoding='utf-8'))
+            self.assertEqual(proc.returncode, 1, report)
+            self.assertEqual(report['cases'][0]['state'], 'fail')
+            self.assertTrue(report['cases'][0]['failures'])
+            self.assertEqual((output / 'artifact-roundtrip/generated.json').read_bytes(), b'invalid manifest')
+            self.assertTrue((output / 'artifact-roundtrip/reader.json').is_file())
+
+    def test_fake_gh_handles_spaces_and_shell_characters_in_python_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            parent = Path(tmp) / "python env ' $fixture"
+            parent.mkdir()
+            python = parent / 'python'
+            python.symlink_to(sys.executable)
+            output = Path(tmp) / 'run'
+            proc = subprocess.run([str(python), '-B', corpus.__file__, '--case', 'pr-normal',
+                                   '--output', str(output)], capture_output=True, text=True)
+            report = json.loads((output / 'results.json').read_text(encoding='utf-8'))
+            self.assertEqual(proc.returncode, 0, report)
+            self.assertEqual(report['cases'][0]['state'], 'pass')
+            calls = (output / 'pr-normal/calls.jsonl').read_text(encoding='utf-8').splitlines()
+            self.assertEqual(len(calls), 3)
+
+    def test_long_output_path_never_shifts_the_json_escape_boundary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            if not hasattr(os, 'pathconf') or os.pathconf(tmp, 'PC_PATH_MAX') < 3500:
+                self.skipTest('requires a filesystem supporting the long-path fixture')
+            directory = Path(tmp)
+            while len(str(directory.resolve())) < 322:
+                directory = directory / ('base' * 15)
+            output = directory / 'run'
+            proc = subprocess.run([sys.executable, '-B', corpus.__file__,
+                                   '--case', 'artifact-json_escape', '--output', str(output)],
+                                  capture_output=True, text=True)
+            report = json.loads((output / 'results.json').read_text(encoding='utf-8'))
+            self.assertIn(report['cases'][0]['state'], ('pass', 'unsupported'), report)
+            self.assertEqual(proc.returncode, 0 if report['state'] == 'pass' else 2, report)
+            if report['cases'][0]['state'] == 'unsupported':
+                self.assertIn('JSON byte', report['cases'][0]['error'])
+
     def test_rejection_exit_two_is_a_pass_only_with_the_full_contract(self):
         expected = {'exit': 2, 'fields': {'execution/state': 'unknown',
                     'execution/observed_failure': True}, 'stderr': 'nonempty', 'output': False,
