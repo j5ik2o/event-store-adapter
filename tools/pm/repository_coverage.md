@@ -2,16 +2,50 @@
 
 This manual, offline Python 3 CLI compares the explicit [16-repository ledger](repository_coverage_ledger.json) with a PM inventory and its per-repository GraphQL responses. It reports omitted examples even when the operator does not list their names again. Local checkout availability does not affect the ledger. dotnet and php remain GitHub audit targets.
 
-Run from the repository root. The supplied PM data uses the CLI's input format directly, so no conversion or invented completion metadata is needed.
+Run from the repository root. Obtain an acquisition bundle from your PM collector containing `inventory.json` and the per-repository `<repo>.json` GraphQL responses described below. This CLI does not include a live collector. Copy the complete bundle into a local directory and replace `/path/to/your/pm-audit` with that directory.
 
 ```sh
+audit_dir=/path/to/your/pm-audit
 python3 tools/pm/repository_coverage.py \
-  --inventory /tmp/pm-handoff-live-audit/inventory.json \
-  --records-dir /tmp/pm-handoff-live-audit
+  --inventory "$audit_dir/inventory.json" \
+  --records-dir "$audit_dir"
 python3 -m unittest discover -s tools/pm -p 'test_repository_coverage.py' -v
 ```
 
-The supplied inventory records `2026-11-10T15:09:36.787078+00:00`. The observed result is exit 0 with 16 successful repositories and no gaps. This checks the supplied records, not whether GitHub still has the same state. The tool does not fetch data, execute input commands, change files, configure CI, schedule runs, or enforce T3 gates.
+The implementation's historical inventory recorded `2026-11-10T15:09:36.787078+00:00` and returned exit 0 with 16 successful repositories. That acquisition bundle is not included in a checkout; its original `/tmp/pm-handoff-live-audit` path belongs to the implementation environment. The observation does not describe current GitHub state. The tool does not fetch data, execute input commands, change files, configure CI, schedule runs, or enforce T3 gates.
+
+## Create a local example
+
+To try the checker without an acquisition bundle, run this complete example from the repository root. It creates synthetic responses with zero open items for all ledger repositories. These files demonstrate input consistency, not a real GitHub audit or a reproduction of the historical acquisition.
+
+```sh
+audit_dir="$(mktemp -d)"
+python3 - "$audit_dir" <<'PY'
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import sys
+
+directory = Path(sys.argv[1])
+ledger = json.loads(Path("tools/pm/repository_coverage_ledger.json").read_text())
+results = []
+for entry in ledger["repositories"]:
+    name = entry["repo"].split("/", 1)[1]
+    repository = {"name": name}
+    for connection in ("pullRequests", "issues", "milestones"):
+        repository[connection] = {"nodes": [], "pageInfo": {"hasNextPage": False}}
+    response = {"data": {"repository": repository}}
+    (directory / (name + ".json")).write_text(json.dumps(response), encoding="utf-8")
+    results.append({"repo": name, "prs": 0, "issues": 0,
+                    "milestones": [], "pagination": []})
+inventory = {"at": datetime.now(timezone.utc).isoformat(), "results": results}
+(directory / "inventory.json").write_text(json.dumps(inventory), encoding="utf-8")
+PY
+python3 tools/pm/repository_coverage.py \
+  --inventory "$audit_dir/inventory.json" --records-dir "$audit_dir"
+```
+
+Expect exit 0, `status: consistent`, and 16 `successful` names. Keep the generated directory for inspection. Use a collector's actual responses instead of these synthetic files when checking an operational audit.
 
 ## Inputs and scope
 
@@ -56,4 +90,4 @@ Record diagnostic entries include `repo`, zero-based inventory `index`, and `rea
 
 [Issue #124](https://github.com/j5ik2o/event-store-adapter/issues/124) records that examples were omitted. The historical raw audit input was not recovered. [repository_coverage_missing_examples.json](repository_coverage_missing_examples.json) is a reconstructed nine-library inventory with synthetic zero counts. The CLI tests create matching synthetic response files and verify that the CLI lists all seven missing example repositories. They also prove that valid zero-item acquisitions succeed and that failed acquisitions with names cannot claim completeness.
 
-The implementation handoff evidence is local at `/tmp/pm-repository-coverage`. Its `reproduce.py` copies the provided records without modifying the source directory, constructs clearly named failure cases from those copies, runs the actual CLI, and saves input, stdout, stderr, exit codes, commands, source snapshots, and a SHA256 manifest. `outputs/live.json` is the actual 16-repository result. `outputs/missing-examples.json` is a reconstruction from current records, not a recovered historical audit. These temporary evidence files are not repository assets.
+The CLI tests create their own temporary response files, so they run from a checkout without the historical acquisition bundle. Implementation evidence and its temporary paths are recorded in [PR #132](https://github.com/j5ik2o/event-store-adapter/pull/132). Those files are not repository assets or prerequisites for the local example.
