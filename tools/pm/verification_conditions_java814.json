@@ -1,0 +1,167 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "old-head-jdk11-conformance",
+      "conditions": {
+        "repository": "j5ik2o/event-store-adapter-java",
+        "revision": "7334a49330aa7d647930da0777b60a3a9ac9b0f3",
+        "base": "d0237ddcd76149fae8296fedea1f4b1f1d281ae5",
+        "jdk": "11.0.32.1",
+        "runtime": "Gradle JDK25; macOS/aarch64",
+        "command": "./gradlew test --tests 'com.github.j5ik2o.event.store.adapter.java.conformance.*' -PtestJavaVersion=11 spotlessCheck --console=plain --no-daemon",
+        "suite": "conformance",
+        "resources": {
+          "heap": null,
+          "cpu": null,
+          "memory": null,
+          "parallelism": null
+        }
+      }
+    },
+    {
+      "id": "old-head-jdk17-full",
+      "conditions": {
+        "repository": "j5ik2o/event-store-adapter-java",
+        "revision": "7334a49330aa7d647930da0777b60a3a9ac9b0f3",
+        "base": "d0237ddcd76149fae8296fedea1f4b1f1d281ae5",
+        "jdk": "17",
+        "runtime": null,
+        "command": null,
+        "suite": "full",
+        "resources": {
+          "heap": "512MiB",
+          "cpu": null,
+          "memory": null,
+          "parallelism": null
+        }
+      }
+    },
+    {
+      "id": "fixed-head-jdk17-full",
+      "conditions": {
+        "repository": "j5ik2o/event-store-adapter-java",
+        "revision": "0450b26184912af9c15d7572ca8e6c26c6091bf0",
+        "base": "d0237ddcd76149fae8296fedea1f4b1f1d281ae5",
+        "jdk": "17.0.21+9",
+        "runtime": "Gradle JDK25; macOS/aarch64",
+        "command": "./gradlew test coreDynamoDbOnlyTest spotlessCheck -PtestJavaVersion=17 -Dorg.gradle.java.installations.paths=/tmp/m-java-ci-oom.7df4p8/jdk-17.0.21+9/Contents/Home,/Users/j5ik2o/.gradle/jdks/eclipse_adoptium-11-aarch64-os_x.2/jdk-11.0.32.1+1/Contents/Home -I /tmp/m-java-oom-review.36z1GL/observe.gradle --info --console=plain",
+        "suite": "full + coreDynamoDbOnlyTest",
+        "resources": {
+          "heap": "512MiB",
+          "cpu": null,
+          "memory": null,
+          "parallelism": null
+        }
+      }
+    }
+  ],
+  "runs": [
+    {
+      "id": "java-author-jdk11",
+      "actor": "java-author-jdk11",
+      "role": "author",
+      "conditions": {
+        "repository": "j5ik2o/event-store-adapter-java",
+        "revision": "7334a49330aa7d647930da0777b60a3a9ac9b0f3",
+        "base": "d0237ddcd76149fae8296fedea1f4b1f1d281ae5",
+        "jdk": "11.0.32.1",
+        "runtime": null,
+        "command": "./gradlew test --tests 'com.github.j5ik2o.event.store.adapter.java.conformance.*' spotlessCheck --console=plain",
+        "suite": "conformance",
+        "resources": {
+          "heap": null,
+          "cpu": null,
+          "memory": null,
+          "parallelism": null
+        }
+      },
+      "result": "pass",
+      "evidence": [
+        "https://github.com/j5ik2o/event-store-adapter-java/issues/813#issuecomment-6767842659",
+        "/tmp/java-conformance-813.P9mfG3/validation-final.log"
+      ],
+      "unverified": []
+    },
+    {
+      "id": "java-review-jdk11",
+      "actor": "java-review-jdk11",
+      "role": "review",
+      "conditions": {
+        "repository": "j5ik2o/event-store-adapter-java",
+        "revision": "7334a49330aa7d647930da0777b60a3a9ac9b0f3",
+        "base": "d0237ddcd76149fae8296fedea1f4b1f1d281ae5",
+        "jdk": "11.0.32.1",
+        "runtime": "Gradle JDK25; macOS/aarch64",
+        "command": "./gradlew test --tests 'com.github.j5ik2o.event.store.adapter.java.conformance.*' -PtestJavaVersion=11 spotlessCheck --console=plain --no-daemon",
+        "suite": "conformance",
+        "resources": {
+          "heap": null,
+          "cpu": null,
+          "memory": null,
+          "parallelism": null
+        }
+      },
+      "result": "pass",
+      "evidence": [
+        "https://github.com/j5ik2o/event-store-adapter-java/pull/814#issuecomment-6767996357",
+        "/tmp/M-java-conformance-review.vaacmO/jdk11.log"
+      ],
+      "unverified": []
+    },
+    {
+      "id": "java-review-old-jdk17-not-run",
+      "actor": "java-review-jdk11",
+      "role": "review",
+      "conditions": {
+        "repository": "j5ik2o/event-store-adapter-java",
+        "revision": "7334a49330aa7d647930da0777b60a3a9ac9b0f3",
+        "base": "d0237ddcd76149fae8296fedea1f4b1f1d281ae5",
+        "jdk": "17",
+        "runtime": null,
+        "command": null,
+        "suite": "full",
+        "resources": {
+          "heap": "512MiB",
+          "cpu": null,
+          "memory": null,
+          "parallelism": null
+        }
+      },
+      "result": "not_run",
+      "evidence": [
+        "https://github.com/j5ik2o/event-store-adapter-java/pull/814#issuecomment-6767996357",
+        "https://github.com/j5ik2o/event-store-adapter-java/issues/815"
+      ],
+      "unverified": [
+        "Old reviewer did not execute full repository or JDK17/19. CI separately failed with OOM per issue815."
+      ]
+    },
+    {
+      "id": "java-review-fixed-jdk17",
+      "actor": "java-review-fixed-jdk17",
+      "role": "review",
+      "conditions": {
+        "repository": "j5ik2o/event-store-adapter-java",
+        "revision": "0450b26184912af9c15d7572ca8e6c26c6091bf0",
+        "base": "d0237ddcd76149fae8296fedea1f4b1f1d281ae5",
+        "jdk": "17.0.21+9",
+        "runtime": "Gradle JDK25; macOS/aarch64",
+        "command": "./gradlew test coreDynamoDbOnlyTest spotlessCheck -PtestJavaVersion=17 -Dorg.gradle.java.installations.paths=/tmp/m-java-ci-oom.7df4p8/jdk-17.0.21+9/Contents/Home,/Users/j5ik2o/.gradle/jdks/eclipse_adoptium-11-aarch64-os_x.2/jdk-11.0.32.1+1/Contents/Home -I /tmp/m-java-oom-review.36z1GL/observe.gradle --info --console=plain",
+        "suite": "full + coreDynamoDbOnlyTest",
+        "resources": {
+          "heap": "512MiB",
+          "cpu": null,
+          "memory": null,
+          "parallelism": null
+        }
+      },
+      "result": "pass",
+      "evidence": [
+        "https://github.com/j5ik2o/event-store-adapter-java/pull/814#issuecomment-6768867219",
+        "/tmp/m-java-oom-review.36z1GL/worker-flags.log"
+      ],
+      "unverified": []
+    }
+  ]
+}
