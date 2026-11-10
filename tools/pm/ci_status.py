@@ -4,6 +4,7 @@ import argparse
 import copy
 import datetime
 import json
+import math
 import re
 import subprocess
 import sys
@@ -21,8 +22,14 @@ def decode_json(payload):
     def invalid_constant(value):
         raise ValueError('invalid JSON constant: ' + value)
 
+    def finite_float(text):
+        value = float(text)
+        if not math.isfinite(value):
+            raise ValueError('JSON number exceeds supported finite range')
+        return value
+
     return json.loads(payload, object_pairs_hook=unique_object,
-                      parse_constant=invalid_constant)
+                      parse_constant=invalid_constant, parse_float=finite_float)
 
 
 def required_entries(rows, app_key):

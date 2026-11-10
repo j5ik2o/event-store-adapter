@@ -38,7 +38,7 @@ The arrays retain API conclusions and identifiers, including unknown or null con
 
 A version 1 capture has `schema_version`, `repository`, `head`, `branch`, `captured_at`, and `responses`. Each response is keyed by its relative REST path, including query parameters. It contains `http_status`, `body`, and `next`. `next` is a relative path from the response Link header, or null when there is no next page. A missing response or missing pagination metadata prevents success. An unavailable request has a null status if no HTTP response could be decoded.
 
-The schema version must be integer 1, excluding booleans and floats. Only null terminates pagination; false, zero, empty strings, and other non-string markers are invalid. Both live and replay JSON reject duplicate object keys and non-finite numeric constants.
+The schema version must be integer 1, excluding booleans and floats. Only null terminates pagination; false, zero, empty strings, and other non-string markers are invalid. Both live and replay JSON reject duplicate object keys and non-finite numeric constants. Numeric lexemes that overflow Python's finite floating-point range also remain unknown instead of producing nonstandard `Infinity` in JSON output. Ordinary finite extension values remain supported.
 
 The capture stores response bodies and pagination information, never request authentication headers or gh stderr. Bodies may contain repository metadata. Treat private captures as private. Replay requires no token and makes no API requests. Captures are evidence supplied by their author, not signed GitHub attestations.
 

@@ -278,6 +278,20 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(code, 2)
                 self.assertEqual(report['execution']['state'], 'unknown')
 
+    def test_overflowing_json_numbers_do_not_produce_infinity(self):
+        for number in ['1e999', '-1e999']:
+            with self.subTest(number=number):
+                payload = json.dumps(sample()).replace(
+                    '"name": "test"', '"metric": ' + number + ', "name": "test"', 1)
+                code, report, _ = self.raw_cli(payload)
+                self.assertEqual(code, 2)
+                self.assertEqual(report['execution']['state'], 'unknown')
+        capture = sample()
+        response(capture, '/check-runs?')['body']['check_runs'][0]['metric'] = 0.125
+        code, report, _ = self.cli(capture)
+        self.assertEqual(code, 0)
+        self.assertEqual(report['check_runs'][0]['metric'], 0.125)
+
     def test_malformed_policy_preserves_failure_evidence(self):
         for checks in [True, [], {}, {'checks': None},
                        {'checks': [{'context': 1}]}, {'contexts': [1]}]:
