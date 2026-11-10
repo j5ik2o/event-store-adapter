@@ -77,7 +77,8 @@ def identity(locator, aliases):
     try:
         if "://" in locator:
             url = urlsplit(locator)
-            if url.scheme not in ("https", "ssh") or url.query or url.fragment or url.port:
+            if (url.scheme not in ("https", "ssh") or url.query or url.fragment
+                    or url.port is not None or url.netloc.endswith(":")):
                 return None
             host, path = url.hostname, url.path.lstrip("/")
         else:

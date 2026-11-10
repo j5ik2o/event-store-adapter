@@ -20,6 +20,15 @@ The first command exits 0 with `plan: compatible`, `assignment: matched`, and
 `checkout: snapshot_match`. The second exits 1 with `plan: rejected`,
 `assignment: unassigned`, and `checkout: not_observed`.
 
+The live-success behavior test reads an existing common checkout without creating
+or changing a repository. By default it finds that checkout from the test file
+location. For a downloaded source snapshot, set `PREFLIGHT_TEST_CHECKOUT` to an
+existing common checkout when running the tests. Only this test is skipped if no
+checkout is available and the variable is absent. Its assignment is a synthetic
+control built from independent git reads, not proof of a T3 allocation. The test
+compares clean or dirty status with the recorded status; it does not certify that
+execution is safe in a dirty tree.
+
 The examples contain extracted evidence and explicitly marked synthetic controls.
 The Java project id/root/origin are extracted from the recorded project list.
 The exact `invalid_request` response is extracted from the failed local dispatch.
@@ -83,7 +92,7 @@ A source string records the operator's evidence; it does not authenticate it.
 
 Repository locators accept HTTPS, SSH URLs, or SCP-style SSH syntax with an
 owner/repository path. Optional `.git` is removed. GitHub host and owner/repository
-case are normalized. Other host paths retain case. Ports, query strings,
+case are normalized. Other host paths retain case. Explicit ports, including `:0` and an empty `:` suffix, query strings,
 fragments and unsupported forms do not match. Host aliases require explicit
 mapping, such as `j5ik2o.github.com` to `github.com`. Another forge with the same
 owner/repository is a different identity. This compares URL syntax, not remote
