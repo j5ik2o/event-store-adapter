@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -48,8 +49,8 @@ def prepare(case, directory, python):
         row = {'filename': 'x', 'status': 'modified', 'sha': '3' * 40,
                'additions': 1, 'deletions': 1, 'changes': 2, 'patch': patch}
         save(directory / 'responses.json', [meta, [row], meta])
-        fake = directory / 'gh'
-        fake.write_text('#!' + python + '''
+        driver = directory / 'fake-gh.py'
+        driver.write_text('''
 import json, pathlib, sys
 p = pathlib.Path(__file__).parent
 args = sys.argv[1:]
@@ -63,6 +64,9 @@ if n > len(responses):
     sys.exit(92)
 print(json.dumps(responses[n-1]))
 ''', encoding='utf-8')
+        fake = directory / 'gh'
+        fake.write_text('#!/bin/sh\nexec ' + shlex.quote(python) + ' -B ' +
+                        shlex.quote(str(driver)) + ' "$@"\n', encoding='utf-8')
         fake.chmod(0o700)
         env['PATH'] = str(directory)
         return ['owner/repo', '1', '--file', 'x'], env, output
@@ -90,8 +94,12 @@ print(json.dumps(responses[n-1]))
     if case.get('long_path'):
         if not hasattr(os, 'pathconf') or os.pathconf(directory, 'PC_PATH_MAX') < 3500:
             raise Unsupported('long Unicode path requires PATH_MAX >=3500; Linux case unexecuted')
+        levels = 14 if recipe == 'absolute_path' else 10
+        expanded = directory.joinpath(*(['あ' * 75] * levels))
+        if recipe == 'json_escape' and len(str(expanded / 'f255.txt')) > 1024:
+            raise Unsupported('JSON byte limit fixture cannot be isolated within the 1024-character path limit')
         try:
-            for _ in range(14 if recipe == 'absolute_path' else 10):
+            for _ in range(levels):
                 root = root / ('あ' * 75)
                 root.mkdir()
         except OSError as exc:
@@ -215,7 +223,7 @@ def run_case(case, directory, python, script, historical=False):
                          'evidence': 'not_assessed'}, 'stderr': 'empty', 'output': True}, output)
         if producer:
             return producer
-        save(directory / 'generated.json', json.loads(output.read_text(encoding='utf-8')))
+        (directory / 'generated.json').write_bytes(output.read_bytes())
         result = invoke(python, script, ['verify', str(output), '--contract', args[1]],
                         directory, env, 'reader')
     problems = check(result, expected, output)
