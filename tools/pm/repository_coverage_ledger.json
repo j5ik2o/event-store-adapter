@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "sources": {
+    "mandate": {
+      "url": "https://github.com/j5ik2o/event-store-adapter/issues/124#issuecomment-6771014626",
+      "scope": "Start record mandates 16 repos including examples and dotnet/php. Exact names are the PM delegation inventory from 2026-11-10T15:09:36.787078+00:00, explicitly confirmed in the implementation work order. This is an explicit audit list, not automatic discovery."
+    },
+    "issue": {
+      "url": "https://github.com/j5ik2o/event-store-adapter/issues/124",
+      "scope": "Reports example omission; requires rerunnable set comparison. Does not enumerate every repository."
+    },
+    "readme": {
+      "url": "https://github.com/j5ik2o/event-store-adapter/blob/7077fc1af85204738e716f04b6fc572f83f04b58/README.md",
+      "scope": "Lists eight j5ik2o library implementations including dotnet/php. Links to lemo-nade-room Swift do not add it to this owner-scoped mandate."
+    },
+    "policy": {
+      "url": "https://github.com/j5ik2o/event-store-adapter/blob/7077fc1af85204738e716f04b6fc572f83f04b58/docs/operations/repository-policy.md",
+      "scope": "Opening scope limits operations policy to six registered implementations; dotnet/php/swift deferred for that policy. This is not the PM audit boundary."
+    },
+    "plan": {
+      "url": "https://github.com/j5ik2o/event-store-adapter/blob/7077fc1af85204738e716f04b6fc572f83f04b58/docs/plan/implementation-plan.md",
+      "scope": "Opening scope and chapter 2 cover six implementation migrations, not the complete PM management set."
+    },
+    "example-readme": {
+      "url": "https://github.com/j5ik2o/cqrs-es-example/blob/main/README.md",
+      "scope": "Read at implementation time. Lists rs/go/js/java examples. Kotlin/Scala are included by explicit PM mandate, not inferred from this README. External akinoriakatsuka PHP is outside the mandate."
+    }
+  },
+  "repositories": [
+    {
+      "repo": "j5ik2o/event-store-adapter",
+      "sources": [
+        "mandate",
+        "issue"
+      ]
+    },
+    {
+      "repo": "j5ik2o/event-store-adapter-java",
+      "sources": [
+        "mandate",
+        "issue",
+        "readme",
+        "policy",
+        "plan"
+      ]
+    },
+    {
+      "repo": "j5ik2o/event-store-adapter-kotlin",
+      "sources": [
+        "mandate",
+        "issue",
+        "readme",
+        "policy",
+        "plan"
+      ]
+    },
+    {
+      "repo": "j5ik2o/event-store-adapter-scala",
+      "sources": [
+        "mandate",
+        "issue",
+        "readme",
+        "policy",
+        "plan"
+      ]
+    },
+    {
+      "repo": "j5ik2o/event-store-adapter-rs",
+      "sources": [
+        "mandate",
+        "issue",
+        "readme",
+        "policy",
+        "plan"
+      ]
+    },
+    {
+      "repo": "j5ik2o/event-store-adapter-js",
+      "sources": [
+        "mandate",
+        "issue",
+        "readme",
+        "policy",
+        "plan"
+      ]
+    },
+    {
+      "repo": "j5ik2o/event-store-adapter-go",
+      "sources": [
+        "mandate",
+        "issue",
+        "readme",
+        "policy",
+        "plan"
+      ]
+    },
+    {
+      "repo": "j5ik2o/event-store-adapter-dotnet",
+      "sources": [
+        "mandate",
+        "issue",
+        "readme"
+      ]
+    },
+    {
+      "repo": "j5ik2o/event-store-adapter-php",
+      "sources": [
+        "mandate",
+        "issue",
+        "readme"
+      ]
+    },
+    {
+      "repo": "j5ik2o/cqrs-es-example",
+      "sources": [
+        "mandate",
+        "issue",
+        "example-readme"
+      ]
+    },
+    {
+      "repo": "j5ik2o/cqrs-es-example-java",
+      "sources": [
+        "mandate",
+        "issue",
+        "example-readme"
+      ]
+    },
+    {
+      "repo": "j5ik2o/cqrs-es-example-kotlin",
+      "sources": [
+        "mandate",
+        "issue"
+      ]
+    },
+    {
+      "repo": "j5ik2o/cqrs-es-example-scala",
+      "sources": [
+        "mandate",
+        "issue"
+      ]
+    },
+    {
+      "repo": "j5ik2o/cqrs-es-example-rs",
+      "sources": [
+        "mandate",
+        "issue",
+        "example-readme"
+      ]
+    },
+    {
+      "repo": "j5ik2o/cqrs-es-example-js",
+      "sources": [
+        "mandate",
+        "issue",
+        "example-readme"
+      ]
+    },
+    {
+      "repo": "j5ik2o/cqrs-es-example-go",
+      "sources": [
+        "mandate",
+        "issue",
+        "example-readme"
+      ]
+    }
+  ]
+}
