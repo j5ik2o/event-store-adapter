@@ -145,6 +145,22 @@ class TranscriptCLI(unittest.TestCase):
             conn.execute('delete from threads')
         self.run_cli(live=db, success=False)
 
+    def test_live_session_payload_must_be_an_object(self):
+        db = self.root / 'state.sqlite'
+        with sqlite3.connect(str(db)) as conn:
+            conn.execute('create table threads (id text, rollout_path text)')
+            conn.execute('insert into threads values (?,?)', ('synthetic', str(self.source)))
+        before = db.read_bytes()
+        for payload in [None, False, [], 'text', 7]:
+            with self.subTest(payload=payload):
+                self.write_events([{'type': 'session_meta', 'payload': payload}])
+                source = self.source.read_bytes()
+                result = self.run_cli('--end', '1', live=db, success=False)
+                self.assertIn(b'UNKNOWN session identity', result.stderr)
+                self.assertNotIn(b'Traceback', result.stderr)
+                self.assertEqual(self.source.read_bytes(), source)
+                self.assertEqual(db.read_bytes(), before)
+
 
 if __name__ == '__main__':
     unittest.main()

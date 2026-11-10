@@ -66,7 +66,8 @@ def resolve(args):
         first = stream.readline()
         meta = parse(first)
     payload = meta.get('payload', {})
-    if meta.get('type') != 'session_meta' or payload.get('id') != args.thread_id:
+    if (meta.get('type') != 'session_meta' or not isinstance(payload, dict)
+            or payload.get('id') != args.thread_id):
         raise Blocked('UNKNOWN session identity')
     cwd = Path(payload['cwd']).resolve()
     workspace = Path(args.workspace).resolve()
