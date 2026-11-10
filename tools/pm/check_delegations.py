@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Check a PM delegation export before recording a checkpoint as complete."""
+"""Check a PM delegation export before recording a checkpoint as complete.
+
+Only started rows with valid issue start URLs count toward twenty-record
+checkpoints. Recovering missing start evidence changes that sequence; regenerate
+the checkpoint export from the same ledger after recovery. URLs are checked for
+syntax only, not comment existence or proof that the work was performed.
+"""
 import argparse
 import csv
 import re

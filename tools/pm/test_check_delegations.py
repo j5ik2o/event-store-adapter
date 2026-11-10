@@ -15,27 +15,27 @@ class DelegationAuditTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             ledger = Path(directory) / "ledger.tsv"
             checkpoints = Path(directory) / "checkpoints.tsv"
-            with ledger.open("w", newline="") as output:
+            with ledger.open("w", newline="", encoding="utf-8") as output:
                 writer = csv.DictWriter(output, delimiter="\t", fieldnames=["launch", "task_id", "delegation", "issue_start_record", "issue_start_comments"])
                 writer.writeheader()
                 for number in range(count):
                     missing = missing_start and number == 0
-                    writer.writerow(dict(launch=launch, task_id=f"task-{number}", delegation=f"job-{number}", issue_start_record="missing" if missing else "present", issue_start_comments="" if missing else f"https://github.com/owner/repo/issues/1#issuecomment-{number+1}{suffix}"))
-            with checkpoints.open("w", newline="") as output:
+                    writer.writerow(dict(launch=launch, task_id=f"task-{number}", delegation=f"作業-{number}", issue_start_record="missing" if missing else "present", issue_start_comments="" if missing else f"https://github.com/owner/repo/issues/1#issuecomment-{number+1}{suffix}"))
+            with checkpoints.open("w", newline="", encoding="utf-8") as output:
                 writer = csv.DictWriter(output, delimiter="\t", fieldnames=["counter", "boundary", "correct_issue_evidence", "reflect_issue_evidence"])
                 writer.writeheader()
                 if completed:
                     writer.writerow(dict(counter="issue-recorded-started", boundary=20, correct_issue_evidence="https://github.com/owner/repo/issues/1#issuecomment-100" + checkpoint_suffix, reflect_issue_evidence="https://github.com/owner/repo/issues/1#issuecomment-101" + checkpoint_suffix))
-            return subprocess.run([sys.executable, str(SCRIPT), str(ledger), str(checkpoints)], capture_output=True, text=True)
+            return subprocess.run([sys.executable, str(SCRIPT), str(ledger), str(checkpoints)], capture_output=True, text=True, encoding="utf-8")
 
     def test_empty_files_and_missing_headers_are_invalid(self):
         with tempfile.TemporaryDirectory() as directory:
             ledger = Path(directory) / "ledger.tsv"
             checkpoints = Path(directory) / "checkpoints.tsv"
             for value in ("", "wrong\n"):
-                ledger.write_text(value)
-                checkpoints.write_text(value)
-                result = subprocess.run([sys.executable, str(SCRIPT), str(ledger), str(checkpoints)], capture_output=True, text=True)
+                ledger.write_text(value, encoding="utf-8")
+                checkpoints.write_text(value, encoding="utf-8")
+                result = subprocess.run([sys.executable, str(SCRIPT), str(ledger), str(checkpoints)], capture_output=True, text=True, encoding="utf-8")
                 self.assertEqual(result.returncode, 2)
                 self.assertIn("headers", result.stderr)
 
