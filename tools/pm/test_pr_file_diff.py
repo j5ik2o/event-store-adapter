@@ -15,13 +15,14 @@ FILE = {'filename': 'fixture.txt', 'status': 'modified', 'sha': 'c' * 40,
 
 
 class PrFileDiffTest(unittest.TestCase):
-    def invoke(self, responses, names=('fixture.txt',), extra=(), url=False):
+    def invoke(self, responses, names=('fixture.txt',), extra=(), url=False, target=None):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / 'responses.json').write_text(json.dumps(responses))
             gh = root / 'gh'
             gh.write_text('''#!/usr/bin/env python3
 import json
+import os
 from pathlib import Path
 import sys
 root = Path(__file__).parent
@@ -31,15 +32,20 @@ with calls.open('a') as stream:
     stream.write(json.dumps(sys.argv[1:]) + '\\n')
 responses = json.loads((root / 'responses.json').read_text())
 if index >= len(responses):
+    print(os.environ['PM_DIFF_TEST_LEAK_SENTINEL'])
+    print(os.environ['PM_DIFF_TEST_LEAK_SENTINEL'], file=sys.stderr)
     raise SystemExit(7)
 print(json.dumps(responses[index]))
 ''')
             gh.chmod(0o755)
             arguments = ['https://github.com/owner/repo/pull/12'] if url else ['owner/repo', '12']
+            if target is not None:
+                arguments = list(target)
             for name in names:
                 arguments += ['--file', name]
             result = subprocess.run([sys.executable, str(SCRIPT), *arguments, *extra],
-                                    env=dict(os.environ, PATH=str(root) + os.pathsep + os.environ['PATH']),
+                                    env=dict(os.environ, PATH=str(root) + os.pathsep + os.environ['PATH'],
+                                             PM_DIFF_TEST_LEAK_SENTINEL='LEAK_SENTINEL'),
                                     capture_output=True, text=True, cwd=root)
             calls = root / 'calls.jsonl'
             history = [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []
@@ -90,6 +96,49 @@ print(json.dumps(responses[index]))
             code, report, _, _ = self.invoke([META, [FILE], after])
             self.assertEqual(code, 1)
             self.assertIn('revision_or_metadata_changed', report['reasons'])
+
+    def test_no_newline_marker_rejects_invalid_positions(self):
+        marker = '\\ No newline at end of file'
+        cases = [
+            (f'@@ -1 +1 @@\n{marker}\n-old\n+new', 1, 1),
+            (f'@@ -1 +1 @@\n-old\n{marker}\n{marker}\n+new', 1, 1),
+            (f'@@ -1,2 +1 @@\n-old\n{marker}\n-other\n+new', 1, 2),
+            (f'@@ -1 +1 @@\n-old\n{marker}\n+new\n@@ -3 +3 @@\n-a\n+b', 2, 2),
+        ]
+        for patch, additions, deletions in cases:
+            with self.subTest(patch=patch):
+                item = dict(FILE, patch=patch, additions=additions, deletions=deletions,
+                            changes=additions + deletions)
+                meta = dict(META, additions=additions, deletions=deletions)
+                code, report, _, _ = self.invoke([meta, [item], meta])
+                self.assertEqual(code, 1)
+                self.assertFalse(report['api_consistent'])
+                self.assertIsNone(report['files'][0]['patch'])
+                self.assertIn('newline_marker_invalid', report['files'][0]['reasons'])
+
+    def test_no_newline_marker_accepts_final_old_new_and_context_lines(self):
+        marker = '\\ No newline at end of file'
+        patches = [f'@@ -1 +1 @@\n-old\n{marker}\n+new',
+                   f'@@ -1 +1 @@\n-old\n+new\n{marker}',
+                   f'@@ -1 +1 @@\n-old\n{marker}\n+new\n{marker}',
+                   f'@@ -1,2 +1,2 @@\n-old\n+new\n last\n{marker}']
+        for patch in patches:
+            with self.subTest(patch=patch):
+                _, report, _, _ = self.invoke([META, [dict(FILE, patch=patch)], META])
+                self.assertTrue(report['api_consistent'])
+                self.assertEqual(report['files'][0]['patch'], patch)
+
+    def test_hunk_numbers_are_bounded_without_losing_json_response(self):
+        for index in range(4):
+            fields = ['1', '1', '1', '1']
+            fields[index] = '9' * 5000
+            patch = f'@@ -{fields[0]},{fields[1]} +{fields[2]},{fields[3]} @@\n-old\n+new'
+            with self.subTest(field=index):
+                code, report, _, _ = self.invoke([META, [dict(FILE, patch=patch)], META])
+                self.assertEqual(code, 1)
+                self.assertFalse(report['api_consistent'])
+                self.assertIsNone(report['files'][0]['patch'])
+                self.assertIn('hunk_number_out_of_range', report['files'][0]['reasons'])
 
     def test_missing_selection_is_not_empty_diff(self):
         code, report, _, _ = self.invoke([META, [FILE], META], names=('absent',))
@@ -148,6 +197,7 @@ print(json.dumps(responses[index]))
         code, report, _, _ = self.invoke([])
         self.assertEqual(code, 1)
         self.assertEqual(report['reasons'], ['api_request_failed'])
+        self.assertNotIn('LEAK_SENTINEL', json.dumps(report))
 
     def test_output_cap_never_returns_complete(self):
         item = dict(FILE, additions=1000, deletions=0, changes=1000,
@@ -159,6 +209,15 @@ print(json.dumps(responses[index]))
         self.assertEqual(report['reasons'], ['output_limit'])
 
     def test_invalid_target_does_not_call_api(self):
+        for target in [('owner/repo',), ('https://example.com/owner/repo/pull/12',),
+                       ('owner/repo', 'not-a-number'), ('https://github.com/owner/repo/pull/nope',)]:
+            with self.subTest(target=target):
+                code, report, calls, _ = self.invoke([], target=target)
+                self.assertEqual(code, 1)
+                self.assertEqual(calls, [])
+                self.assertEqual(report['reasons'], ['invalid_arguments'])
+
+    def test_invalid_output_cap_does_not_call_api(self):
         code, report, calls, _ = self.invoke([], extra=('--max-output-bytes', '0'))
         self.assertEqual(code, 1)
         self.assertEqual(calls, [])

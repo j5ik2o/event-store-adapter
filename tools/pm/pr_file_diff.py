@@ -53,20 +53,37 @@ def patch_reasons(patch, additions, deletions):
     counts = [0, 0]
     remaining = None
     previous_end = [0, 0]
+    previous_line = None
+    terminated_sides = [False, False]
     for line in patch.split('\n'):
-        match = re.fullmatch(r'@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@.*', line)
+        match = re.fullmatch(r'@@ -([0-9]+)(?:,([0-9]+))? \+([0-9]+)(?:,([0-9]+))? @@.*', line)
         if match:
+            values = [match[1], match[2] or '1', match[3], match[4] or '1']
+            if any(len(value) > 10 or int(value) > 2147483647 for value in values):
+                return ['hunk_number_out_of_range']
+            if any(terminated_sides):
+                return ['newline_marker_invalid']
             if remaining and any(remaining):
                 return ['hunk_incomplete']
-            start = [int(match[1]), int(match[3])]
+            start = [int(values[0]), int(values[2])]
             if any(start[i] < previous_end[i] for i in (0, 1)):
                 return ['hunk_order_invalid']
-            remaining = [int(match[2] or 1), int(match[4] or 1)]
+            remaining = [int(values[1]), int(values[3])]
             previous_end = [start[i] + remaining[i] for i in (0, 1)]
+            previous_line = None
         elif line == '\\ No newline at end of file':
-            if remaining is None:
-                return ['hunk_missing']
+            if previous_line is None:
+                return ['newline_marker_invalid']
+            sides = (0, 1) if previous_line == ' ' else ((0,) if previous_line == '-' else (1,))
+            if any(remaining[i] or terminated_sides[i] for i in sides):
+                return ['newline_marker_invalid']
+            for i in sides:
+                terminated_sides[i] = True
+            previous_line = None
         elif line[:1] in (' ', '+', '-') and remaining is not None:
+            sides = (0, 1) if line[0] == ' ' else ((0,) if line[0] == '-' else (1,))
+            if any(terminated_sides[i] for i in sides):
+                return ['newline_marker_invalid']
             if line[0] != '+':
                 remaining[0] -= 1
             if line[0] != '-':
@@ -77,6 +94,7 @@ def patch_reasons(patch, additions, deletions):
                 counts[1] += 1
             if min(remaining) < 0:
                 return ['hunk_length_mismatch']
+            previous_line = line[0]
         else:
             return ['patch_syntax_invalid']
     if remaining is None:
