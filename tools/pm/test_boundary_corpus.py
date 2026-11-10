@@ -28,6 +28,38 @@ class CorpusTests(unittest.TestCase):
             self.assertIn('ci-job_id/cli.stdout', manifest)
             self.assertFalse(report['external_GET'])
 
+    def test_relative_output_location_runs_the_created_fixture(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            proc = subprocess.run([sys.executable, '-B', str(Path(corpus.__file__).resolve()),
+                                   '--case', 'ci-integer', '--output', 'evidence/run'],
+                                  cwd=tmp, capture_output=True, text=True)
+            report = json.loads((Path(tmp) / 'evidence/run/results.json').read_text())
+            self.assertEqual(proc.returncode, 0, report)
+            self.assertEqual(report['state'], 'pass')
+            self.assertEqual(Path(json.loads(proc.stdout)['results']),
+                             (Path(tmp) / 'evidence/run/results.json').resolve())
+
+    def test_retention_rejection_stays_a_contract_failure(self):
+        for stdout in ['', 'not json', '[]', '{"counts": []}', '{"counts": {}, "jobs": 1}']:
+            with self.subTest(stdout=stdout), tempfile.TemporaryDirectory() as tmp:
+                directory = Path(tmp)
+                script = directory / 'runner.py'
+                script.write_text(Path(corpus.__file__).read_text())
+                data = json.loads(Path(corpus.__file__).with_suffix('.json').read_text())
+                data['cases'] = [c for c in data['cases'] if c['id'] == 'ci-late_body']
+                script.with_suffix('.json').write_text(json.dumps(data))
+                (directory / 'ci_status.py').write_text(
+                    'import sys\nsys.stdout.write(' + repr(stdout) + ')\nsys.exit(2)\n')
+                output = directory / 'run'
+                proc = subprocess.run([sys.executable, '-B', str(script), '--output', str(output)],
+                                      capture_output=True, text=True)
+                report = json.loads((output / 'results.json').read_text())
+                self.assertEqual(proc.returncode, 1, proc.stderr)
+                self.assertEqual(report['state'], 'fail')
+                self.assertTrue(report['cases'][0]['failures'])
+                self.assertIn('ci-late_body/cli.stdout',
+                              json.loads((output / 'manifest.json').read_text()))
+
     def test_rejection_exit_two_is_a_pass_only_with_the_full_contract(self):
         expected = {'exit': 2, 'fields': {'execution/state': 'unknown',
                     'execution/observed_failure': True}, 'stderr': 'nonempty', 'output': False,
