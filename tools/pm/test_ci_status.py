@@ -265,6 +265,82 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(report['execution'].get('observed_failure'), True)
                 self.assertTrue(report['acquisition_errors'])
 
+    def test_successful_job_missing_id_retains_all_evidence(self):
+        capture = copy.deepcopy(RECORDED['js1127'])
+        jobs = response(capture, '/jobs?')['body']['jobs']
+        del jobs[0]['id']
+        response(capture, '/check-runs?')['body']['check_runs'][0]['conclusion'] = 'failure'
+        code, report, _ = self.cli(capture)
+        self.assertEqual(code, 2)
+        self.assertEqual(report['execution'].get('observed_failure'), True)
+        self.assertEqual(report['counts']['jobs'], len(jobs))
+        self.assertEqual(len(report['jobs']), len(jobs))
+        self.assertTrue(report['acquisition_errors'])
+        self.assertEqual(report['test_execution']['successful_job_ids'],
+                         [row['id'] for row in jobs if 'id' in row])
+
+    def test_invalid_lifecycle_cannot_establish_success(self):
+        for fragment, key in [('/check-runs?', 'check_runs'),
+                              ('/check-suites?', 'check_suites'),
+                              ('/actions/runs?', 'workflow_runs'), ('/jobs?', 'jobs')]:
+            for invalid in ['success', 'failure', None, True, [], {}]:
+                if invalid is None and key in ('check_suites', 'workflow_runs'):
+                    continue
+                with self.subTest(collection=key, status=invalid):
+                    capture = sample()
+                    row = response(capture, fragment)['body'][key][0]
+                    row.update(status=invalid, conclusion='failure')
+                    code, report, _ = self.cli(capture)
+                    self.assertEqual(code, 2)
+                    self.assertEqual(report['execution']['state'], 'unknown')
+                    self.assertEqual(report['execution'].get('observed_failure'), True)
+                    self.assertTrue(report['acquisition_errors'])
+                    self.assertNotEqual(report['required_gate']['state'], 'accepted')
+
+    def test_pending_lifecycle_statuses_remain_incomplete(self):
+        for fragment, key in [('/check-runs?', 'check_runs'),
+                              ('/check-suites?', 'check_suites'),
+                              ('/actions/runs?', 'workflow_runs'), ('/jobs?', 'jobs')]:
+            for pending in ['queued', 'in_progress', 'waiting', 'requested', 'pending']:
+                with self.subTest(collection=key, status=pending):
+                    capture = sample()
+                    response(capture, fragment)['body'][key][0].update(status=pending, conclusion=None)
+                    code, report, _ = self.cli(capture)
+                    self.assertEqual(code, 1)
+                    self.assertEqual(report['execution']['state'], 'incomplete')
+                    self.assertEqual(report['acquisition_errors'], [])
+                    self.assertFalse(report['execution']['observed_failure'])
+
+    def test_nullable_suite_and_run_statuses_remain_incomplete(self):
+        for fragment, key in [('/check-suites?', 'check_suites'),
+                              ('/actions/runs?', 'workflow_runs')]:
+            with self.subTest(collection=key):
+                capture = sample()
+                response(capture, fragment)['body'][key][0].update(status=None, conclusion=None)
+                code, report, _ = self.cli(capture)
+                self.assertEqual(code, 1)
+                self.assertEqual(report['execution']['state'], 'incomplete')
+                self.assertEqual(report['acquisition_errors'], [])
+
+    def test_invalid_run_suite_reference_preserves_evidence(self):
+        for identifier in [None, True, [], 0]:
+            with self.subTest(identifier=identifier):
+                capture = sample()
+                response(capture, '/actions/runs?')['body']['workflow_runs'][0]['check_suite_id'] = identifier
+                code, report, _ = self.cli(capture)
+                self.assertEqual(code, 2)
+                self.assertEqual(report['execution']['state'], 'unknown')
+                self.assertEqual(report['counts']['jobs'], 1)
+                self.assertTrue(report['acquisition_errors'])
+
+    def test_optional_run_suite_reference_can_be_absent(self):
+        capture = sample()
+        del response(capture, '/actions/runs?')['body']['workflow_runs'][0]['check_suite_id']
+        code, report, _ = self.cli(capture)
+        self.assertEqual(code, 0)
+        self.assertEqual(report['acquisition_errors'], [])
+        self.assertEqual(report['suites'][0]['observed_actions_job_count'], 0)
+
     def test_capture_time_requires_a_nonempty_string(self):
         for value in [None, False, 100, '']:
             with self.subTest(captured_at=value):
