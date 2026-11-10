@@ -33,6 +33,7 @@ Some documents are currently written in Japanese only: the specification in `doc
 - [ADR-0006: key by aggregate ID instead of logical shards](docs/adr/0006-key-by-aggregate-id-instead-of-logical-shards.md) ([Japanese](docs/adr/0006-key-by-aggregate-id-instead-of-logical-shards.ja.md))
 - [ADR-0007: store Bigtable snapshot history with the events](docs/adr/0007-store-bigtable-snapshot-history-with-events.md) ([Japanese](docs/adr/0007-store-bigtable-snapshot-history-with-events.ja.md))
 - [ADR-0008: fix the Bigtable envelope binary format](docs/adr/0008-fix-bigtable-envelope-binary-format.md) ([Japanese](docs/adr/0008-fix-bigtable-envelope-binary-format.ja.md))
+- [ADR-0009: bounded manual Spanner ABORTED retry waits](docs/adr/0009-bound-manual-spanner-aborted-retry-waits.md)
 
 ### Tools
 
