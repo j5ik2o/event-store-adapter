@@ -1,0 +1,2325 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "pr-normal",
+      "target": "pr_file_diff",
+      "recipe": "normal",
+      "expect": {
+        "exit": 1,
+        "fields": {
+          "complete": false,
+          "api_consistent": true,
+          "files/0/state": "validated-api-patch",
+          "reasons": [
+            "api_only_completeness_unproven"
+          ]
+        },
+        "stderr": "empty",
+        "output": false
+      },
+      "old_sha": "bbfc4a34f44220af891474b06fc6604b586d1ce0",
+      "old_expect": {
+        "exit": 1,
+        "fields": {
+          "api_consistent": true
+        },
+        "stderr": "empty",
+        "output": false
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/pull/130",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pr130-review.VyEq26/README.md and probes.py; /tmp/pr130-n2.oeMPMt/README.md"
+      },
+      "runtime": "Python >=3.9; local filesystem; no network",
+      "control": true,
+      "input": "Named normal recipe in boundary_corpus.py; all files created under the new run directory",
+      "evidence": "Assert fields, exit, stderr and output presence as declared; preserve raw stdout/stderr and fixtures"
+    },
+    {
+      "id": "pr-invalid_marker",
+      "target": "pr_file_diff",
+      "recipe": "invalid_marker",
+      "expect": {
+        "exit": 1,
+        "fields": {
+          "complete": false,
+          "api_consistent": false,
+          "files/0/state": "unavailable",
+          "files/0/reasons": [
+            "newline_marker_invalid"
+          ],
+          "files/0/patch": null
+        },
+        "stderr": "empty",
+        "output": false
+      },
+      "old_sha": "bbfc4a34f44220af891474b06fc6604b586d1ce0",
+      "old_expect": {
+        "exit": 1,
+        "fields": {
+          "api_consistent": true
+        },
+        "stderr": "empty",
+        "output": false
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/pull/130",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pr130-review.VyEq26/README.md and probes.py; /tmp/pr130-n2.oeMPMt/README.md"
+      },
+      "runtime": "Python >=3.9; local filesystem; no network",
+      "control": false,
+      "input": "Named invalid_marker recipe in boundary_corpus.py; all files created under the new run directory",
+      "evidence": "Assert fields, exit, stderr and output presence as declared; preserve raw stdout/stderr and fixtures"
+    },
+    {
+      "id": "pr-huge_hunk_integer",
+      "target": "pr_file_diff",
+      "recipe": "huge_hunk_integer",
+      "expect": {
+        "exit": 1,
+        "fields": {
+          "complete": false,
+          "api_consistent": false,
+          "files/0/state": "unavailable",
+          "files/0/reasons": [
+            "hunk_number_out_of_range"
+          ],
+          "files/0/patch": null
+        },
+        "stderr": "empty",
+        "output": false
+      },
+      "old_sha": "bbfc4a34f44220af891474b06fc6604b586d1ce0",
+      "old_expect": {
+        "exit_by_python": {
+          "3.9": 1,
+          "3.15": 1
+        },
+        "special": "huge_integer"
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/pull/130",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pr130-review.VyEq26/README.md and probes.py; /tmp/pr130-n2.oeMPMt/README.md"
+      },
+      "runtime": "Python >=3.9; local filesystem; no network",
+      "control": false,
+      "input": "Named huge_hunk_integer recipe in boundary_corpus.py; all files created under the new run directory",
+      "evidence": "Assert fields, exit, stderr and output presence as declared; preserve raw stdout/stderr and fixtures"
+    },
+    {
+      "id": "coverage-integer",
+      "target": "repository_coverage",
+      "recipe": "integer",
+      "expect": {
+        "exit": 0,
+        "fields": {
+          "status": "consistent"
+        },
+        "stderr": "empty",
+        "output": false
+      },
+      "old_sha": "88c66afedaea46d626b5c1982c69c815059c5c03",
+      "old_expect": {
+        "exit": 0,
+        "fields": {
+          "status": "consistent"
+        },
+        "stderr": "empty",
+        "output": false
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/pull/132",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pr132-independent-review/review.md; /tmp/pr132-fixed-review/review.md"
+      },
+      "runtime": "Python >=3.9; local filesystem; no network",
+      "control": true,
+      "input": "Named integer recipe in boundary_corpus.py; all files created under the new run directory",
+      "evidence": "Assert fields, exit, stderr and output presence as declared; preserve raw stdout/stderr and fixtures"
+    },
+    {
+      "id": "coverage-bool",
+      "target": "repository_coverage",
+      "recipe": "bool",
+      "expect": {
+        "exit": 2,
+        "fields": {
+          "status": "invalid_input"
+        },
+        "stderr": "empty",
+        "output": false
+      },
+      "old_sha": "88c66afedaea46d626b5c1982c69c815059c5c03",
+      "old_expect": {
+        "exit": 0,
+        "fields": {
+          "status": "consistent"
+        },
+        "stderr": "empty",
+        "output": false
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/pull/132",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pr132-independent-review/review.md; /tmp/pr132-fixed-review/review.md"
+      },
+      "runtime": "Python >=3.9; local filesystem; no network",
+      "control": false,
+      "input": "Named bool recipe in boundary_corpus.py; all files created under the new run directory",
+      "evidence": "Assert fields, exit, stderr and output presence as declared; preserve raw stdout/stderr and fixtures"
+    },
+    {
+      "id": "coverage-float",
+      "target": "repository_coverage",
+      "recipe": "float",
+      "expect": {
+        "exit": 2,
+        "fields": {
+          "status": "invalid_input"
+        },
+        "stderr": "empty",
+        "output": false
+      },
+      "old_sha": "88c66afedaea46d626b5c1982c69c815059c5c03",
+      "old_expect": {
+        "exit": 0,
+        "fields": {
+          "status": "consistent"
+        },
+        "stderr": "empty",
+        "output": false
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/pull/132",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pr132-independent-review/review.md; /tmp/pr132-fixed-review/review.md"
+      },
+      "runtime": "Python >=3.9; local filesystem; no network",
+      "control": false,
+      "input": "Named float recipe in boundary_corpus.py; all files created under the new run directory",
+      "evidence": "Assert fields, exit, stderr and output presence as declared; preserve raw stdout/stderr and fixtures"
+    },
+    {
+      "id": "coverage-deep",
+      "target": "repository_coverage",
+      "recipe": "deep",
+      "expect": {
+        "exit": 2,
+        "fields": {
+          "status": "invalid_input",
+          "successful": [],
+          "invalid_records/0/repo": "j5ik2o/example"
+        },
+        "stderr": "empty",
+        "output": false
+      },
+      "old_sha": "88c66afedaea46d626b5c1982c69c815059c5c03",
+      "old_expect": {
+        "special": "deep"
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/pull/132",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pr132-independent-review/review.md; /tmp/pr132-fixed-review/review.md"
+      },
+      "runtime": "Python >=3.9; local filesystem; no network",
+      "control": false,
+      "input": "Named deep recipe in boundary_corpus.py; all files created under the new run directory",
+      "evidence": "Assert fields, exit, stderr and output presence as declared; preserve raw stdout/stderr and fixtures"
+    },
+    {
+      "id": "coverage-acquisition_error",
+      "target": "repository_coverage",
+      "recipe": "acquisition_error",
+      "expect": {
+        "exit": 1,
+        "fields": {
+          "status": "coverage_gap",
+          "successful": [],
+          "failed/0/repo": "j5ik2o/example"
+        },
+        "stderr": "empty",
+        "output": false
+      },
+      "old_sha": "88c66afedaea46d626b5c1982c69c815059c5c03",
+      "old_expect": {
+        "exit": 1,
+        "fields": {
+          "status": "coverage_gap"
+        },
+        "stderr": "empty",
+        "output": false
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/pull/132",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pr132-independent-review/review.md; /tmp/pr132-fixed-review/review.md"
+      },
+      "runtime": "Python >=3.9; local filesystem; no network",
+      "control": true,
+      "input": "Named acquisition_error recipe in boundary_corpus.py; all files created under the new run directory",
+      "evidence": "Assert fields, exit, stderr and output presence as declared; preserve raw stdout/stderr and fixtures"
+    },
+    {
+      "id": "artifact-roundtrip",
+      "target": "artifact_evidence",
+      "recipe": "roundtrip",
+      "expect": {
+        "exit": 0,
+        "fields": {
+          "evidence": "satisfied_now",
+          "integrity": "matched_now"
+        },
+        "stderr": "empty",
+        "output": true
+      },
+      "old_sha": "a9f2c3769cb7892d1a5fd7127a8643c31ecdc49c",
+      "old_expect": {
+        "exit": 0,
+        "fields": {
+          "evidence": "satisfied_now",
+          "integrity": "matched_now"
+        },
+        "stderr": "empty",
+        "output": true
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/pull/133",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pr133-independent-review/review.md"
+      },
+      "runtime": "Python >=3.9; local filesystem; no network",
+      "control": true,
+      "long_path": false,
+      "input": "Named roundtrip recipe in boundary_corpus.py; all files created under the new run directory",
+      "evidence": "Assert fields, exit, stderr and output presence as declared; preserve raw stdout/stderr and fixtures"
+    },
+    {
+      "id": "artifact-absolute_path",
+      "target": "artifact_evidence",
+      "recipe": "absolute_path",
+      "expect": {
+        "exit": 2,
+        "fields": {
+          "inspection_complete": false,
+          "evidence": "not_established"
+        },
+        "stderr": "empty",
+        "output": false,
+        "contains": {
+          "error": "bounded string"
+        }
+      },
+      "old_sha": "a9f2c3769cb7892d1a5fd7127a8643c31ecdc49c",
+      "old_expect": {
+        "exit": 0,
+        "fields": {
+          "generated_files": 4
+        },
+        "stderr": "empty",
+        "output": true
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/pull/133",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pr133-independent-review/review.md"
+      },
+      "runtime": "Python >=3.9; filesystem PATH_MAX >=3500; create long Unicode fixture before invoking CLI",
+      "control": false,
+      "long_path": true,
+      "input": "Named absolute_path recipe in boundary_corpus.py; all files created under the new run directory",
+      "evidence": "Assert fields, exit, stderr and output presence as declared; preserve raw stdout/stderr and fixtures"
+    },
+    {
+      "id": "artifact-json_escape",
+      "target": "artifact_evidence",
+      "recipe": "json_escape",
+      "expect": {
+        "exit": 2,
+        "fields": {
+          "inspection_complete": false,
+          "evidence": "not_established"
+        },
+        "stderr": "empty",
+        "output": false,
+        "contains": {
+          "error": "JSON byte limit"
+        }
+      },
+      "old_sha": "a9f2c3769cb7892d1a5fd7127a8643c31ecdc49c",
+      "old_expect": {
+        "exit": 0,
+        "fields": {
+          "generated_files": 256
+        },
+        "stderr": "empty",
+        "output": true
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/pull/133",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pr133-independent-review/review.md"
+      },
+      "runtime": "Python >=3.9; filesystem PATH_MAX >=3500; create long Unicode fixture before invoking CLI",
+      "control": false,
+      "long_path": true,
+      "input": "Named json_escape recipe in boundary_corpus.py; all files created under the new run directory",
+      "evidence": "Assert fields, exit, stderr and output presence as declared; preserve raw stdout/stderr and fixtures"
+    },
+    {
+      "id": "artifact-invalid_contract",
+      "target": "artifact_evidence",
+      "recipe": "invalid_contract",
+      "expect": {
+        "exit": 2,
+        "fields": {
+          "inspection_complete": false,
+          "evidence": "not_established"
+        },
+        "stderr": "empty",
+        "output": false
+      },
+      "old_sha": "a9f2c3769cb7892d1a5fd7127a8643c31ecdc49c",
+      "old_expect": {
+        "exit": 2,
+        "fields": {
+          "inspection_complete": false,
+          "evidence": "not_established"
+        },
+        "stderr": "empty",
+        "output": false
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/pull/133",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pr133-independent-review/review.md"
+      },
+      "runtime": "Python >=3.9; local filesystem; no network",
+      "control": true,
+      "long_path": false,
+      "input": "Named invalid_contract recipe in boundary_corpus.py; all files created under the new run directory",
+      "evidence": "Assert fields, exit, stderr and output presence as declared; preserve raw stdout/stderr and fixtures"
+    },
+    {
+      "id": "ci-late_body",
+      "target": "ci_status",
+      "recipe": "replay",
+      "expect": {
+        "exit": 2,
+        "fields": {
+          "execution/state": "unknown",
+          "execution/observed_failure": true,
+          "test_execution/state": "unverified"
+        },
+        "stderr": "nonempty",
+        "output": false,
+        "retain": true,
+        "errors": true
+      },
+      "old_sha": "af71a0c24b484d0eaeb2efd11f0971e1c4f6ee4c",
+      "old_expect": {
+        "exit": 2,
+        "fields": {
+          "error": "invalid_input_or_response"
+        },
+        "stderr": "nonempty",
+        "output": false
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/issues/136",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pm-checkpoint100/correct-proof.py; /tmp/pm-ci-status-required-independent/review.md",
+        "fixture": "Limited inheritance of test_ci_status.py sample shape, reconstructed variants of checkpoint100 cases. No test module imported at runtime. Late body and suite ID use synthetic sample rather than historical PHP capture."
+      },
+      "runtime": "Python >=3.9; local filesystem; no network",
+      "fixture": {
+        "schema_version": 1,
+        "repository": "example/repo",
+        "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "branch": "main",
+        "captured_at": "synthetic",
+        "responses": {
+          "repos/example/repo/branches/main": {
+            "http_status": 200,
+            "body": {
+              "protected": true
+            },
+            "next": null
+          },
+          "repos/example/repo/branches/main/protection": {
+            "http_status": 200,
+            "body": {
+              "required_status_checks": {
+                "checks": [
+                  {
+                    "context": "test",
+                    "app_id": 15368
+                  }
+                ]
+              }
+            },
+            "next": null
+          },
+          "repos/example/repo/rules/branches/main?per_page=100": {
+            "http_status": 200,
+            "body": [],
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-runs?per_page=100&filter=latest": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "check_runs": [
+                {
+                  "id": 1,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  }
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/status?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "total_count": 1,
+              "statuses": [
+                {
+                  "id": 7,
+                  "context": "other",
+                  "state": "failure"
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-suites?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "check_suites": [
+                {
+                  "id": 2,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  }
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/actions/runs?head_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "workflow_runs": [
+                {
+                  "id": 3,
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "run_attempt": 1,
+                  "check_suite_id": 2
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/actions/runs/3/attempts/1/jobs?per_page=100": {
+            "http_status": 200,
+            "next": null
+          }
+        }
+      },
+      "control": false,
+      "input": "Inline synthetic replay fixture",
+      "evidence": "All observed raw rows and counts, observed_failure true, acquisition_errors nonempty"
+    },
+    {
+      "id": "ci-suite_id",
+      "target": "ci_status",
+      "recipe": "replay",
+      "expect": {
+        "exit": 2,
+        "fields": {
+          "execution/state": "unknown",
+          "execution/observed_failure": true,
+          "test_execution/state": "unverified"
+        },
+        "stderr": "nonempty",
+        "output": false,
+        "retain": true,
+        "errors": true
+      },
+      "old_sha": "8182b859a2a9b74c6060cbf744d29f9e550673a3",
+      "old_expect": {
+        "exit": 2,
+        "fields": {
+          "error": "invalid_input_or_response"
+        },
+        "stderr": "nonempty",
+        "output": false
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/issues/136",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pm-checkpoint100/correct-proof.py; /tmp/pm-ci-status-required-independent/review.md",
+        "fixture": "Limited inheritance of test_ci_status.py sample shape, reconstructed variants of checkpoint100 cases. No test module imported at runtime. Late body and suite ID use synthetic sample rather than historical PHP capture."
+      },
+      "runtime": "Python >=3.9; local filesystem; no network",
+      "fixture": {
+        "schema_version": 1,
+        "repository": "example/repo",
+        "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "branch": "main",
+        "captured_at": "synthetic",
+        "responses": {
+          "repos/example/repo/branches/main": {
+            "http_status": 200,
+            "body": {
+              "protected": true
+            },
+            "next": null
+          },
+          "repos/example/repo/branches/main/protection": {
+            "http_status": 200,
+            "body": {
+              "required_status_checks": {
+                "checks": [
+                  {
+                    "context": "test",
+                    "app_id": 15368
+                  }
+                ]
+              }
+            },
+            "next": null
+          },
+          "repos/example/repo/rules/branches/main?per_page=100": {
+            "http_status": 200,
+            "body": [],
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-runs?per_page=100&filter=latest": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "check_runs": [
+                {
+                  "id": 1,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  }
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/status?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "total_count": 1,
+              "statuses": [
+                {
+                  "id": 7,
+                  "context": "other",
+                  "state": "failure"
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-suites?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "check_suites": [
+                {
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  }
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/actions/runs?head_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "workflow_runs": [
+                {
+                  "id": 3,
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "run_attempt": 1,
+                  "check_suite_id": 2
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/actions/runs/3/attempts/1/jobs?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "jobs": [
+                {
+                  "id": 4,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  },
+                  "run_id": 3,
+                  "run_attempt": 1,
+                  "steps": [
+                    {
+                      "name": "Run tests",
+                      "status": "completed",
+                      "conclusion": "success"
+                    }
+                  ]
+                }
+              ]
+            },
+            "next": null
+          }
+        }
+      },
+      "control": false,
+      "input": "Inline synthetic replay fixture",
+      "evidence": "All observed raw rows and counts, observed_failure true, acquisition_errors nonempty"
+    },
+    {
+      "id": "ci-job_id",
+      "target": "ci_status",
+      "recipe": "replay",
+      "expect": {
+        "exit": 2,
+        "fields": {
+          "execution/state": "unknown",
+          "execution/observed_failure": true,
+          "test_execution/state": "unverified",
+          "test_execution/successful_job_ids": []
+        },
+        "stderr": "nonempty",
+        "output": false,
+        "retain": true,
+        "errors": true
+      },
+      "old_sha": "e391b8ee80e6e7fa3e9cd65f400423e109fe2bf5",
+      "old_expect": {
+        "exit": 2,
+        "fields": {
+          "error": "invalid_input_or_response"
+        },
+        "stderr": "nonempty",
+        "output": false
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/issues/136",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pm-checkpoint100/correct-proof.py; /tmp/pm-ci-status-required-independent/review.md",
+        "fixture": "Limited inheritance of test_ci_status.py sample shape, reconstructed variants of checkpoint100 cases. No test module imported at runtime. Late body and suite ID use synthetic sample rather than historical PHP capture."
+      },
+      "runtime": "Python >=3.9; local filesystem; no network",
+      "fixture": {
+        "schema_version": 1,
+        "repository": "example/repo",
+        "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "branch": "main",
+        "captured_at": "synthetic",
+        "responses": {
+          "repos/example/repo/branches/main": {
+            "http_status": 200,
+            "body": {
+              "protected": true
+            },
+            "next": null
+          },
+          "repos/example/repo/branches/main/protection": {
+            "http_status": 200,
+            "body": {
+              "required_status_checks": {
+                "checks": [
+                  {
+                    "context": "test",
+                    "app_id": 15368
+                  }
+                ]
+              }
+            },
+            "next": null
+          },
+          "repos/example/repo/rules/branches/main?per_page=100": {
+            "http_status": 200,
+            "body": [],
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-runs?per_page=100&filter=latest": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "check_runs": [
+                {
+                  "id": 1,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  }
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/status?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "total_count": 1,
+              "statuses": [
+                {
+                  "id": 7,
+                  "context": "other",
+                  "state": "failure"
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-suites?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "check_suites": [
+                {
+                  "id": 2,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  }
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/actions/runs?head_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "workflow_runs": [
+                {
+                  "id": 3,
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "run_attempt": 1,
+                  "check_suite_id": 2
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/actions/runs/3/attempts/1/jobs?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "jobs": [
+                {
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  },
+                  "run_id": 3,
+                  "run_attempt": 1,
+                  "steps": [
+                    {
+                      "name": "Run tests",
+                      "status": "completed",
+                      "conclusion": "success"
+                    }
+                  ]
+                }
+              ]
+            },
+            "next": null
+          }
+        }
+      },
+      "control": false,
+      "input": "Inline synthetic replay fixture",
+      "evidence": "All observed raw rows and counts, observed_failure true, acquisition_errors nonempty"
+    },
+    {
+      "id": "ci-duplicate_context",
+      "target": "ci_status",
+      "recipe": "replay",
+      "expect": {
+        "exit": 2,
+        "fields": {
+          "execution/state": "unknown",
+          "execution/observed_failure": true,
+          "test_execution/state": "unverified"
+        },
+        "stderr": "nonempty",
+        "output": false,
+        "retain": true,
+        "errors": true
+      },
+      "old_sha": "af71a0c24b484d0eaeb2efd11f0971e1c4f6ee4c",
+      "old_expect": {
+        "exit": 0,
+        "fields": {
+          "execution/state": "success",
+          "execution/observed_failure": false
+        },
+        "stderr": "empty",
+        "output": false,
+        "errors": false
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/issues/136",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pm-checkpoint100/correct-proof.py; /tmp/pm-ci-status-required-independent/review.md",
+        "fixture": "Limited inheritance of test_ci_status.py sample shape, reconstructed variants of checkpoint100 cases. No test module imported at runtime. Late body and suite ID use synthetic sample rather than historical PHP capture."
+      },
+      "runtime": "Python >=3.9; local filesystem; no network",
+      "fixture": {
+        "schema_version": 1,
+        "repository": "example/repo",
+        "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "branch": "main",
+        "captured_at": "synthetic",
+        "responses": {
+          "repos/example/repo/branches/main": {
+            "http_status": 200,
+            "body": {
+              "protected": true
+            },
+            "next": null
+          },
+          "repos/example/repo/branches/main/protection": {
+            "http_status": 200,
+            "body": {
+              "required_status_checks": {
+                "checks": [
+                  {
+                    "context": "test",
+                    "app_id": 15368
+                  }
+                ]
+              }
+            },
+            "next": null
+          },
+          "repos/example/repo/rules/branches/main?per_page=100": {
+            "http_status": 200,
+            "body": [],
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-runs?per_page=100&filter=latest": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "check_runs": [
+                {
+                  "id": 1,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  }
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/status?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "total_count": 2,
+              "statuses": [
+                {
+                  "id": 7,
+                  "context": "other",
+                  "state": "success"
+                },
+                {
+                  "id": 8,
+                  "context": "other",
+                  "state": "failure"
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-suites?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "check_suites": [
+                {
+                  "id": 2,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  }
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/actions/runs?head_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "workflow_runs": [
+                {
+                  "id": 3,
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "run_attempt": 1,
+                  "check_suite_id": 2
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/actions/runs/3/attempts/1/jobs?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "jobs": [
+                {
+                  "id": 4,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  },
+                  "run_id": 3,
+                  "run_attempt": 1,
+                  "steps": [
+                    {
+                      "name": "Run tests",
+                      "status": "completed",
+                      "conclusion": "success"
+                    }
+                  ]
+                }
+              ]
+            },
+            "next": null
+          }
+        }
+      },
+      "control": false,
+      "input": "Inline synthetic replay fixture",
+      "evidence": "All observed raw rows and counts, observed_failure true, acquisition_errors nonempty"
+    },
+    {
+      "id": "ci-lifecycle",
+      "target": "ci_status",
+      "recipe": "replay",
+      "expect": {
+        "exit": 2,
+        "fields": {
+          "execution/state": "unknown",
+          "execution/observed_failure": true,
+          "test_execution/state": "unverified"
+        },
+        "stderr": "nonempty",
+        "output": false,
+        "retain": true,
+        "errors": true
+      },
+      "old_sha": "e391b8ee80e6e7fa3e9cd65f400423e109fe2bf5",
+      "old_expect": {
+        "exit": 1,
+        "fields": {
+          "execution/state": "failure"
+        },
+        "stderr": "nonempty",
+        "output": false,
+        "errors": false
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/issues/136",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pm-checkpoint100/correct-proof.py; /tmp/pm-ci-status-required-independent/review.md",
+        "fixture": "Limited inheritance of test_ci_status.py sample shape, reconstructed variants of checkpoint100 cases. No test module imported at runtime. Late body and suite ID use synthetic sample rather than historical PHP capture."
+      },
+      "runtime": "Python >=3.9; local filesystem; no network",
+      "fixture": {
+        "schema_version": 1,
+        "repository": "example/repo",
+        "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "branch": "main",
+        "captured_at": "synthetic",
+        "responses": {
+          "repos/example/repo/branches/main": {
+            "http_status": 200,
+            "body": {
+              "protected": true
+            },
+            "next": null
+          },
+          "repos/example/repo/branches/main/protection": {
+            "http_status": 200,
+            "body": {
+              "required_status_checks": {
+                "checks": [
+                  {
+                    "context": "test",
+                    "app_id": 15368
+                  }
+                ]
+              }
+            },
+            "next": null
+          },
+          "repos/example/repo/rules/branches/main?per_page=100": {
+            "http_status": 200,
+            "body": [],
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-runs?per_page=100&filter=latest": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "check_runs": [
+                {
+                  "id": 1,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "success",
+                  "conclusion": "failure",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  }
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/status?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "total_count": 1,
+              "statuses": [
+                {
+                  "id": 7,
+                  "context": "other",
+                  "state": "failure"
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-suites?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "check_suites": [
+                {
+                  "id": 2,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  }
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/actions/runs?head_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "workflow_runs": [
+                {
+                  "id": 3,
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "run_attempt": 1,
+                  "check_suite_id": 2
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/actions/runs/3/attempts/1/jobs?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "jobs": [
+                {
+                  "id": 4,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  },
+                  "run_id": 3,
+                  "run_attempt": 1,
+                  "steps": [
+                    {
+                      "name": "Run tests",
+                      "status": "completed",
+                      "conclusion": "success"
+                    }
+                  ]
+                }
+              ]
+            },
+            "next": null
+          }
+        }
+      },
+      "control": false,
+      "input": "Inline synthetic replay fixture",
+      "evidence": "All observed raw rows and counts, observed_failure true, acquisition_errors nonempty"
+    },
+    {
+      "id": "ci-required_missing",
+      "target": "ci_status",
+      "recipe": "replay",
+      "expect": {
+        "exit": 2,
+        "fields": {
+          "execution/state": "unknown",
+          "execution/observed_failure": true,
+          "test_execution/state": "unverified"
+        },
+        "stderr": "nonempty",
+        "output": false,
+        "retain": true,
+        "errors": true
+      },
+      "old_sha": "4762e7309bee87769120fb08a456dbbdb94b03c2",
+      "old_expect": {
+        "exit": 1,
+        "fields": {
+          "execution/state": "failure"
+        },
+        "stderr": "nonempty",
+        "output": false,
+        "errors": false
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/issues/136",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pm-checkpoint100/correct-proof.py; /tmp/pm-ci-status-required-independent/review.md",
+        "fixture": "Limited inheritance of test_ci_status.py sample shape, reconstructed variants of checkpoint100 cases. No test module imported at runtime. Late body and suite ID use synthetic sample rather than historical PHP capture."
+      },
+      "runtime": "Python >=3.9; local filesystem; no network",
+      "fixture": {
+        "schema_version": 1,
+        "repository": "example/repo",
+        "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "branch": "main",
+        "captured_at": "synthetic",
+        "responses": {
+          "repos/example/repo/branches/main": {
+            "http_status": 200,
+            "body": {
+              "protected": true
+            },
+            "next": null
+          },
+          "repos/example/repo/branches/main/protection": {
+            "http_status": 200,
+            "body": {
+              "required_status_checks": {
+                "checks": [
+                  {
+                    "context": "test",
+                    "app_id": 15368
+                  }
+                ]
+              }
+            },
+            "next": null
+          },
+          "repos/example/repo/rules/branches/main?per_page=100": {
+            "http_status": 200,
+            "body": [],
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-runs?per_page=100&filter=latest": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "check_runs": [
+                {
+                  "id": 1,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  }
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/status?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "total_count": 1,
+              "statuses": [
+                {
+                  "id": 7,
+                  "context": "other",
+                  "state": "failure"
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-suites?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "check_suites": [
+                {
+                  "id": 2,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  }
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/actions/runs?head_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "workflow_runs": [
+                {
+                  "id": 3,
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "run_attempt": 1,
+                  "check_suite_id": 2
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/actions/runs/3/attempts/1/jobs?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "jobs": [
+                {
+                  "id": 4,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  },
+                  "run_id": 3,
+                  "run_attempt": 1,
+                  "steps": [
+                    {
+                      "name": "Run tests",
+                      "status": "completed",
+                      "conclusion": "success"
+                    }
+                  ]
+                }
+              ]
+            },
+            "next": null
+          }
+        }
+      },
+      "control": false,
+      "input": "Inline synthetic replay fixture",
+      "evidence": "All observed raw rows and counts, observed_failure true, acquisition_errors nonempty"
+    },
+    {
+      "id": "ci-legal_null",
+      "target": "ci_status",
+      "recipe": "replay",
+      "expect": {
+        "exit": 1,
+        "fields": {
+          "execution/state": "incomplete",
+          "execution/observed_failure": false,
+          "test_execution/state": "unverified"
+        },
+        "stderr": "nonempty",
+        "output": false,
+        "retain": false,
+        "errors": false
+      },
+      "old_sha": "4762e7309bee87769120fb08a456dbbdb94b03c2",
+      "old_expect": {
+        "exit": 1,
+        "fields": {
+          "execution/state": "incomplete",
+          "execution/observed_failure": false,
+          "test_execution/state": "unverified"
+        },
+        "stderr": "nonempty",
+        "output": false,
+        "retain": false,
+        "errors": false
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/issues/136",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pm-checkpoint100/correct-proof.py; /tmp/pm-ci-status-required-independent/review.md",
+        "fixture": "Limited inheritance of test_ci_status.py sample shape, reconstructed variants of checkpoint100 cases. No test module imported at runtime. Late body and suite ID use synthetic sample rather than historical PHP capture."
+      },
+      "runtime": "Python >=3.9; local filesystem; no network",
+      "fixture": {
+        "schema_version": 1,
+        "repository": "example/repo",
+        "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "branch": "main",
+        "captured_at": "synthetic",
+        "responses": {
+          "repos/example/repo/branches/main": {
+            "http_status": 200,
+            "body": {
+              "protected": true
+            },
+            "next": null
+          },
+          "repos/example/repo/branches/main/protection": {
+            "http_status": 200,
+            "body": {
+              "required_status_checks": {
+                "checks": [
+                  {
+                    "context": "test",
+                    "app_id": 15368
+                  }
+                ]
+              }
+            },
+            "next": null
+          },
+          "repos/example/repo/rules/branches/main?per_page=100": {
+            "http_status": 200,
+            "body": [],
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-runs?per_page=100&filter=latest": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "check_runs": [
+                {
+                  "id": 1,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  }
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/status?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "total_count": 0,
+              "statuses": []
+            },
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-suites?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "check_suites": [
+                {
+                  "id": 2,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": null,
+                  "conclusion": null,
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  }
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/actions/runs?head_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "workflow_runs": [
+                {
+                  "id": 3,
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "run_attempt": 1,
+                  "check_suite_id": 2
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/actions/runs/3/attempts/1/jobs?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "jobs": [
+                {
+                  "id": 4,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  },
+                  "run_id": 3,
+                  "run_attempt": 1,
+                  "steps": [
+                    {
+                      "name": "Run tests",
+                      "status": "completed",
+                      "conclusion": "success"
+                    }
+                  ]
+                }
+              ]
+            },
+            "next": null
+          }
+        }
+      },
+      "control": true,
+      "input": "Inline synthetic replay fixture",
+      "evidence": "Assert fields, exit, stderr and output presence as declared; preserve raw stdout/stderr and fixtures"
+    },
+    {
+      "id": "ci-schema_bool",
+      "target": "ci_status",
+      "recipe": "replay",
+      "expect": {
+        "exit": 2,
+        "fields": {
+          "execution/state": "unknown"
+        },
+        "stderr": "nonempty",
+        "output": false,
+        "retain": false,
+        "errors": false
+      },
+      "old_sha": "a9c643e1183e3653e1e7aac41c4bfd792b867575",
+      "old_expect": {
+        "exit": 0,
+        "fields": {
+          "execution/state": "success"
+        },
+        "stderr": "empty",
+        "output": false
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/issues/136",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pm-checkpoint100/correct-proof.py; /tmp/pm-ci-status-required-independent/review.md",
+        "fixture": "Limited inheritance of test_ci_status.py sample shape, reconstructed variants of checkpoint100 cases. No test module imported at runtime. Late body and suite ID use synthetic sample rather than historical PHP capture."
+      },
+      "runtime": "Python >=3.9; local filesystem; no network",
+      "fixture": {
+        "schema_version": true,
+        "repository": "example/repo",
+        "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "branch": "main",
+        "captured_at": "synthetic",
+        "responses": {
+          "repos/example/repo/branches/main": {
+            "http_status": 200,
+            "body": {
+              "protected": true
+            },
+            "next": null
+          },
+          "repos/example/repo/branches/main/protection": {
+            "http_status": 200,
+            "body": {
+              "required_status_checks": {
+                "checks": [
+                  {
+                    "context": "test",
+                    "app_id": 15368
+                  }
+                ]
+              }
+            },
+            "next": null
+          },
+          "repos/example/repo/rules/branches/main?per_page=100": {
+            "http_status": 200,
+            "body": [],
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-runs?per_page=100&filter=latest": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "check_runs": [
+                {
+                  "id": 1,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  }
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/status?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "total_count": 0,
+              "statuses": []
+            },
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-suites?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "check_suites": [
+                {
+                  "id": 2,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  }
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/actions/runs?head_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "workflow_runs": [
+                {
+                  "id": 3,
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "run_attempt": 1,
+                  "check_suite_id": 2
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/actions/runs/3/attempts/1/jobs?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "jobs": [
+                {
+                  "id": 4,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  },
+                  "run_id": 3,
+                  "run_attempt": 1,
+                  "steps": [
+                    {
+                      "name": "Run tests",
+                      "status": "completed",
+                      "conclusion": "success"
+                    }
+                  ]
+                }
+              ]
+            },
+            "next": null
+          }
+        }
+      },
+      "control": false,
+      "input": "Inline synthetic replay fixture",
+      "evidence": "Assert fields, exit, stderr and output presence as declared; preserve raw stdout/stderr and fixtures"
+    },
+    {
+      "id": "ci-schema_float",
+      "target": "ci_status",
+      "recipe": "replay",
+      "expect": {
+        "exit": 2,
+        "fields": {
+          "execution/state": "unknown"
+        },
+        "stderr": "nonempty",
+        "output": false,
+        "retain": false,
+        "errors": false
+      },
+      "old_sha": "a9c643e1183e3653e1e7aac41c4bfd792b867575",
+      "old_expect": {
+        "exit": 0,
+        "fields": {
+          "execution/state": "success"
+        },
+        "stderr": "empty",
+        "output": false
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/issues/136",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pm-checkpoint100/correct-proof.py; /tmp/pm-ci-status-required-independent/review.md",
+        "fixture": "Limited inheritance of test_ci_status.py sample shape, reconstructed variants of checkpoint100 cases. No test module imported at runtime. Late body and suite ID use synthetic sample rather than historical PHP capture."
+      },
+      "runtime": "Python >=3.9; local filesystem; no network",
+      "fixture": {
+        "schema_version": 1.0,
+        "repository": "example/repo",
+        "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "branch": "main",
+        "captured_at": "synthetic",
+        "responses": {
+          "repos/example/repo/branches/main": {
+            "http_status": 200,
+            "body": {
+              "protected": true
+            },
+            "next": null
+          },
+          "repos/example/repo/branches/main/protection": {
+            "http_status": 200,
+            "body": {
+              "required_status_checks": {
+                "checks": [
+                  {
+                    "context": "test",
+                    "app_id": 15368
+                  }
+                ]
+              }
+            },
+            "next": null
+          },
+          "repos/example/repo/rules/branches/main?per_page=100": {
+            "http_status": 200,
+            "body": [],
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-runs?per_page=100&filter=latest": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "check_runs": [
+                {
+                  "id": 1,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  }
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/status?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "total_count": 0,
+              "statuses": []
+            },
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-suites?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "check_suites": [
+                {
+                  "id": 2,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  }
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/actions/runs?head_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "workflow_runs": [
+                {
+                  "id": 3,
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "run_attempt": 1,
+                  "check_suite_id": 2
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/actions/runs/3/attempts/1/jobs?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "jobs": [
+                {
+                  "id": 4,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  },
+                  "run_id": 3,
+                  "run_attempt": 1,
+                  "steps": [
+                    {
+                      "name": "Run tests",
+                      "status": "completed",
+                      "conclusion": "success"
+                    }
+                  ]
+                }
+              ]
+            },
+            "next": null
+          }
+        }
+      },
+      "control": false,
+      "input": "Inline synthetic replay fixture",
+      "evidence": "Assert fields, exit, stderr and output presence as declared; preserve raw stdout/stderr and fixtures"
+    },
+    {
+      "id": "ci-legal_extension",
+      "target": "ci_status",
+      "recipe": "replay",
+      "expect": {
+        "exit": 0,
+        "fields": {
+          "execution/state": "success",
+          "execution/observed_failure": false,
+          "test_execution/state": "unverified"
+        },
+        "stderr": "empty",
+        "output": false,
+        "retain": false,
+        "errors": false
+      },
+      "old_sha": "af71a0c24b484d0eaeb2efd11f0971e1c4f6ee4c",
+      "old_expect": {
+        "exit": 0,
+        "fields": {
+          "execution/state": "success",
+          "execution/observed_failure": false,
+          "test_execution/state": "unverified"
+        },
+        "stderr": "empty",
+        "output": false,
+        "retain": false,
+        "errors": false
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/issues/136",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pm-checkpoint100/correct-proof.py; /tmp/pm-ci-status-required-independent/review.md",
+        "fixture": "Limited inheritance of test_ci_status.py sample shape, reconstructed variants of checkpoint100 cases. No test module imported at runtime. Late body and suite ID use synthetic sample rather than historical PHP capture."
+      },
+      "runtime": "Python >=3.9; local filesystem; no network",
+      "fixture": {
+        "schema_version": 1,
+        "repository": "example/repo",
+        "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "branch": "main",
+        "captured_at": "synthetic",
+        "responses": {
+          "repos/example/repo/branches/main": {
+            "http_status": 200,
+            "body": {
+              "protected": true
+            },
+            "next": null
+          },
+          "repos/example/repo/branches/main/protection": {
+            "http_status": 200,
+            "body": {
+              "required_status_checks": {
+                "checks": [
+                  {
+                    "context": "test",
+                    "app_id": 15368
+                  }
+                ]
+              }
+            },
+            "next": null
+          },
+          "repos/example/repo/rules/branches/main?per_page=100": {
+            "http_status": 200,
+            "body": [],
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-runs?per_page=100&filter=latest": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "check_runs": [
+                {
+                  "id": 1,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  },
+                  "extension": 0.125
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/status?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "total_count": 0,
+              "statuses": []
+            },
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-suites?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "check_suites": [
+                {
+                  "id": 2,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  }
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/actions/runs?head_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "workflow_runs": [
+                {
+                  "id": 3,
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "run_attempt": 1,
+                  "check_suite_id": 2
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/actions/runs/3/attempts/1/jobs?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "jobs": [
+                {
+                  "id": 4,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  },
+                  "run_id": 3,
+                  "run_attempt": 1,
+                  "steps": [
+                    {
+                      "name": "Run tests",
+                      "status": "completed",
+                      "conclusion": "success"
+                    }
+                  ]
+                }
+              ]
+            },
+            "next": null
+          }
+        }
+      },
+      "control": true,
+      "input": "Inline synthetic replay fixture",
+      "evidence": "Assert fields, exit, stderr and output presence as declared; preserve raw stdout/stderr and fixtures"
+    },
+    {
+      "id": "ci-integer",
+      "target": "ci_status",
+      "recipe": "replay",
+      "expect": {
+        "exit": 0,
+        "fields": {
+          "execution/state": "success",
+          "execution/observed_failure": false,
+          "test_execution/state": "unverified"
+        },
+        "stderr": "empty",
+        "output": false,
+        "retain": false,
+        "errors": false
+      },
+      "old_sha": "af71a0c24b484d0eaeb2efd11f0971e1c4f6ee4c",
+      "old_expect": {
+        "exit": 0,
+        "fields": {
+          "execution/state": "success",
+          "execution/observed_failure": false,
+          "test_execution/state": "unverified"
+        },
+        "stderr": "empty",
+        "output": false,
+        "retain": false,
+        "errors": false
+      },
+      "provenance": {
+        "url": "https://github.com/j5ik2o/event-store-adapter/issues/136",
+        "kind": "reconstructed from reported counterexample; synthetic legal controls",
+        "report": "/tmp/pm-checkpoint100/correct-proof.py; /tmp/pm-ci-status-required-independent/review.md",
+        "fixture": "Limited inheritance of test_ci_status.py sample shape, reconstructed variants of checkpoint100 cases. No test module imported at runtime. Late body and suite ID use synthetic sample rather than historical PHP capture."
+      },
+      "runtime": "Python >=3.9; local filesystem; no network",
+      "fixture": {
+        "schema_version": 1,
+        "repository": "example/repo",
+        "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "branch": "main",
+        "captured_at": "synthetic",
+        "responses": {
+          "repos/example/repo/branches/main": {
+            "http_status": 200,
+            "body": {
+              "protected": true
+            },
+            "next": null
+          },
+          "repos/example/repo/branches/main/protection": {
+            "http_status": 200,
+            "body": {
+              "required_status_checks": {
+                "checks": [
+                  {
+                    "context": "test",
+                    "app_id": 15368
+                  }
+                ]
+              }
+            },
+            "next": null
+          },
+          "repos/example/repo/rules/branches/main?per_page=100": {
+            "http_status": 200,
+            "body": [],
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-runs?per_page=100&filter=latest": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "check_runs": [
+                {
+                  "id": 1,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  }
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/status?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "total_count": 0,
+              "statuses": []
+            },
+            "next": null
+          },
+          "repos/example/repo/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-suites?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "check_suites": [
+                {
+                  "id": 2,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  }
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/actions/runs?head_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "workflow_runs": [
+                {
+                  "id": 3,
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "run_attempt": 1,
+                  "check_suite_id": 2
+                }
+              ]
+            },
+            "next": null
+          },
+          "repos/example/repo/actions/runs/3/attempts/1/jobs?per_page=100": {
+            "http_status": 200,
+            "body": {
+              "total_count": 1,
+              "jobs": [
+                {
+                  "id": 4,
+                  "name": "test",
+                  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "app": {
+                    "id": 15368
+                  },
+                  "check_suite": {
+                    "id": 2
+                  },
+                  "run_id": 3,
+                  "run_attempt": 1,
+                  "steps": [
+                    {
+                      "name": "Run tests",
+                      "status": "completed",
+                      "conclusion": "success"
+                    }
+                  ]
+                }
+              ]
+            },
+            "next": null
+          }
+        }
+      },
+      "control": true,
+      "input": "Inline synthetic replay fixture",
+      "evidence": "Assert fields, exit, stderr and output presence as declared; preserve raw stdout/stderr and fixtures"
+    }
+  ]
+}
