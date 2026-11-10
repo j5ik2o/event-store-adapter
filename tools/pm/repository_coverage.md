@@ -15,7 +15,7 @@ The supplied inventory records `2026-11-10T15:09:36.787078+00:00`. The observed 
 
 ## Inputs and scope
 
-`--ledger` defaults to the adjacent ledger JSON. Schema version 1 has a nonempty `repositories` list of unique full `j5ik2o/repo` names. Each row references nonempty `sources` entries with `url` and `scope`. The ledger is an explicit reviewable audit input. It cannot prove that its own list contains every repository the owner manages. Change it when the owner changes scope.
+`--ledger` defaults to the adjacent ledger JSON. `schema_version` must be the JSON integer `1`; booleans and floating-point values are invalid. Schema version 1 has a nonempty `repositories` list of unique full `j5ik2o/repo` names. Each row references nonempty `sources` entries with `url` and `scope`. The ledger is an explicit reviewable audit input. It cannot prove that its own list contains every repository the owner manages. Change it when the owner changes scope.
 
 The ledger maps each repository to its evidence. The README lists the eight library implementations. The operations policy and implementation plan cover six registered implementation repositories. They do not define this broader audit boundary. The example README lists four language examples. Kotlin and Scala examples and both coordinator repositories are included by the explicit PM work order. The start comment records the 16-repository acquisition; the work order and supplied inventory provide the exact names. External-owner Swift and PHP links in the READMEs do not expand this mandate. No operations policy is changed.
 

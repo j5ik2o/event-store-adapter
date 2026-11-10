@@ -40,7 +40,8 @@ def timestamp(value):
 
 
 def ledger_names(ledger):
-    require(isinstance(ledger, dict) and ledger.get("schema_version") == 1,
+    require(isinstance(ledger, dict) and type(ledger.get("schema_version")) is int
+            and ledger["schema_version"] == 1,
             "ledger schema_version must be 1")
     sources = ledger.get("sources")
     rows = ledger.get("repositories")
@@ -144,7 +145,7 @@ def check(ledger, inventory, records_dir):
                 category, detail = "failed", "inventory declares acquisition error"
             else:
                 category, detail = inspect_record(row, load(records_dir / (row["repo"] + ".json")))
-        except (InvalidInput, OSError, ValueError, UnicodeError) as exc:
+        except (InvalidInput, OSError, ValueError, UnicodeError, RecursionError) as exc:
             category, detail = "invalid_records", str(exc)
         if category == "successful":
             result[category].append(name)
@@ -168,7 +169,7 @@ def main():
     args = parser.parse_args()
     try:
         result, code = check(load(args.ledger), load(args.inventory), args.records_dir)
-    except (InvalidInput, OSError, ValueError, UnicodeError) as exc:
+    except (InvalidInput, OSError, ValueError, UnicodeError, RecursionError) as exc:
         result, code = dict(schema_version=1, status="invalid_input", errors=[str(exc)]), 2
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return code

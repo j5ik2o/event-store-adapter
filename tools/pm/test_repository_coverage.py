@@ -28,18 +28,51 @@ class CoverageCLI(unittest.TestCase):
     def write_raw(self, name, value):
         (self.root / (name + ".json")).write_text(json.dumps(value))
 
-    def run_cli(self, code):
+    def run_cli(self, code, ledger=None, inventory_text=None):
         path = self.root / "inventory.json"
-        path.write_text(json.dumps(self.inventory))
-        process = subprocess.run([sys.executable, str(CLI), "--inventory", str(path),
-                                  "--records-dir", str(self.root)], capture_output=True, text=True)
+        path.write_text(json.dumps(self.inventory) if inventory_text is None else inventory_text)
+        command = [sys.executable, str(CLI), "--inventory", str(path),
+                   "--records-dir", str(self.root)]
+        if ledger is not None:
+            command.extend(["--ledger", str(ledger)])
+        process = subprocess.run(command, capture_output=True, text=True)
         self.assertEqual(process.returncode, code, process.stdout + process.stderr)
+        self.assertEqual(process.stderr, "")
         return json.loads(process.stdout)
 
     def test_all_sixteen_success_including_zero_open_items(self):
         result = self.run_cli(0)
         self.assertEqual(len(result["successful"]), 16)
         self.assertEqual(result["status"], "consistent")
+
+    def test_schema_version_requires_integer_one(self):
+        ledger = json.loads(LEDGER.read_text())
+        path = self.root / "ledger.json"
+        for value in (True, False, 1.0, "1", None):
+            with self.subTest(value=value):
+                ledger["schema_version"] = value
+                path.write_text(json.dumps(ledger))
+                result = self.run_cli(2, ledger=path)
+                self.assertEqual(result["status"], "invalid_input")
+                self.assertIn("schema_version", result["errors"][0])
+
+    def test_deep_response_returns_invalid_record_json(self):
+        path = self.root / (NAMES[0] + ".json")
+        repo = json.loads(path.read_text())["data"]["repository"]
+        nested = "[" * 1100 + "0" + "]" * 1100
+        repo_text = json.dumps(repo)[:-1] + ', "extra": ' + nested + "}"
+        path.write_text('{"data": {"repository": ' + repo_text + "}}")
+        result = self.run_cli(2)
+        self.assertEqual(result["status"], "invalid_input")
+        self.assertEqual(len(result["invalid_records"]), 1)
+        self.assertEqual(result["invalid_records"][0]["repo"], "j5ik2o/" + NAMES[0])
+        self.assertIn("recursion", result["invalid_records"][0]["reason"].lower())
+
+    def test_deep_inventory_returns_invalid_input_json(self):
+        nested = "[" * 1100 + "0" + "]" * 1100
+        result = self.run_cli(2, inventory_text=nested)
+        self.assertEqual(result["status"], "invalid_input")
+        self.assertTrue(result["errors"])
 
     def test_reconstructed_example_omission_reports_seven_names(self):
         self.inventory = json.loads(CLI.with_name("repository_coverage_missing_examples.json").read_text())
