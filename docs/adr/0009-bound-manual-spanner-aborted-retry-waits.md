@@ -1,18 +1,18 @@
 ---
-status: proposed
+status: accepted
 ---
 
-# Proposal for bounded manual Spanner ABORTED retry waits
+# Bounded manual Spanner ABORTED retry waits
 
-This is an unaccepted design draft for [#137](https://github.com/j5ik2o/event-store-adapter/issues/137), following the [PM decision](https://github.com/j5ik2o/event-store-adapter/issues/113#issuecomment-6773097308). It proposes implementation requirements for [Java #816](https://github.com/j5ik2o/event-store-adapter-java/issues/816) and [JS #1126](https://github.com/j5ik2o/event-store-adapter-js/issues/1126). Implementation, contract acceptance, merge, and release are separate work. The [Japanese companion](0009-bound-manual-spanner-aborted-retry-waits.ja.md) is supplementary. English is authoritative.
+The PM accepted this design for [#137](https://github.com/j5ik2o/event-store-adapter/issues/137) on 2026-11-11 JST. The [adoption record](https://github.com/j5ik2o/event-store-adapter/issues/137#issuecomment-6773771824) follows the [initial PM decision](https://github.com/j5ik2o/event-store-adapter/issues/113#issuecomment-6773097308). This design defines implementation requirements for [Java #816](https://github.com/j5ik2o/event-store-adapter-java/issues/816) and [JS #1126](https://github.com/j5ik2o/event-store-adapter-js/issues/1126). Implementation, integration verification, merge, and release remain separate work. The [Japanese companion](0009-bound-manual-spanner-aborted-retry-waits.ja.md) is supplementary. English is authoritative.
 
 ## D1. Scope and observed behavior
 
 The goal is to reduce the risk that contention consumes the retry count immediately. This risk is an inference from the manual retry loops. No production improvement, success-rate change, or starvation has been measured.
 
-[SPN-7](../spec/storage/spanner.md) remains accepted and unchanged. It specifies envelope reuse, seq_nr reuse, head checks, side effects, and exhaustion errors. It does not specify waits. This draft adds no requirement to Rust, Go, Kotlin, or Scala without their own audit and acceptance. Conformance data 1.4.0 is unchanged.
+[SPN-7](../spec/storage/spanner.md) remains accepted and unchanged. It specifies envelope reuse, seq_nr reuse, head checks, side effects, and exhaustion errors. It does not specify waits. This design adds no requirement to Rust, Go, Kotlin, or Scala without their own audit and acceptance. Conformance data 1.4.0 is unchanged.
 
-The following source snapshots were read directly and reacquired for this proposal.
+The following source snapshots were read directly and reacquired for this design.
 
 | Snapshot | Entry and dependency |
 | --- | --- |
@@ -20,7 +20,7 @@ The following source snapshots were read directly and reacquired for this propos
 | [Java published 5.2.0 sources](https://repo.maven.apache.org/maven2/io/github/j5ik2o/event-store-adapter-java-spanner/5.2.0/event-store-adapter-java-spanner-5.2.0-sources.jar) | The transaction entry is byte-identical to the fixed main entry. [Published POM](https://repo.maven.apache.org/maven2/io/github/j5ik2o/event-store-adapter-java-spanner/5.2.0/event-store-adapter-java-spanner-5.2.0.pom) declares SDK 6.127.0. Tag commit is 0ec46b15ba44b4dfb45b4261dfafd6af6d79efbc. |
 | [JS main 4f4f5b800aea89b7e880a77cc90d76929dc889bc](https://github.com/j5ik2o/event-store-adapter-js/blob/4f4f5b800aea89b7e880a77cc90d76929dc889bc/packages/library/src/internal/spanner-read-write-transaction.ts) | `runSpannerReadWriteTransaction` calls `getTransaction` each time. Lockfile SDK is 9.1.0. Optional peer range is `^8.7.1 || ^9.0.0`, so users need not resolve 9.1.0. |
 
-These entries do not invoke the SDK automatic transaction runners. They have no intentional ABORTED backoff. RPC retries, session acquisition, rollback, and close can still take time. This draft does not describe the proposed waits as implemented or released.
+These entries do not invoke the SDK automatic transaction runners. They have no intentional ABORTED backoff. RPC retries, session acquisition, rollback, and close can still take time. This design does not describe the specified waits as implemented or released.
 
 ## D2. Attempt state and count
 
@@ -48,7 +48,7 @@ For Java SDK 6.127.0, first inspect the public `SpannerException.getErrorDetails
 
 For JS, inspect `cause.metadata.get("google.rpc.retryinfo-bin")` in returned order. Decode binary entries with an adapter-owned private protobuf decoder for RetryInfo and Duration, generated from the descriptors in the fixed SDK's `build/protos/status.json`. Preserve the upstream license. Use a directly declared protobuf runtime if the generated decoder requires one. Do not resolve a transitive runtime by accident. The fixed SDK's `getRetryInfo()` is private and RetryInfo is absent from its spanner-api exports, so importing that helper or assuming a public RetryInfo export is not an implementation path. Use the first valid duration. Do not use the automatic runner's private `getNextDelay`. Accept protobuf seconds as an exact safe integer number, canonical decimal integer string, or the decoder's Long representation converted losslessly to an integer. Reject coercions of arbitrary objects. The valid protobuf seconds range fits within JS safe integers. Validate before multiplication and use integer arithmetic such as BigInt. Check metadata access and decoding against supported peer 8 and 9, including 8.7.1 and locked 9.1.0, before claiming compatibility.
 
-For an accepted duration, compute `h = 1000*s + ceil(n/1000000)` with checked or exact integer arithmetic. If `h <= 60000`, schedule `d = max(1,h)` milliseconds. If `h > 60000`, stop immediately after cleanup with a storage error, retaining the ABORTED cause and identifying that the server delay exceeds the supported wait. Do not schedule a timer or retry. This is a new proposed stop condition within the existing storage error category, not exhaustion or an unknown commit outcome.
+For an accepted duration, compute `h = 1000*s + ceil(n/1000000)` with checked or exact integer arithmetic. If `h <= 60000`, schedule `d = max(1,h)` milliseconds. If `h > 60000`, stop immediately after cleanup with a storage error, retaining the ABORTED cause and identifying that the server delay exceeds the supported wait. Do not schedule a timer or retry. This is a new stop condition within the existing storage error category, not exhaustion or an unknown commit outcome.
 
 The 1ms scheduling floor prevents a tight loop for a valid zero hint. The 60000ms per-wait ceiling bounds requested waits without retrying earlier than the server asks. Both are design choices, not measured optima or SDK defaults. A long hint can therefore stop before L retries are used. Unbounded waits would preserve every hint but could block Java callers for hours. Clamping and retrying at 60 seconds would violate a longer hint. The stop choice trades availability for bounded scheduled waiting.
 
@@ -78,9 +78,9 @@ For next retry ordinal k starting at 1, use equal jitter in integer milliseconds
 | 5 | 800 | 400..800 |
 | 6 and later | 1000 | 500..1000 |
 
-With L=5 and no hints, selected retry delays total 775..1550ms if all retry opportunities are used. With accepted server hints, their sum is at most `L * 60000` ms, calculated without overflow for diagnostics. This sum counts each selected delay once. Timer requests after early wake-ups can have a larger sum. This is not a wall-clock deadline. RPCs, hooks, rollback, cleanup, scheduler delays, and a blocked event loop can add time. This proposal introduces no total operation deadline and never resets an SDK RPC deadline. The caller's existing client settings still govern SDK operations.
+With L=5 and no hints, selected retry delays total 775..1550ms if all retry opportunities are used. With accepted server hints, their sum is at most `L * 60000` ms, calculated without overflow for diagnostics. This sum counts each selected delay once. Timer requests after early wake-ups can have a larger sum. This is not a wall-clock deadline. RPCs, hooks, rollback, cleanup, scheduler delays, and a blocked event loop can add time. This design introduces no total operation deadline and never resets an SDK RPC deadline. The caller's existing client settings still govern SDK operations.
 
-The 50ms initial cap gives a positive pause while limiting added latency for a transient abort. Doubling spreads later retries over a wider interval. The 1000ms cap limits fallback latency for high retry limits. Equal jitter retains a nonzero lower bound. These are policy judgments to review, not benchmark results or copies of either SDK's defaults.
+The 50ms initial cap gives a positive pause while limiting added latency for a transient abort. Doubling spreads later retries over a wider interval. The 1000ms cap limits fallback latency for high retry limits. Equal jitter retains a nonzero lower bound. These are policy judgments, not benchmark results or copies of either SDK's defaults.
 
 ## D5. Errors, ordering, and side effects
 
@@ -94,7 +94,7 @@ The 50ms initial cap gives a positive pause while limiting added latency for a t
 | JS `getTransaction` failure, including code 10 | Existing transaction-start storage error, no wait or retry. |
 | `afterCommit` failure, including an ABORTED-shaped failure | Existing unknown-outcome storage error, no wait or retry. |
 
-Keep Java classification as ABORTED error code or `AbortedException`, after its domain-error catch. Keep JS classification as numeric code 10, after its committed and domain-rejection checks. This proposal does not expand retryable errors to INTERNAL, CANCELLED, or unknown outcomes.
+Keep Java classification as ABORTED error code or `AbortedException`, after its domain-error catch. Keep JS classification as numeric code 10, after its committed and domain-rejection checks. This design does not expand retryable errors to INTERNAL, CANCELLED, or unknown outcomes.
 
 For Java, keep the try-with-resources boundary. Each attempt runs `begin`, body, `beforeCommit`, and commit. Manager close, including any SDK rollback and session release, finishes before a wait or another manager is created. Retain Java's existing exception suppression and cleanup-error precedence. If a primary `RuntimeException` is neither `EventStoreException` nor `SpannerException`, preserve its propagation instead of wrapping it as `StorageException`. This includes failures from body, `beforeCommit`, or close. `afterCommit` retains its separate unknown-outcome mapping. Do not reclassify an unrelated cleanup error as ABORTED. On success, close precedes `afterCommit`, as today.
 
@@ -108,7 +108,7 @@ Java checks `Thread.currentThread().isInterrupted()` before the initial attempt,
 
 These checks do not cancel an active SDK call or roll back a successful commit. An interrupt during an attempt is handled by the SDK until control returns. Once commit succeeds, finish the existing success path, including `afterCommit`, even if a flag was set during that attempt. A race can set the flag immediately after a check. Do not promise instantaneous cancellation.
 
-Java sleep blocks the calling thread. The fixed implementation of the asynchronous facade completes its action synchronously before returning a Future. `AsyncEventStore`'s returned `Future.cancel` has no guarantee of stopping this retry loop. This proposal does not add an executor or change that API.
+Java sleep blocks the calling thread. The fixed implementation of the asynchronous facade completes its action synchronously before returning a Future. `AsyncEventStore`'s returned `Future.cancel` has no guarantee of stopping this retry loop. This design does not add an executor or change that API.
 
 JS awaits a referenced timer Promise. The event loop can run other work, but the operation remains pending and the timer can keep the process alive. Do not call `unref()`. There is no new AbortSignal API. Abandoning the Promise or racing it against a timeout does not stop retries. Existing SDK cancellation errors remain non-ABORTED failures. If an internal wait fails, return a storage error and do not retry. No cancellation or total-duration guarantee is added.
 
@@ -119,7 +119,7 @@ JS awaits a referenced timer Promise. The event loop can run other work, but the
 | Immediate retry | Reject. It retains the risk of consuming L without an intentional pause. |
 | Fixed delay | Reject. It gives callers the same schedule. Jitter varies the schedule, though production benefit is unmeasured. |
 | Full jitter from zero | Reject. It permits zero or near-zero repeated delays. |
-| Equal jitter plus valid server hints and a long-hint stop | Adopt as this proposal. Adds latency and a storage-error stop before exhaustion. |
+| Equal jitter plus valid server hints and a long-hint stop | Adopt. Adds latency and a storage-error stop before exhaustion. |
 | Replace with SDK automatic runners | Defer. Require proof of one shared count, classification, and time budget before adoption. Do not nest the current loop around a runner. |
 | Preserve prior transaction ID and session priority | Separate verification before adoption. Keep current fresh-manager and fresh-getTransaction lifecycle for this waiting change. |
 
@@ -149,4 +149,4 @@ Both implementation issues should use fake transactions, an injected sleeper or 
 
 This design pass reacquired the fixed application entries, Java published source, and both fixed SDK packages. It matched their relevant bytes against inherited originals and verified all 55 inherited major-manifest hashes. It read the actual manual lifecycle and SDK hint paths. Pure local boundary calculations verify the tables, not adapter behavior. Earlier stub and virtual-timer experiments are inherited evidence only and were not rerun here.
 
-No adapter implementation, real SDK backend integration, wall-clock retry benchmark, cloud operation, or full application suite was run for this document change. The JS peer matrix and Java encoded metadata integration remain implementation gates. PM owns independent review and acceptance of the proposed constants, long-hint stop, and interruption behavior. No independent reviewer ran in this design task.
+No new waiting implementation, real SDK backend integration, wall-clock retry benchmark, cloud operation, or full application suite was run for this document change. The JS peer matrix and Java encoded metadata integration remain implementation gates. The PM adopted the constants, long-hint stop, interruption behavior, and adapter-owned JS decoding strategy after [independent review of the corrected contract](https://github.com/j5ik2o/event-store-adapter/pull/138#issuecomment-6773696853). Implementation verification and publication approval remain separate gates.

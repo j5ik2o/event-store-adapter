@@ -35,7 +35,7 @@
 - [ADR-0006: 論理シャードをやめ、集約 ID をキーにする](docs/adr/0006-key-by-aggregate-id-instead-of-logical-shards.ja.md)（[英語版](docs/adr/0006-key-by-aggregate-id-instead-of-logical-shards.md)）
 - [ADR-0007: Bigtable のスナップショット履歴を対応するイベントと同じ行に置く](docs/adr/0007-store-bigtable-snapshot-history-with-events.ja.md)（[英語版](docs/adr/0007-store-bigtable-snapshot-history-with-events.md)）
 - [ADR-0008: Bigtable の封筒を固定バイナリ形式で保存する](docs/adr/0008-fix-bigtable-envelope-binary-format.ja.md)（[英語版](docs/adr/0008-fix-bigtable-envelope-binary-format.md)）
-- [草案 ADR-0009: Spanner 手動 ABORTED 再試行の待機](docs/adr/0009-bound-manual-spanner-aborted-retry-waits.ja.md)
+- [ADR-0009: Spanner 手動 ABORTED 再試行の待機](docs/adr/0009-bound-manual-spanner-aborted-retry-waits.ja.md)
 
 ### 道具
 

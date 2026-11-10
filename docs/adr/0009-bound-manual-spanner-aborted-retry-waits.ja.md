@@ -1,10 +1,10 @@
 ---
-status: proposed
+status: accepted
 ---
 
-# Spanner 手動 ABORTED 再試行の待機を定める提案
+# Spanner 手動 ABORTED 再試行の待機
 
-これは [#137](https://github.com/j5ik2o/event-store-adapter/issues/137) の未承認の設計草案である。[英語正本](0009-bound-manual-spanner-aborted-retry-waits.md) を優先し、本書は日本語補助とする。[PM 判断](https://github.com/j5ik2o/event-store-adapter/issues/113#issuecomment-6773097308) を [Java #816](https://github.com/j5ik2o/event-store-adapter-java/issues/816) と [JS #1126](https://github.com/j5ik2o/event-store-adapter-js/issues/1126) が実装できる形にする。実装・契約確定・merge・公開は別作業であり、合意日は設定しない。
+これは PM が 2026-11-11 JST に [#137](https://github.com/j5ik2o/event-store-adapter/issues/137) で採用した待機設計である。[採用記録](https://github.com/j5ik2o/event-store-adapter/issues/137#issuecomment-6773771824) は [最初の PM 判断](https://github.com/j5ik2o/event-store-adapter/issues/113#issuecomment-6773097308) に続く。[英語正本](0009-bound-manual-spanner-aborted-retry-waits.md) を優先し、本書は日本語補助とする。[Java #816](https://github.com/j5ik2o/event-store-adapter-java/issues/816) と [JS #1126](https://github.com/j5ik2o/event-store-adapter-js/issues/1126) の実装要件を定める。実装・結合検証・merge・公開は別作業として残る。
 
 ## D1. 適用範囲と観測した現状
 
@@ -18,7 +18,7 @@ status: proposed
 | [Java 公開 5.2.0 sources](https://repo.maven.apache.org/maven2/io/github/j5ik2o/event-store-adapter-java-spanner/5.2.0/event-store-adapter-java-spanner-5.2.0-sources.jar) | 入口は固定 main と bytes 一致。[公開 POM](https://repo.maven.apache.org/maven2/io/github/j5ik2o/event-store-adapter-java-spanner/5.2.0/event-store-adapter-java-spanner-5.2.0.pom) も SDK 6.127.0。tag commit は 0ec46b15ba44b4dfb45b4261dfafd6af6d79efbc。 |
 | [JS main 4f4f5b800aea89b7e880a77cc90d76929dc889bc](https://github.com/j5ik2o/event-store-adapter-js/blob/4f4f5b800aea89b7e880a77cc90d76929dc889bc/packages/library/src/internal/spanner-read-write-transaction.ts) | 毎回 `getTransaction` を呼ぶ。lock は 9.1.0、optional peer は `^8.7.1 || ^9.0.0`。利用者の版は一意ではない。 |
 
-どちらも SDK 自動 transaction runner の retry loop を通らず、意図的な ABORTED backoff がない。RPC・session 取得・rollback・close の待ちは別に存在し得る。以下の提案挙動は実装済み・公開済みではない。
+どちらも SDK 自動 transaction runner の retry loop を通らず、意図的な ABORTED backoff がない。RPC・session 取得・rollback・close の待ちは別に存在し得る。以下の本設計の挙動は実装済み・公開済みではない。
 
 ## D2. 試行状態と回数
 
@@ -117,7 +117,7 @@ JS は参照を保持する timer Promise を await する。event loop は他�
 | 即時 retry | 見送り。意図的休止なしで L を消費するリスクが残る。 |
 | 固定待機 | 見送り。同じ schedule になる。jitter は schedule を変えるが本番効果は未測定。 |
 | 0 からの full jitter | 見送り。0 または極小待機の連続を許す。 |
-| equal jitter・正当 hint 優先・長い hint で停止 | 本提案で採用。遅延と上限前の storage エラーが増える。 |
+| equal jitter・正当 hint 優先・長い hint で停止 | 採用。遅延と上限前の storage エラーが増える。 |
 | SDK 自動 runner 置換 | 別途検証。回数・分類・時間予算を一つにできる証明まで採用しない。外側 loop と入れ子にしない。 |
 | 前回 transaction ID・session 優先度の引継ぎ | 別途検証後に判断。今回は毎回新 manager・getTransaction を維持する。 |
 
@@ -147,4 +147,4 @@ JS は参照を保持する timer Promise を await する。event loop は他�
 
 今回は固定アプリ入口、Java 公開 source、両固定 SDK package を再取得した。主要 source bytes を継承原本と比較し、継承 major-manifest 55 件の hash も全件照合した。実際の手動 lifecycle と SDK hint 経路を読んだ。純粋な局所境界計算は表の検証であり、adapter 動作の証明ではない。既存 stub・仮想 timer 実験は継承証拠であり、今回は再実行していない。
 
-実装・実 SDK backend 結合・実時間 benchmark・クラウド操作・全アプリ suite は実行していない。peer matrix と Java encoded metadata 結合は後続実装の検証条件。定数・長い hint の停止・割込み挙動の独立 review と承認は PM が扱う。今回独立 reviewer は起動していない。
+新しい待機の実装・実 SDK backend 結合・実時間 benchmark・クラウド操作・全アプリ suite は実行していない。peer matrix と Java encoded metadata 結合は後続実装の検証条件。[修正済み契約の独立 review](https://github.com/j5ik2o/event-store-adapter/pull/138#issuecomment-6773696853) を経て、PM は定数・長い hint の停止・割込み挙動・adapter 所有 JS decoder 方針を採用した。実装検証と公開承認は別の条件として残る。
