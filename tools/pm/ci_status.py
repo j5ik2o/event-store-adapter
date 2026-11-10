@@ -224,7 +224,8 @@ def evaluate(probe):
         for row in rows:
             lifecycle = row.get('status')
             nullable_status = lifecycle is None and kind in ('suites', 'runs')
-            if not nullable_status and (not isinstance(lifecycle, str) or lifecycle not in LIFECYCLE_STATUSES):
+            if 'status' not in row or (not nullable_status and
+                    (not isinstance(lifecycle, str) or lifecycle not in LIFECYCLE_STATUSES)):
                 probe.errors.append({'reason': 'invalid_lifecycle_status', 'kind': kind, 'id': row.get('id')})
             identifier = positive_id(row.get('id'))
             if identifier is None or identifier in ids or row.get('head_sha') != head:
