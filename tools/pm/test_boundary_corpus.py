@@ -1,6 +1,7 @@
 """Exercise the manual runner and falsify its verdicts with corrupted observations."""
 import copy
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -60,6 +61,26 @@ class CorpusTests(unittest.TestCase):
                 self.assertIn('ci-late_body/cli.stdout',
                               json.loads((output / 'manifest.json').read_text()))
 
+    def test_target_exit_before_gh_keeps_contract_mismatches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            script = directory / 'runner.py'
+            script.write_text(Path(corpus.__file__).read_text(encoding='utf-8'), encoding='utf-8')
+            data = json.loads(Path(corpus.__file__).with_suffix('.json').read_text(encoding='utf-8'))
+            data['cases'] = [c for c in data['cases'] if c['id'] == 'pr-normal']
+            script.with_suffix('.json').write_text(json.dumps(data), encoding='utf-8')
+            (directory / 'pr_file_diff.py').write_text('print("{}"); raise SystemExit(2)', encoding='utf-8')
+            output = directory / 'run'
+            proc = subprocess.run([sys.executable, '-B', str(script), '--output', str(output)],
+                                  capture_output=True, text=True)
+            report = json.loads((output / 'results.json').read_text(encoding='utf-8'))
+            self.assertEqual(proc.returncode, 1, report)
+            self.assertEqual(report['cases'][0]['state'], 'fail')
+            failures = report['cases'][0]['failures']
+            self.assertTrue(any('exit:' in item for item in failures), failures)
+            self.assertIn('fake gh did not serve all three saved responses', failures)
+            self.assertEqual((output / 'pr-normal/cli.stdout').read_text(encoding='utf-8'), '{}\n')
+
     def test_rejection_exit_two_is_a_pass_only_with_the_full_contract(self):
         expected = {'exit': 2, 'fields': {'execution/state': 'unknown',
                     'execution/observed_failure': True}, 'stderr': 'nonempty', 'output': False,
@@ -102,6 +123,45 @@ class CorpusTests(unittest.TestCase):
                                    '--output', str(output)], capture_output=True)
             self.assertEqual(proc.returncode, 2)
             self.assertEqual(json.loads((output / 'results.json').read_text())['state'], 'incomplete')
+
+    def test_historical_integer_contract_uses_the_target_runtime(self):
+        old_source = """import json, pathlib, sys
+pathlib.Path('calls.jsonl').touch()
+try:
+    int('9' * 5000)
+except ValueError as exc:
+    print('ValueError: ' + str(exc), file=sys.stderr)
+else:
+    print(json.dumps({'api_consistent': True, 'files': [{'state': 'validated-api-patch'}]}))
+sys.exit(1)
+"""
+        data = json.loads(Path(corpus.__file__).with_suffix('.json').read_text())
+        case = next(c for c in data['cases'] if c['id'] == 'pr-huge_hunk_integer')
+        for limit, parent_flags in [('0', []), ('6000', []), ('4300', []),
+                                    ('4300', ['-X', 'int_max_str_digits=0'])]:
+            with self.subTest(limit=limit, parent_flags=parent_flags), tempfile.TemporaryDirectory() as tmp:
+                directory = Path(tmp)
+                source = directory / 'sources' / case['old_sha']
+                source.mkdir(parents=True)
+                (source / 'pr_file_diff.py').write_text(old_source, encoding='utf-8')
+                output = directory / 'run'
+                env = dict(os.environ, PYTHONINTMAXSTRDIGITS=limit)
+                proc = subprocess.run([sys.executable, '-B', *parent_flags, corpus.__file__,
+                                       '--case', case['id'], '--historical-dir',
+                                       str(directory / 'sources'), '--output', str(output)],
+                                      env=env, capture_output=True, text=True)
+                report = json.loads((output / 'results.json').read_text())
+                self.assertEqual(proc.returncode, 0, report)
+                self.assertEqual(report['state'], 'pass')
+
+    def test_text_fixtures_are_utf8_under_ascii_locale(self):
+        env = dict(os.environ, LC_ALL='C', PYTHONCOERCECLOCALE='0', PYTHONUTF8='0')
+        proc = subprocess.run([sys.executable, '-B', '-X', 'utf8=0', '-m', 'unittest',
+                               'discover', '-s', str(Path(corpus.__file__).parent),
+                               '-p', 'test_boundary_corpus.py', '-k',
+                               'test_empty_corpus_and_all_unsupported_cannot_pass'],
+                              env=env, capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
 
     def test_missing_historical_source_is_incomplete(self):
         with tempfile.TemporaryDirectory() as tmp:
