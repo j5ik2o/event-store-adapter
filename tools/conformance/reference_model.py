@@ -29,6 +29,36 @@ NO_CHANGE_FEED_BACKENDS = {'memory', 'sqlite', 'spanner', 'bigtable'}
 BIGTABLE_ENVELOPE_LIMIT_DEFAULT = 1048576
 BIGTABLE_ENVELOPE_LIMIT_MAXIMUM = 8388608
 BIGTABLE_SMALLEST_ENVELOPE = 17
+# DynamoDB の項目上限（D-7）。
+ITEM_SIZE_LIMIT = 400 * 1024
+# 数値は rs・go・java が常に 21 バイト、js が型の 1 バイト + 10 進の桁数 + 2 バイトと数える。
+FIXED_NUMBER_BYTES = 21
+
+
+def attribute_size(value, type_tag, number_bytes):
+    """属性値の上界。S は UTF-8、B は生のバイト数（値は数）、L と M は 3 バイトと要素ごとの 1 バイトを足す。"""
+    kind, body = value
+    if kind == 'S':
+        return type_tag + len(body.encode('utf-8'))
+    if kind == 'B':
+        return type_tag + body
+    if kind == 'N':
+        return number_bytes(body)
+    if kind == 'L':
+        return type_tag + 3 + sum(1 + attribute_size(element, type_tag, number_bytes) for element in body)
+    return type_tag + 3 + len(body) + item_size(body, type_tag, number_bytes)
+
+
+def item_size(item, type_tag, number_bytes):
+    return sum(len(name.encode('utf-8')) + attribute_size(value, type_tag, number_bytes) for name, value in item.items())
+
+
+def item_size_bounds(items):
+    def fixed(_):
+        return FIXED_NUMBER_BYTES
+    def digits(number):
+        return 1 + len(number) + 2
+    return [tuple(sorted((item_size(item, 0, fixed), item_size(item, 1, digits)))) for item in items]
 
 
 def aid(identifier):
@@ -219,15 +249,36 @@ class Model:
         return None
 
     def oversize(self, event, snapshot):
-        """既存ケースは属性値だけで400KiB超となる。厳密な項目境界はモデル対象外。"""
+        """D-7。言語ごとに違う上界の数え方（item_size_bounds）が、どれも上限超過と判断する場合だけ真にする。
+        どれも上限以下と判断する場合は偽にする。判断が割れる範囲は、ケースを置けないので例外にする。"""
+        bounds = item_size_bounds(self.dynamodb_items(event, snapshot))
+        if any(smallest > ITEM_SIZE_LIMIT for smallest, _ in bounds):
+            return True
+        if all(largest <= ITEM_SIZE_LIMIT for _, largest in bounds):
+            return False
+        raise ValueError('D-7 の境界が言語ごとの上界で割れる範囲にある。上限超過か上限以下かを、全言語の上界が一致して判断できる位置に置くこと')
+
+    def dynamodb_items(self, event, snapshot):
+        """書き込む前に検査する項目（journal・head・スナップショット）の属性値。payload は JSON のバイト数で表す。"""
         def length(value):
-            return len(value.encode('utf-8'))
-        def binary(value):
             return len(json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode('utf-8'))
-        identifier = length(aid(event['aggregate_id']))
-        head = identifier + length(event['aggregate_id']['type_name']) + length(event.get('manifest', '')) + binary(event['payload'])
-        snap = 0 if snapshot is None else identifier + length(snapshot.get('manifest', '')) + binary(snapshot['aggregate'])
-        return max(head, snap) > 409600
+        identifier = aid(event['aggregate_id'])
+        seq_nr = ('N', str(event['seq_nr']))
+        millis = epoch_nanoseconds(event['occurred_at']) // 1_000_000
+        metadata = {'seq_nr': seq_nr, 'occurred_at': ('N', str(epoch_nanoseconds(event['occurred_at']))),
+                    'manifest': ('S', event.get('manifest', '')), 'payload': ('B', length(event['payload']))}
+        items = [{'aid': ('S', identifier), **metadata},
+                 {'aid': ('S', identifier), 'type_name': ('S', event['aggregate_id']['type_name']),
+                  'seq_nr': seq_nr, 'events': ('L', [('M', metadata)])}]
+        if snapshot is not None:
+            snapshot_seq_nr = ('N', str(snapshot['seq_nr']))
+            current = {'aid': ('S', identifier), 'skey': ('N', '0'), 'seq_nr': snapshot_seq_nr,
+                       'manifest': ('S', snapshot.get('manifest', '')), 'payload': ('B', length(snapshot['aggregate'])),
+                       'last_updated_at': ('N', str(millis))}
+            items.append(current)
+            if self.store.get('retention_count') is not None:
+                items.append({**current, 'skey': snapshot_seq_nr, 'active_history_seq_nr': snapshot_seq_nr})
+        return items
 
     def bigtable_oversize(self, event, snapshot, limit):
         """BT-16: 封筒の大きさの下限の見積り（固定部分 + 文字列のバイト数 + 空白なしの JSON の payload）が上限を超える。"""
