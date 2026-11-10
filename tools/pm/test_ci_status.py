@@ -224,6 +224,30 @@ class CliTests(unittest.TestCase):
             proc = subprocess.run([sys.executable, str(SCRIPT), '--replay', str(path)], capture_output=True, text=True)
         return proc.returncode, json.loads(proc.stdout), proc.stderr
 
+    def test_schema_version_rejects_boolean_and_float(self):
+        for version in [True, 1.0]:
+            with self.subTest(version=version):
+                capture = sample()
+                capture['schema_version'] = version
+                code, report, stderr = self.cli(capture)
+                self.assertEqual(code, 2)
+                self.assertEqual(report['execution']['state'], 'unknown')
+                self.assertTrue(stderr)
+
+    def test_deep_response_returns_structured_unknown(self):
+        payload = json.dumps(sample()).replace(
+            '"check_runs": [',
+            '"extra": ' + '[' * 5000 + '0' + ']' * 5000 + ', "check_runs": [', 1)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'capture.json'
+            path.write_text(payload)
+            proc = subprocess.run([sys.executable, str(SCRIPT), '--replay', str(path)],
+                                  capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 2)
+        self.assertEqual(json.loads(proc.stdout)['execution']['state'], 'unknown')
+        self.assertTrue(proc.stderr)
+        self.assertNotIn('Traceback', proc.stderr)
+
     def test_live_capture_projections(self):
         expected = {'php35': (1, 'accepted', 'failure', 3),
                     'common138': (1, 'none', 'absent', 0),

@@ -199,7 +199,8 @@ def main():
         else:
             capture = {'schema_version': 1, 'repository': args.repo, 'head': args.head,
                        'branch': args.branch, 'captured_at': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'responses': {}}
-        if (capture['schema_version'] != 1 or not re.fullmatch(r'[\w.-]+/[\w.-]+', capture['repository'] or '')
+        if (type(capture['schema_version']) is not int or capture['schema_version'] != 1
+                or not re.fullmatch(r'[\w.-]+/[\w.-]+', capture['repository'] or '')
                 or not re.fullmatch(r'[0-9a-f]{40}', capture['head'] or '') or not capture['branch']
                 or not isinstance(capture['responses'], dict)):
             raise ValueError('invalid capture or target')
@@ -212,7 +213,7 @@ def main():
         if code:
             print('CI execution is not established as successful; inspect JSON evidence.', file=sys.stderr)
         return code
-    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, RecursionError) as exc:
         print(json.dumps({'schema_version': 1, 'execution': {'state': 'unknown'}, 'error': 'invalid_input_or_response'}))
         print('Invalid input, response, or output path: ' + type(exc).__name__, file=sys.stderr)
         return 2
