@@ -32,6 +32,8 @@ Malformed response envelopes, required-check configuration, rows, and identifier
 
 Association calculations use only validated positive integer identifiers. An invalid suite identifier leaves association counts at zero and the aggregate unknown; the raw suite and independently observed failures remain in the report. The capture's `captured_at` must be a nonempty string before acquisition, but replay does not authenticate that author-supplied timestamp.
 
+Lifecycle statuses are distinct from conclusions. An invalid lifecycle status adds an acquisition error and cannot establish success. A failure conclusion remains visible through `observed_failure`, including when that row has an invalid status. Successful-job pointers contain only validated positive IDs; a job with an invalid ID remains in the raw observations.
+
 `test_execution` always reports `unverified`. Successful job IDs and each job's steps provide pointers for further investigation. Job or step names do not prove test commands, test selection, assertions, nonzero test counts, or environment coverage. A green test command that skips every environment requires logs or artifacts to distinguish it from executed tests. This probe does not fetch those artifacts or certify that evidence.
 
 The arrays retain API conclusions and identifiers, including unknown or null conclusions. `counts` separates check runs, commit statuses, suites, workflow runs, and jobs. Suite counts describe observed associations, not a claim that an external app has Actions jobs. `observed_check_count` covers the latest checks returned by the commit endpoint.

@@ -11,6 +11,9 @@ import sys
 from pathlib import Path
 from urllib.parse import quote
 
+LIFECYCLE_STATUSES = ('queued', 'in_progress', 'completed', 'waiting', 'requested', 'pending')
+FAILURE_CONCLUSIONS = ('failure', 'error', 'timed_out', 'cancelled', 'action_required', 'startup_failure')
+
 
 def decode_json(payload):
     def unique_object(pairs):
@@ -148,7 +151,8 @@ def outcome(row, status=False):
     if status:
         return row.get('state', 'unknown')
     if row.get('status') != 'completed':
-        return row.get('status') or 'unknown'
+        value = row.get('status')
+        return value if isinstance(value, str) and value in LIFECYCLE_STATUSES else 'unknown'
     return row.get('conclusion') or 'unknown'
 
 
@@ -218,6 +222,10 @@ def evaluate(probe):
     for kind, rows in [('checks', checks), ('suites', suites), ('runs', runs), ('jobs', jobs)]:
         ids = set()
         for row in rows:
+            lifecycle = row.get('status')
+            nullable_status = lifecycle is None and kind in ('suites', 'runs')
+            if not nullable_status and (not isinstance(lifecycle, str) or lifecycle not in LIFECYCLE_STATUSES):
+                probe.errors.append({'reason': 'invalid_lifecycle_status', 'kind': kind, 'id': row.get('id')})
             identifier = positive_id(row.get('id'))
             if identifier is None or identifier in ids or row.get('head_sha') != head:
                 probe.errors.append({'reason': 'duplicate_or_foreign_head', 'kind': kind, 'id': row.get('id')})
@@ -227,6 +235,9 @@ def evaluate(probe):
         for field in ['app', 'check_suite']:
             if reference_id(row, field) is None:
                 probe.errors.append({'reason': 'invalid_check_reference', 'field': field, 'id': row.get('id')})
+    for run in runs:
+        if 'check_suite_id' in run and positive_id(run['check_suite_id']) is None:
+            probe.errors.append({'reason': 'invalid_workflow_suite_reference', 'id': run.get('id')})
     status_ids, status_contexts = set(), set()
     for row in statuses:
         identifier, context = positive_id(row.get('id')), row.get('context')
@@ -261,7 +272,8 @@ def evaluate(probe):
                                                       if positive_id(x.get('check_suite_id')) == suite_id)
     observations = [outcome(x) for rows in (checks, suites, runs, jobs) for x in rows]
     observations += [outcome(x, True) for x in statuses]
-    failed = any(x in ('failure', 'error', 'timed_out', 'cancelled', 'action_required', 'startup_failure') for x in observations)
+    failed = any(x in FAILURE_CONCLUSIONS for x in observations) or any(
+        x.get('conclusion') in FAILURE_CONCLUSIONS for rows in (checks, suites, runs, jobs) for x in rows)
     empty_suite = any(x['observed_check_count'] == 0 for x in suites)
     execution = 'unknown' if probe.errors else 'failure' if failed else (
         'success' if jobs and observations and all(x == 'success' for x in observations)
@@ -275,7 +287,8 @@ def evaluate(probe):
                             'success' if all(outcome(x) == 'success' for x in jobs) else
                             'failure' if any(outcome(x) in ('failure', 'timed_out', 'cancelled', 'action_required') for x in jobs) else 'incomplete'},
             'test_execution': {'state': 'unverified', 'reason': 'Job and step names do not prove test contents or nonzero tests.',
-                               'successful_job_ids': [x['id'] for x in jobs if outcome(x) == 'success']},
+                               'successful_job_ids': [positive_id(x.get('id')) for x in jobs
+                                                      if positive_id(x.get('id')) is not None and outcome(x) == 'success']},
             'counts': {k: len(v) for k, v in [('check_runs', checks), ('commit_statuses', statuses), ('suites', suites), ('workflow_runs', runs), ('jobs', jobs)]},
             'check_runs': checks, 'commit_statuses': statuses, 'suites': suites,
             'workflow_runs': runs, 'jobs': jobs, 'acquisition_errors': probe.errors}
