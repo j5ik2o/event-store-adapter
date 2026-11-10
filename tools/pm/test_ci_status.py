@@ -322,6 +322,23 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(report['execution']['state'], 'incomplete')
                 self.assertEqual(report['acquisition_errors'], [])
 
+    def test_nullable_lifecycle_requires_the_status_field(self):
+        for fragment, key in [('/check-suites?', 'check_suites'),
+                              ('/actions/runs?', 'workflow_runs')]:
+            with self.subTest(collection=key):
+                capture = sample()
+                del response(capture, fragment)['body'][key][0]['status']
+                response(capture, '/status?')['body'] = {
+                    'sha': HEAD, 'total_count': 1,
+                    'statuses': [{'id': 7, 'context': 'other', 'state': 'failure'}]}
+                code, report, _ = self.cli(capture)
+                self.assertEqual(code, 2)
+                self.assertEqual(report['execution']['state'], 'unknown')
+                self.assertTrue(report['execution']['observed_failure'])
+                self.assertEqual(report['required_gate']['state'], 'unknown')
+                self.assertTrue(report['acquisition_errors'])
+                self.assertEqual(report['counts']['suites' if key == 'check_suites' else key], 1)
+
     def test_invalid_run_suite_reference_preserves_evidence(self):
         for identifier in [None, True, [], 0]:
             with self.subTest(identifier=identifier):
