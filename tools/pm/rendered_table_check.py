@@ -112,6 +112,11 @@ class Tables(HTMLParser):
             self.tables.append(self.table)
             self.table = None
 
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs)
+        if tag not in self.void:
+            self.handle_endtag(tag)
+
     def handle_data(self, data):
         if self.cell is not None:
             self.cell.text += data

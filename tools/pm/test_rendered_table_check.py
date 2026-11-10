@@ -46,6 +46,13 @@ class RenderedTableCheckTest(unittest.TestCase):
     def test_entities_and_inline_markup_preserve_semantic_text(self):
         self.invoke(self.positive().replace('||', '&#124;&#124;').replace('^9.0.0', '<span>^9.0.0</span>'), 'PASS')
 
+    def test_self_closing_void_elements_preserve_valid_tables(self):
+        for tag in ('<br/>', '<br />', '<img src="x" />', '<hr/>', '<input/>'):
+            self.invoke(self.positive().replace('Optional peer', tag + 'Optional peer'), 'PASS')
+            self.invoke('<table><tr><td>' + tag + '</td></tr></table>' + self.positive(), 'PASS')
+        self.invoke(self.positive().replace('Optional peer', '<span/>Optional peer'), 'PASS')
+        self.invoke(self.positive().replace('Optional peer', '<br hidden/>Optional peer'), 'UNKNOWN')
+
     def test_truncated_or_changed_or_extended_expression(self):
         for text in ('^8.7.1', '^8.7.1 || ^9.1.0', '^8.7.1 || ^9.0.0 || ^10.0.0', ''):
             with self.subTest(text=text):
