@@ -1,22 +1,22 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Java 非同期操作の実行資源の明示
 
-## D0. 提案と決定の境界
+## D0. 採用した実装targetと決定の境界
 
-[#139](https://github.com/j5ik2o/event-store-adapter/issues/139) の目的は、Java SQLite・Spanner・Bigtable の呼出 thread を操作の I/O で塞がず、既存 factory と保存順を維持することである。[英語草案](0010-explicit-execution-for-async-operations.md) を正本とし、本書は日本語補助とする。
+[#139](https://github.com/j5ik2o/event-store-adapter/issues/139) の目的は、Java SQLite・Spanner・Bigtable の呼出 thread を操作の I/O で塞がず、既存 factory と保存順を維持することである。[英語ADR](0010-explicit-execution-for-async-operations.md) を正本とし、本書は日本語補助とする。
 
-明示的に作成する、容量上限付き単一 worker の実行資源と追加 factory を推奨する。以下の signature と挙動は未採用・未公開の提案である。独立レビューと PM 承認を経て API を採用し、その後に言語別実装 issue を作る。共通契約と conformance 1.4.0 は変更しない。
+草案 head 51bf027 の [独立 PASS+NOTES](https://github.com/j5ik2o/event-store-adapter/pull/144#issuecomment-6776410540) を経て、PM は [案 B を実装targetとして採用した](https://github.com/j5ik2o/event-store-adapter/issues/139#issuecomment-6776831524)。明示的に作成する容量上限付き単一 worker の実行資源と追加 factory を採用する。accepted は設計判断だけを表す。API の実装済み・公開済み、D8 runtime gate 達成、CI 合格、公開承認を意味しない。採用更新の最新 head の独立確認と merge を経るまで実装は保留する。共通契約と conformance 1.4.0 は変更しない。
 
 基準は [共通 main ea561f8](https://github.com/j5ik2o/event-store-adapter/tree/ea561f8d2a1d008a9196e8b189268741fbc0c9ff)。[ADR-0009](0009-bound-manual-spanner-aborted-retry-waits.md) は採用済みの待機設計であり、Java main の実装済み証拠ではない。Java #814/#817、JS #1127、Kotlin #906、Scala #918、公開設定・workflow・版・既存 ADR は本変更の対象外とする。
 
 ## D1. 観測した挙動と固定 source
 
-本作業では [#114 の調査記録](https://github.com/j5ik2o/event-store-adapter/issues/114#issuecomment-6773418204)、現 #139 本文とコメント、以下の固定 source と Maven 公開物を再取得した。旧 report は出発点であり、本作業の確認の代用にはしていない。
+原草案の作業では [#114 の調査記録](https://github.com/j5ik2o/event-store-adapter/issues/114#issuecomment-6773418204)、現 #139 本文とコメント、以下の固定 source と Maven 公開物を再取得した。旧 report は出発点であり、原草案の確認の代用にはしていない。
 
-| 固定対象 | 本作業で照合した source 事実 |
+| 固定対象 | 原草案で照合した source 事実 |
 | --- | --- |
 | [Java main d0237dd](https://github.com/j5ik2o/event-store-adapter-java/tree/d0237ddcd76149fae8296fedea1f4b1f1d281ae5) | 各保存先の `createAsync` は caller-thread 実行を記載している。`Async.complete` は Future を返す前に `action.get()` を呼ぶ。 |
 | [公開 Java 5.2.0 SQLite source](https://repo.maven.apache.org/maven2/io/github/j5ik2o/event-store-adapter-java-sqlite/5.2.0/event-store-adapter-java-sqlite-5.2.0-sources.jar)、[Spanner source](https://repo.maven.apache.org/maven2/io/github/j5ik2o/event-store-adapter-java-spanner/5.2.0/event-store-adapter-java-spanner-5.2.0-sources.jar)、[Bigtable source](https://repo.maven.apache.org/maven2/io/github/j5ik2o/event-store-adapter-java-bigtable/5.2.0/event-store-adapter-java-bigtable-5.2.0-sources.jar) | 3 個の `*EventStore.java` は固定 main と bytes 一致。D8 は公開 binary を使用した。 |
@@ -32,9 +32,9 @@ status: proposed
 
 SDK の一次 source は [Spanner 6.127.0](https://repo.maven.apache.org/maven2/com/google/cloud/google-cloud-spanner/6.127.0/google-cloud-spanner-6.127.0-sources.jar) と [Bigtable 2.88.0](https://repo.maven.apache.org/maven2/com/google/cloud/google-cloud-bigtable/2.88.0/google-cloud-bigtable-2.88.0-sources.jar) を参照する。
 
-## D2. 具体的な 2 案
+## D2. 採用した B の API と不採用 A の比較
 
-案 A は 3 保存先に次の overload を追加する。
+案 A は任意 Executor の inline・飽和時に offload を保証できず、必要な所有権契約も定まらないため不採用とした。次の overload は比較用に残す。
 
 ```java
 // Candidate A, not an existing API.
@@ -46,7 +46,7 @@ public static <P, A> AsyncEventStore<P, A> createAsync(
 	BigtableStorage storage, EventStoreConfig<P, A> config, Executor executor);
 ```
 
-案 B は実行資源と別名の factory を追加する。
+案 B を実装targetとして採用する。以下の名前と signature を固定する。`BlockingExecution` は SDK 依存を持たない Java core に置き、各保存先が `createOffloaded` を提供する。code block のコメントは追跡のため原提案の文言を保つ。本 ADR によって追加 API が実装・公開されたわけではない。
 
 ```java
 // Candidate B, proposed names and signatures only.
@@ -65,7 +65,7 @@ public static <P, A> AsyncEventStore<P, A> createOffloaded(
 
 両案とも 4 操作は既存 `AsyncEventStore` と同じ `persistEvent(EventEnvelope<P>)`、`persistEventAndSnapshot(EventEnvelope<P>, SnapshotEnvelope<A>)`、`getLatestSnapshotById(AggregateId)`、`getEventsByIdSinceSeqNr(AggregateId, long)` とする。返却型は順に `CompletableFuture<Void>`、`CompletableFuture<Void>`、`CompletableFuture<Optional<SnapshotReadResult<A>>>`、`CompletableFuture<List<EventEnvelope<P>>>` を維持する。
 
-| 論点 | A: 任意 Executor の借用 | B: 明示的に作る library 管理資源、推奨 |
+| 論点 | A: 任意 Executor の借用 | B: 明示的に作る library 管理資源、採用target |
 | --- | --- | --- |
 | 所有者・寿命 | application が executor と storage を所有する。store は executor を shutdown しない。 | application が資源 handle と storage を所有する。資源が 1 worker と queue を所有し、store は handle を借用する。 |
 | worker/queue 上限 | Executor 次第で不明。順序維持には別途 bounded FIFO sequencer が必要。 | worker は厳密に 1。正の Q を明示指定し pending queue を Q 件に制限する。受理は最大 Q+1 件。既定の共通 pool はない。 |
@@ -74,7 +74,7 @@ public static <P, A> AsyncEventStore<P, A> createOffloaded(
 | 順序 | 複数 worker では直列化が必要。executor shutdown と sequencer の競合で受理済み操作を残し得る。 | 接続した全 store の read・write・retention を 1 FIFO で実行する。 |
 | close/drain/cancel | overload だけでは不足し、store ごとの受理/drain handle が別途必要。executor 終了だけでは識別できない。 | D5 で close・drain・取消しを独立に定義する。 |
 
-offload 契約を定める入口には B を推奨する。同じ資源を共有する無関係な aggregate も遅い操作を待つというコストがある。所有範囲が独立した storage には別資源を作れる。将来の bounded multiworker/keyed 案は順序と資源予算の別レビューが必要である。SDK native async は transaction・取消しの再設計を要し、SQLite JDBC も解決しない。どちらも本提案には含めない。
+offload 契約を定める入口には B を採用する。同じ資源を共有する無関係な aggregate も遅い操作を待つというコストがある。所有範囲が独立した storage には別資源を作れる。将来の bounded multiworker/keyed 案は順序と資源予算の別レビューが必要である。SDK native async は transaction・取消しの再設計を要し、SQLite JDBC も解決しない。どちらも採用targetには含めない。
 
 ## D3. 受理と実行単位
 
@@ -92,7 +92,7 @@ Future 完了は利用者 continuation を完了 worker 上で inline 実行し�
 
 資源ごとの FIFO は受理順であり、event 時刻・seq_nr による整列や並行 thread 間の公平性ではない。同じ caller の連続した受理済み呼出しは呼出順に実行する。並行 caller 間では資源の受理順だけが定まる。queue 内取消しは順番を飛ばすことであり append 成功ではない。後続 seq_nr は楽観 lock に失敗し得る。並べ替え・採番変更はしない。資源・process・raw store・外部 writer を跨ぐ順序は保証しない。成功を条件に次へ進める場合は成功 result から連鎖する。
 
-SQLite の同一 connection への alias を含む全アクセスは同じ資源へ統一するか、offload session の外で行う。内部 connection lock は FIFO 受理を保証しない。同じ connection を 2 資源へ接続せず、session 中は raw 同期アクセスを混ぜず、command が残る間は storage を close しない。採用時には attachment identity を強制するか利用条件にするか決める。それまでは本草案の順序保証は排他的利用を条件とする。
+SQLite は、同一 connection と storage alias の全 offloaded 操作を同じ資源へ集める明示利用条件を採用する。実操作が終了するまで raw API を混用せず、同じ connection に別資源を使わず、storage を close しない。内部 connection lock は FIFO 受理を保証しない。global identity registry や外部 raw JDBC 利用の完全検出を保証するものではない。D8 では条件を満たす使用と、違反を安全と誤認しない negative control を検証する。順序保証はこの排他的利用を条件とする。
 
 Spanner の手動 retry loop 全体は同じ worker に残す。同じ envelope・seq_nr、head 再照合、retry 上限、例外分類、hook を維持し、別 SDK runner で包まない。ADR-0009 の採用済み待機も、別途実装後はこの worker を占有する。queue 上限は SDK・retry の時間上限ではない。案 B の result 取消しは loop を interrupt しない。
 
@@ -110,11 +110,11 @@ SQLite/Spanner の database commit 点も維持する。commit response 消失�
 
 操作 Future の cancel は result の放棄要求とする。`RUNNING` 遷移より先に取消しが原子的に勝てば invocation 全体を飛ばす。worker が skip command を取り除くまで queue 枠を占有したままにし、Q 上限を維持する。`RUNNING` が勝てば `cancel(false)`/`cancel(true)` のどちらも result を取り消し得るが、command を停止・interrupt しない。検証・transaction 解決・commit 後処理・cleanup を完了する。result が cancelled という理由で lane や connection を解放したり drain を通知したりしない。
 
-queue から実行への race は、非同期な `isCancelled()` 確認ではなく 1 個の線形化された状態遷移を必要とする。D8 の局所モデルは制御下のケースだけを試し、この race は証明していない。この取消し案は即時中止より順序と cleanup を優先する。SDK interruption/request cancel は将来の別設計とする。caller timeout 時の in-flight write は確定済みかもしれないものとして扱う。
+queue から実行への race は、非同期な `isCancelled()` 確認ではなく 1 個の線形化された状態遷移を必要とする。D8 の局所モデルは制御下のケースだけを試し、この race は証明していない。採用した取消し規則は即時中止より順序と cleanup を優先する。SDK interruption/request cancel は将来の別設計とする。caller timeout 時の in-flight write は確定済みかもしれないものとして扱う。
 
 ## D6. 境界ごとのエラー
 
-| 境界 | 案 B の提案挙動 |
+| 境界 | 案 B の採用targetの挙動 |
 | --- | --- |
 | 資源/factory 作成 | 不正引数は同期 configuration `RuntimeException`。thread 起動失敗も同期 throw し得る。既存 factory は変更しない。 |
 | 操作確保・受理 | 満杯/close 後は `RejectedExecutionException` の失敗 Future。確保失敗などの基盤 `Error` は同期 throw し得る。操作は未開始。 |
@@ -150,7 +150,7 @@ withContext(blockingDispatcher) {
 }
 ```
 
-現 Kotlin wrapper は `suspend` と `await` だけで Java 呼出しを移さない。取消しは invocation 後の待機に作用し得るが、blocking Java invocation の終了・rollback・資源解放を保証しない。application が dispatcher 寿命を管理し、実操作終了を別途追跡する。既存 factory の dispatcher を本草案で暗黙置換しない。
+現 Kotlin wrapper は `suspend` と `await` だけで Java 呼出しを移さない。取消しは invocation 後の待機に作用し得るが、blocking Java invocation の終了・rollback・資源解放を保証しない。application が dispatcher 寿命を管理し、実操作終了を別途追跡する。既存 factory の dispatcher を本 ADR で暗黙置換しない。
 
 ```scala
 // blockingEc and continuationEc are explicit application-owned ExecutionContexts.
@@ -165,15 +165,17 @@ val result = invoked.flatMap(identity)(continuationEc)
 
 ## D8. 証拠と後続実装の検証
 
-本作業では OpenJDK 26.0.2.1 で `/tmp/pm-java-async-design/` の throwaway probe を実行した。監査資料であり commit しない。継承した probe source を読んで、新たに取得した jar に対して再実行した。compile と最終実行は全て exit 0。返却境界の検査であり性能 benchmark ではない。
+原草案の作業では OpenJDK 26.0.2.1 で `/tmp/pm-java-async-design/` の throwaway probe を実行した。監査資料であり commit しない。継承した probe source を読んで、新たに取得した jar に対して再実行した。compile と最終実行は全て exit 0。返却境界の検査であり性能 benchmark ではない。
 
-| 本作業の実行証拠 | 証明する範囲と限界 |
+| 原草案の実行証拠 | 証明する範囲と限界 |
 | --- | --- |
 | 公開 5.2.0 `BoundaryProbe` | 実 private Async に blocking proxy を注入し、3 保存先×4 操作を実行。同じ caller が fake に入り release 前に Future 未返却。RuntimeException は失敗 Future、AssertionError は同期 throw、完了後 cancel は false。実 Spanner/Bigtable SDK 実行ではない。 |
 | 公開 5.2.0 `SqliteProbe` と sqlite-jdbc 3.54.1.0 | 実一時 DB、2 write・2 read・retention hook を通す。人工待機 hook ごとに caller が Future 返却前に待つ。確定 event 3 件を readback。 |
 | `ExecutionModel` | 1 worker・queue 1 枠の最小案。fake が worker を塞いでいる間に未完了 Future を受け取る。満杯/close 後の拒否、in-flight result 取消し後も FIFO、close/drain、queue 内取消しの invocation skip を確認。direct executor の負例は inline 実行。 |
 
 モデルは提案 public API や library patch ではない。簡略化のため `Throwable` を捕捉し、invocation 前に取消しを確認する。D5 の atomic race、D6 の fatal worker 方針、読取り専用 drain stage、attachment identity 強制は実装していない。成功しても製品の保証にはならない。公開 jar probe は既存挙動の証拠だけである。offload した実 SQLite 実装は試していない。
+
+その後、独立 reviewer は公開 jar・SQLite・モデルを再実行し、飽和・再入待機・読取り専用 stage・制御 Error 後の worker 置換・Java D7 例・Kotlin/Scala の小さな呼出し例の個別 control を追加した。[レビュー記録](https://github.com/j5ik2o/event-store-adapter/pull/144#issuecomment-6776410540) の PASS+NOTES は 51bf027 の文書・設計に限定される。個別 control は library 契約や wrapper 全体の runtime の証明ではない。今回の採用編集は、その記録の範囲内で結果を限定継承する。jar・SDK・wrapper・JDK 11・言語 full suite は再実行せず、新たな独立 PASS と数えない。今回の新規検査は英日 D0-D9、API/例 code block の不変、link、2 file scope、過去の証拠表の不変を対象とする。
 
 実装受入れ前に **3 保存先の全 4 操作** と snapshot write の retention について以下を必要とする。
 
@@ -188,8 +190,15 @@ val result = invoked.flatMap(identity)(continuationEc)
 | Bigtable SDK | fake backend と実 SDK の head CAS、前 journal 書出し失敗、response 消失、tail 失敗、retention 後の遅延コピー、head 境界 stream read、timeout/close。commit 後失敗でも append 成功を維持。 |
 | JVM wrapper | Kotlin/Scala 例の実行、単一 thread caller の応答、invocation 前 dispatch、bounded rejection、coroutine cancel race、queue 内/in-flight write、取消し後の資源 cleanup。main の Java 5.1 と分割 head の 5.2 を別々に検証。 |
 
-実 Spanner/Bigtable SDK backend、wrapper runtime、JDK 11、長時間負荷、製品 offload 実装は未検証である。Future 型やモデル成功でこれらの gate を満たしたことにはならない。本草案のための cloud 操作・release・merge・言語の full suite 実行は行っていない。
+atomic queued cancel、制御 Error 復旧または診断可能な failed termination、library の読取り専用 drain、SQLite 利用条件を満たす使用と違反 control、offloaded real SQLite、実 Spanner/Bigtable SDK backend、全 4 操作の wrapper full runtime、JDK 11、長時間負荷、製品 offload 実装は未検証である。Future 型やモデル成功でこれらの gate を満たしたことにはならない。本 ADR のための cloud 操作・release・merge・言語の full suite 実行は行っていない。
 
 ## D9. レビューと後続
 
-PM へ本草案を返し、単一 worker の待機コスト、SQLite attachment 条件、atomic cancel、fatal worker 復旧、drain 契約、正確な公開名の独立レビューを依頼する。本作業には独立 reviewer の verdict はない。API 採用と言語別実装 issue の新規作成はレビュー後の PM 判断に残す。判断まで #139 を open に保つ。draft PR 作成や推奨を採用済みと扱わない。
+原草案の作業時点には独立 reviewer の verdict がなかった。その後の [独立 PASS+NOTES](https://github.com/j5ik2o/event-store-adapter/pull/144#issuecomment-6776410540) は 51bf027 の文書・設計だけを対象とする。続いて PM が [案 B を採用した](https://github.com/j5ik2o/event-store-adapter/issues/139#issuecomment-6776831524)。Java の固定名、SQLite の明示利用条件、制御 Error の復旧targetを含む。最新の採用 head の独立確認は未完了であり、その確認と merge まで #139 を open に保つ。PR ready は文書の引継ぎであり、実装・公開の承認ではない。
+
+重複検索で同義の後続 issue は見つからなかった。残作業を別々に追跡する。
+
+- [Java #818](https://github.com/j5ik2o/event-store-adapter-java/issues/818) は SDK 依存なしの core 資源、3 保存先の opt-in factory、既存 API・順序・S-4・限定 dependency の維持、D8 全 matrix を対象とする。
+- [Kotlin #907](https://github.com/j5ik2o/event-store-adapter-kotlin/issues/907) と [Scala #919](https://github.com/j5ik2o/event-store-adapter-scala/issues/919) は、対応する新 Java artifact が利用可能になってから、現 wrapper の全 4 操作・dispatch・拒否・取消し・drain・dependency 境界を検証する。追加 wrapper entry が必要なら既存公開 API を維持して別途 signature を定める。本 ADR で wrapper API を発明しない。
+
+最新 head の独立確認と ADR merge までは実装保留とする。追跡 issue の作成は実装完了ではない。製品 runtime の検証、CI、設計採用、公開承認は別々に判断する。Snapshot と正式公開は別の owner 承認を必要とする。新規公開版や milestone は決めない。Java #814/#817、Kotlin #906、Scala #918 へ変更を混ぜない。
