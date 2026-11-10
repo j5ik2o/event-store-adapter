@@ -5,7 +5,7 @@ This manual, offline Python 3 CLI compares the explicit [16-repository ledger](r
 Run from the repository root. Obtain an acquisition bundle from your PM collector containing `inventory.json` and the per-repository `<repo>.json` GraphQL responses described below. This CLI does not include a live collector. Copy the complete bundle into a local directory and replace `/path/to/your/pm-audit` with that directory.
 
 ```sh
-audit_dir=/path/to/your/pm-audit
+audit_dir="/path/to/your/pm-audit"
 python3 tools/pm/repository_coverage.py \
   --inventory "$audit_dir/inventory.json" \
   --records-dir "$audit_dir"
