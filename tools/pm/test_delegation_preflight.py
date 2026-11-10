@@ -1,6 +1,7 @@
 """Behavior controls through the public CLI. Never creates a git repository."""
 import copy
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -81,6 +82,60 @@ class PreflightTests(unittest.TestCase):
             self.assertEqual(run.returncode, code)
             self.assertNotIn('password', run.stdout + run.stderr)
             self.assertNotIn('user:', run.stdout + run.stderr)
+
+    def test_explicit_ports_never_match_an_omitted_port(self):
+        for locator in ('https://github.com:0/j5ik2o/event-store-adapter.git',
+                        'ssh://git@github.com:0/j5ik2o/event-store-adapter.git',
+                        'https://github.com:/j5ik2o/event-store-adapter.git',
+                        'https://github.com:443/j5ik2o/event-store-adapter.git'):
+            for section in ('requested', 'scope', 'assignment', 'snapshot'):
+                with self.subTest(locator=locator, section=section):
+                    data = copy.deepcopy(BASE)
+                    if section == 'snapshot':
+                        data['snapshot']['origin']['value'] = locator
+                    else:
+                        data[section]['repo'] = locator
+                    run, report = self.run_cli(data)
+                    self.assertEqual(run.returncode, 1, report)
+                    self.assertEqual(report['comparison'], 'blocked')
+
+    def test_live_success_reads_an_existing_common_checkout(self):
+        checkout = os.environ.get('PREFLIGHT_TEST_CHECKOUT', str(HERE))
+        env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+        env.update(GIT_OPTIONAL_LOCKS='0', GIT_TERMINAL_PROMPT='0', LC_ALL='C')
+
+        def git(*args):
+            return subprocess.run(['git', '--no-optional-locks', '-c', 'core.fsmonitor=false',
+                                   '-c', 'core.untrackedCache=false', '-C', checkout, *args],
+                                  env=env, capture_output=True, text=True, timeout=15)
+
+        probe = git('rev-parse', '--show-toplevel')
+        if probe.returncode and 'PREFLIGHT_TEST_CHECKOUT' not in os.environ:
+            self.skipTest('requires an existing common checkout; set PREFLIGHT_TEST_CHECKOUT')
+        self.assertEqual(probe.returncode, 0, probe.stderr)
+        root = str(Path(probe.stdout.rstrip('\n')).resolve())
+        values = {'root': root}
+        for key, args in [('head', ['rev-parse', '--verify', 'HEAD']),
+                          ('branch', ['symbolic-ref', '--quiet', '--short', 'HEAD']),
+                          ('status', ['status', '--porcelain=v1', '--untracked-files=all'])]:
+            result = git(*args)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            values[key] = result.stdout.rstrip('\n')
+        data = copy.deepcopy(BASE)
+        data['assignment'].update(path=root, head=values['head'],
+                                  branch=values['branch'], status=values['status'])
+        data['snapshot'] = {}
+        run, report = self.run_cli(data, '--checkout', root)
+        self.assertEqual(run.returncode, 0, report)
+        self.assertEqual(report['mode'], 'live')
+        self.assertEqual(report['checkout'], 'live_match')
+        self.assertEqual(report['plan'], 'compatible')
+        self.assertEqual(report['assignment'], 'matched')
+        for key in ('root', 'head', 'branch'):
+            self.assertEqual(report['observations'][key]['value'], values[key])
+        self.assertEqual(report['observations']['status']['clean'], values['status'] == '')
+        self.assertEqual(report['observations']['origin']['identity'],
+                         'github.com/j5ik2o/event-store-adapter')
 
     def test_malformed_external_types(self):
         variants = [None, [], {**BASE,'schema_version':True}, {**BASE,'schema_version':1.0},
