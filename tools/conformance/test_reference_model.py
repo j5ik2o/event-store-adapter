@@ -214,6 +214,29 @@ class ReferenceModelTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '生成の対象が不正'):
             materialize(invalid)
 
+    def test_item_size_boundary_cases_expect_the_decision_every_upper_bound_agrees_on(self):
+        for identifier, expected in [('dynamodb-item-size-event-under-limit', {'error': {'category': 'contract-violation'}}),
+                                     ('dynamodb-item-size-snapshot-under-limit', {'error': {'category': 'contract-violation'}}),
+                                     ('dynamodb-item-size-event-over-limit', {'result': 'success'}),
+                                     ('dynamodb-item-size-snapshot-over-limit', {'result': 'success'})]:
+            with self.subTest(case=identifier):
+                scenario = case('dynamodb/write-errors.json', identifier)
+                self.assertEqual(replay(materialize(copy.deepcopy(scenario))).checked, len(scenario['steps']))
+                scenario['steps'][0]['expect'] = expected
+                with self.assertRaisesRegex(ValueError, '参照モデルと期待が不一致'):
+                    replay(materialize(scenario))
+
+    def test_item_size_between_the_upper_bounds_has_no_case(self):
+        for identifier, between in [('dynamodb-item-size-event-under-limit', 409470),
+                                    ('dynamodb-item-size-event-over-limit', 409470),
+                                    ('dynamodb-item-size-snapshot-under-limit', 409500),
+                                    ('dynamodb-item-size-snapshot-over-limit', 409500)]:
+            with self.subTest(case=identifier):
+                scenario = case('dynamodb/write-errors.json', identifier)
+                scenario['generators'][0]['byte_length'] = between
+                with self.assertRaisesRegex(ValueError, '言語ごとの上界で割れる範囲'):
+                    replay(materialize(scenario))
+
     def test_hash_matches_all_specification_vectors(self):
         for vector in read_json(DEFAULT_ROOT / 'values/hash.json')['cases']:
             with self.subTest(vector=vector['id']):
