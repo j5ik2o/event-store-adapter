@@ -1,6 +1,7 @@
 """Behavior tests use saved snapshots and the real CLI, with no repository creation."""
 import copy
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -122,17 +123,24 @@ class AuditTests(unittest.TestCase):
         self.assertEqual(len(r['threads']), 2)
 
     def test_readonly_git_capture_existing_checkout(self):
+        checkout = Path(os.environ.get('THREAD_AUDIT_TEST_CHECKOUT', str(HERE.parent.parent)))
+        head = subprocess.run(['git', '-C', str(checkout), 'rev-parse', '--verify', 'HEAD'],
+                              capture_output=True, text=True)
+        if head.returncode:
+            self.skipTest('set THREAD_AUDIT_TEST_CHECKOUT to an existing Git checkout')
         with tempfile.TemporaryDirectory() as tmp:
             roots = Path(tmp) / 'roots.json'
             roots.write_text(json.dumps({'host_aliases': {'j5ik2o.github.com': 'github.com'},
-                'repositories': [{'repo': 'j5ik2o/event-store-adapter', 'root': str(HERE.parent.parent)}]}), encoding='utf-8')
+                'repositories': [{'repo': 'j5ik2o/event-store-adapter', 'root': str(checkout)}]}), encoding='utf-8')
             run = subprocess.run([sys.executable, str(HERE / 'thread_worktree_audit.py'),
                 'observe-git', str(roots)], capture_output=True, text=True)
             self.assertIn(run.returncode, (0, 1))
             records = json.loads(run.stdout)['repositories'][0]
-            tree = next(t for t in records['trees'] if t['path'] == str(HERE.parent.parent))
-            self.assertEqual(tree['observations']['origin']['value'], 'github.com/j5ik2o/event-store-adapter')
-            self.assertEqual(len(tree['observations']['head']['value']), 40)
+            tree = next(t for t in records['trees'] if t['path'] == str(checkout))
+            self.assertEqual(tree['observations']['head']['value'], head.stdout.strip())
+            origin = tree['observations']['origin']
+            self.assertIn(set(origin), ({'value'}, {'error'}))
+            self.assertIsInstance(next(iter(origin.values())), str)
             self.assertIn('value', tree['observations']['status'])
 
     def test_saved_origin_credentials_not_echoed(self):
@@ -215,6 +223,43 @@ class AuditTests(unittest.TestCase):
         self.assertEqual(r['threads'][1]['metadata']['worktreePath'], '/example/監査 tree')
         self.assertEqual(r['threads'][1]['git_comparison'], 'ambiguous')
         self.assertIn('child', r['trees'][1]['owners'])
+
+    def test_empty_or_rootless_git_listing_cannot_cover_repository(self):
+        for empty in (True, False):
+            d = copy.deepcopy(self.example)
+            if empty:
+                d['ledger']['repositories'].append({'repo': 'other/unobserved'})
+                d['git']['repositories'].append(dict(repo='other/unobserved',
+                    root='/missing/root', listing={'value': ''}, trees=[]))
+                repo = 'other/unobserved'
+            else:
+                d['git']['repositories'][0]['root'] = '/missing/root'
+                repo = d['git']['repositories'][0]['repo']
+            code, r = self.run_cli(d)
+            self.assertEqual(code, 1)
+            self.assertIn('git_tree_coverage:' + repo, r['issues'])
+
+    def test_unlisted_metadata_keeps_failure_path_and_candidate_owner(self):
+        d = copy.deepcopy(self.example)
+        d['export']['pages'][0]['threads'].pop()
+        d['export']['pages'][0]['total'] = 1
+        d['export']['metadata'][1].update(status='failed', pendingRequestCount=1)
+        code, r = self.run_cli(d)
+        self.assertEqual(code, 1)
+        self.assertFalse(r['inventory_complete'])
+        self.assertEqual([t['threadId'] for t in r['threads']], ['pm'])
+        self.assertIn('unlisted_metadata', r)
+        missing = r['unlisted_metadata'][0]
+        self.assertEqual(missing['threadId'], 'child')
+        self.assertEqual(missing['listing_membership'], 'unverified')
+        observation = missing['observations'][0]
+        self.assertEqual(observation['status'], 'failed')
+        self.assertEqual(observation['pendingRequestCount'], 1)
+        self.assertEqual(observation['worktreePath'], '/example/監査 tree')
+        self.assertIn('child', r['trees'][1]['owners'])
+        self.assertEqual(r['trees'][1]['cleanup_conditions']
+                         ['no_failed_interrupted_waiting_owner'], 'observed_false')
+        self.assertEqual(r['trees'][1]['cleanup'], 'retain')
 
 
 if __name__ == '__main__':

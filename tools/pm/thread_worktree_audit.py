@@ -284,7 +284,8 @@ def audit(export, observed, ledger):
             listed_paths = [x['worktree'] for x in listed]
             paths = [x.get('path') for x in repo['trees'] if type(x) is dict
                      and type(x.get('path')) is str]
-            if len(set(paths)) != len(paths) or sorted(paths) != sorted(listed_paths):
+            if (root not in listed_paths
+                    or len(set(paths)) != len(paths) or sorted(paths) != sorted(listed_paths)):
                 issues.append('git_tree_coverage:' + name)
             for tree in repo['trees']:
                 try:
@@ -322,9 +323,9 @@ def audit(export, observed, ledger):
                 listed_row = next((x for x in listed if x['worktree'] == path), {})
                 if listed_row.get('HEAD') != values.get('head') or listed_row.get('branch') != 'refs/heads/' + (values.get('branch') or ''):
                     issues.append('git_listing_changed:' + path)
-                owners = [threads[tid] for tid in children if tid in threads and
+                owners = [tid for tid in sorted(metadata_observations) if
                           any(m.get('worktreePath') == path
-                              for m in metadata_observations.get(tid, []))]
+                              for m in metadata_observations[tid])]
                 if not owners:
                     issues.append('owner_unknown:' + path)
                 conditions = {k: 'unknown' for k in CONDITIONS}
@@ -333,14 +334,14 @@ def audit(export, observed, ledger):
                 conditions['no_unpushed_commits'] = ('observed_true' if values.get('unpushed') == '0'
                     else 'observed_false' if values.get('unpushed') is not None else 'unknown')
                 conditions['non_shared'] = 'observed_false' if path == root or len(owners) > 1 else 'unknown'
-                owner_records = [r for t in owners for r in
-                    thread_observations[t['threadId']] + metadata_observations.get(t['threadId'], [])]
+                owner_records = [r for tid in owners for r in
+                    thread_observations.get(tid, []) + metadata_observations[tid]]
                 if any(r.get('status') in ('waiting', 'interrupted', 'failed', 'cancelled', 'rolled_back')
                        or r.get('pendingRequestCount', 0) > 0 for r in owner_records):
                     conditions['no_failed_interrupted_waiting_owner'] = 'observed_false'
                 trees.append(dict(repo=name, path=path, role='root' if path == root else
                     'audit' if path in export.get('auditPaths', []) else 'work',
-                    at=at, observations=obs, owners=[t['threadId'] for t in owners],
+                    at=at, observations=obs, owners=owners,
                     cleanup='retain', cleanup_conditions=conditions))
         except (ValueError, KeyError, TypeError, StopIteration):
             invalid.append('invalid_git_repository')
@@ -376,12 +377,17 @@ def audit(export, observed, ledger):
     result = dict(schema_version=1, status='invalid_input' if invalid else 'review_required' if issues else 'consistent',
                   sources=[{'source': x['source'], 'at': x['at']} for x in (export, observed)],
                   projectId=project, parentThreadId=parent, issues=issues, errors=invalid,
-                  inventory_complete=not invalid and not any(i.split(':')[0] in {
+                  inventory_complete=not invalid and not (metadata_observations.keys() - threads.keys())
+                      and not any(i.split(':')[0] in {
                       'includeSubagents_not_true', 'unknown_or_filtered_scope', 'page_failure',
                       'broken_page_chain', 'page_project_mismatch', 'duplicate_thread',
                       'incomplete_pagination_or_total', 'parent_missing', 'graph_cycle', 'missing_parent'
                       } for i in issues),
-                  threads=list(threads.values()), trees=trees, cleanup='retain',
+                  threads=list(threads.values()),
+                  unlisted_metadata=[dict(threadId=tid, listing_membership='unverified',
+                      observations=records) for tid, records in sorted(metadata_observations.items())
+                      if tid not in threads],
+                  trees=trees, cleanup='retain',
                   limitation='Manual point-in-time comparison; no authenticity, acceptance, ownership, approval, deletion or future guarantee. Read-only/API work may leave no Git artifacts. Single observation cannot prove stagnation.')
     return result, 2 if invalid else 1 if issues else 0
 
