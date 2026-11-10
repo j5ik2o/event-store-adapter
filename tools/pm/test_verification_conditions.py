@@ -114,6 +114,16 @@ class ComparisonTest(unittest.TestCase):
             self.invoke(data)
             self.assertFalse(marker.exists())
 
+    def test_duplicate_key_in_valid_document_is_rejected(self):
+        raw = json.dumps(fixture())
+        duplicate = raw.replace('"heap": "512MiB"',
+                                '"heap": "512MiB", "heap": "512MiB"', 1)
+        self.assertNotEqual(raw, duplicate)
+        code, out = self.invoke(duplicate, raw=True)
+        self.assertEqual(code, 2)
+        self.assertFalse(out['complete'])
+        self.assertEqual(out['errors'], [{'code': 'duplicate_json_key', 'path': 'heap'}])
+
     def test_sourced_java_example(self):
         code, out = self.invoke(json.loads(EXAMPLE.read_text()))
         self.assertEqual(code, 1)
