@@ -139,6 +139,7 @@ def audit(export, observed, ledger):
     pages, metadata = export['pages'], export['metadata']
     require(type(pages) is list and type(metadata) is list, 'expected page/metadata lists')
     issues, invalid, threads, metas = [], [], {}, {}
+    thread_observations, metadata_observations, ambiguous = {}, {}, set()
     if export.get('includeSubagents') is not True:
         issues.append('includeSubagents_not_true')
     if export.get('filters') != {}:
@@ -176,11 +177,14 @@ def audit(export, observed, ledger):
                     require((p is None and rel is None) or
                             (type(p) is str and bool(p) and rel in ('fork', 'subagent')),
                             'invalid parent relationship')
+                    record = {k: t[k] for k in ('threadId', 'projectId', 'parentThreadId',
+                              'relationshipToParent', 'status', 'updatedAt')}
+                    thread_observations.setdefault(tid, []).append(record)
                     if tid in threads:
                         issues.append('duplicate_thread:' + tid)
+                        ambiguous.add(tid)
                     else:
-                        threads[tid] = {k: t[k] for k in ('threadId', 'parentThreadId',
-                                       'relationshipToParent', 'status', 'updatedAt')}
+                        threads[tid] = dict(record)
                 except (ValueError, KeyError, TypeError):
                     invalid.append('invalid_thread_in_page:' + str(i))
         except (ValueError, KeyError, TypeError):
@@ -190,23 +194,50 @@ def audit(export, observed, ledger):
     for m in metadata:
         try:
             tid = string(m['threadId'])
-            if tid in metas:
+            if tid in metadata_observations:
                 issues.append('duplicate_metadata:' + tid)
+                ambiguous.add(tid)
+            record = {'threadId': tid}
+            metadata_observations.setdefault(tid, []).append(record)
             if 'error' in m:
                 string(m['error'])
-                metas[tid] = {'threadId': tid, 'error': 'metadata unavailable'}
+                record['error'] = 'metadata unavailable'
                 issues.append('metadata_failure:' + tid)
+                ambiguous.add(tid)
                 continue
-            require(m['worktreePath'] is None or (type(m['worktreePath']) is str
-                    and Path(m['worktreePath']).is_absolute()), 'invalid metadata path')
-            require(m['branch'] is None or type(m['branch']) is str, 'invalid branch')
-            timestamp(m['updatedAt'])
-            if 'pendingRequestCount' in m:
-                integer(m['pendingRequestCount'])
-            metas[tid] = m
-            if tid not in threads or any(m[k] != threads[tid][k] for k in
+            for key in ('worktreePath', 'branch', 'updatedAt', 'parentThreadId',
+                        'relationshipToParent', 'status', 'projectId', 'pendingRequestCount'):
+                if key in ('projectId', 'pendingRequestCount') and key not in m:
+                    continue
+                try:
+                    value = m[key]
+                    if key == 'worktreePath':
+                        require(value is None or (type(value) is str and Path(value).is_absolute()),
+                                'invalid metadata path')
+                    elif key in ('branch', 'parentThreadId'):
+                        require(value is None or type(value) is str, 'invalid metadata string')
+                    elif key == 'updatedAt':
+                        timestamp(value)
+                    elif key == 'pendingRequestCount':
+                        integer(value)
+                    elif key == 'projectId':
+                        string(value)
+                    elif key == 'status':
+                        require(type(value) is str and value in STATUSES, 'invalid status')
+                    else:
+                        require(value is None or value in ('fork', 'subagent'), 'invalid relationship')
+                    record[key] = value
+                except (ValueError, KeyError, TypeError):
+                    invalid.append('invalid_metadata_field:' + tid + ':' + key)
+                    ambiguous.add(tid)
+            metas.setdefault(tid, record)
+            if 'projectId' in record and record['projectId'] != project:
+                issues.append('metadata_project_mismatch:' + tid)
+                ambiguous.add(tid)
+            if tid not in threads or any(record.get(k) != threads[tid][k] for k in
                     ('parentThreadId', 'relationshipToParent', 'status', 'updatedAt')):
                 issues.append('metadata_changed_or_unlisted:' + tid)
+                ambiguous.add(tid)
         except (ValueError, KeyError, TypeError):
             invalid.append('invalid_metadata')
     if parent not in threads:
@@ -239,26 +270,47 @@ def audit(export, observed, ledger):
             if name in repos:
                 issues.append('duplicate_repository:' + name)
             repos.add(name)
-            listing = repo['listing']
-            require(type(listing) is dict and set(listing) in ({'value'}, {'error'})
-                    and type(next(iter(listing.values()))) is str, 'invalid listing')
-            listed = porcelain(listing['value']) if 'value' in listing else []
+            listing, listed = repo.get('listing'), []
+            try:
+                require(type(listing) is dict and set(listing) in ({'value'}, {'error'})
+                        and type(next(iter(listing.values()))) is str, 'invalid listing')
+                listed = porcelain(listing['value']) if 'value' in listing else []
+            except (ValueError, KeyError, TypeError, StopIteration):
+                invalid.append('invalid_git_listing:' + name)
+                listing = {'error': 'invalid saved listing'}
             if 'error' in listing:
                 issues.append('git_listing_failure:' + name)
             require(type(repo['trees']) is list, 'invalid trees')
             listed_paths = [x['worktree'] for x in listed]
-            paths = [x['path'] for x in repo['trees']]
+            paths = [x.get('path') for x in repo['trees'] if type(x) is dict
+                     and type(x.get('path')) is str]
             if len(set(paths)) != len(paths) or sorted(paths) != sorted(listed_paths):
                 issues.append('git_tree_coverage:' + name)
             for tree in repo['trees']:
-                path, obs = string(tree['path']), tree['observations']
-                timestamp(tree['at'])
-                require(type(obs) is dict, 'invalid observations')
-                for field, value in obs.items():
-                    require(field in GIT and type(value) is dict and set(value) in
-                            ({'value'}, {'error'}) and type(next(iter(value.values()))) is str,
-                            'invalid observation')
-                obs = {k: dict(v) for k, v in obs.items()}
+                try:
+                    path = string(tree['path'])
+                except (ValueError, KeyError, TypeError):
+                    invalid.append('invalid_git_tree_path:' + name)
+                    continue
+                at = tree.get('at')
+                try:
+                    timestamp(at)
+                except (ValueError, TypeError):
+                    invalid.append('invalid_git_tree_timestamp:' + path)
+                    at = None
+                saved, obs = tree.get('observations'), {}
+                if type(saved) is not dict:
+                    invalid.append('invalid_git_observations:' + path)
+                    saved = {}
+                for field, value in saved.items():
+                    valid = (field in GIT and type(value) is dict and set(value) in
+                             ({'value'}, {'error'}) and type(next(iter(value.values()))) is str)
+                    if not valid:
+                        invalid.append('invalid_git_observation:' + path + ':' + field)
+                        if field in GIT:
+                            obs[field] = {'error': 'invalid saved observation'}
+                    else:
+                        obs[field] = dict(value)
                 origin = obs.get('origin', {}).get('value')
                 if origin is not None and not re.fullmatch(r'github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', origin):
                     obs['origin'] = {'error': 'unrecognized saved origin identity'}
@@ -271,7 +323,8 @@ def audit(export, observed, ledger):
                 if listed_row.get('HEAD') != values.get('head') or listed_row.get('branch') != 'refs/heads/' + (values.get('branch') or ''):
                     issues.append('git_listing_changed:' + path)
                 owners = [threads[tid] for tid in children if tid in threads and
-                          metas.get(tid, {}).get('worktreePath') == path]
+                          any(m.get('worktreePath') == path
+                              for m in metadata_observations.get(tid, []))]
                 if not owners:
                     issues.append('owner_unknown:' + path)
                 conditions = {k: 'unknown' for k in CONDITIONS}
@@ -280,17 +333,22 @@ def audit(export, observed, ledger):
                 conditions['no_unpushed_commits'] = ('observed_true' if values.get('unpushed') == '0'
                     else 'observed_false' if values.get('unpushed') is not None else 'unknown')
                 conditions['non_shared'] = 'observed_false' if path == root or len(owners) > 1 else 'unknown'
-                if any(t['status'] in ('waiting', 'interrupted', 'failed', 'cancelled', 'rolled_back')
-                       or metas.get(t['threadId'], {}).get('pendingRequestCount', 0) > 0 for t in owners):
+                owner_records = [r for t in owners for r in
+                    thread_observations[t['threadId']] + metadata_observations.get(t['threadId'], [])]
+                if any(r.get('status') in ('waiting', 'interrupted', 'failed', 'cancelled', 'rolled_back')
+                       or r.get('pendingRequestCount', 0) > 0 for r in owner_records):
                     conditions['no_failed_interrupted_waiting_owner'] = 'observed_false'
                 trees.append(dict(repo=name, path=path, role='root' if path == root else
                     'audit' if path in export.get('auditPaths', []) else 'work',
-                    at=tree['at'], observations=obs, owners=[t['threadId'] for t in owners],
+                    at=at, observations=obs, owners=[t['threadId'] for t in owners],
                     cleanup='retain', cleanup_conditions=conditions))
         except (ValueError, KeyError, TypeError, StopIteration):
             invalid.append('invalid_git_repository')
     issues.extend('missing_repository:' + r for r in sorted(expected - repos))
     issues.extend('unexpected_repository:' + r for r in sorted(repos - expected))
+    for tid, t in threads.items():
+        t['list_observations'] = thread_observations[tid]
+        t['metadata_observations'] = metadata_observations.get(tid, [])
     for tid in sorted(children & threads.keys()):
         m = metas.get(tid, {})
         t = threads[tid]
@@ -312,6 +370,8 @@ def audit(export, observed, ledger):
                 else 'mismatch')
             if t['git_comparison'] != 'match':
                 issues.append('worktree_mismatch:' + tid)
+        if tid in ambiguous:
+            t['git_comparison'] = 'ambiguous'
         t['stale'] = 'not_assessed_single_observation'
     result = dict(schema_version=1, status='invalid_input' if invalid else 'review_required' if issues else 'consistent',
                   sources=[{'source': x['source'], 'at': x['at']} for x in (export, observed)],

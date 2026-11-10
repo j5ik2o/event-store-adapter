@@ -142,6 +142,80 @@ class AuditTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertNotIn('credential', json.dumps(r))
 
+    def test_malformed_git_field_keeps_known_and_following_trees(self):
+        for index in (0, 1):
+            for field, bad in [('status', {'value': None}), ('upstream', {'error': False})]:
+                d = copy.deepcopy(self.example)
+                d['git']['repositories'][0]['trees'][index]['observations'][field] = bad
+                code, r = self.run_cli(d)
+                self.assertEqual(code, 2)
+                self.assertEqual([t['path'] for t in r['trees']],
+                                 [t['path'] for t in d['git']['repositories'][0]['trees']])
+                self.assertEqual(r['trees'][index]['observations']['head']['value'], 'a'*40)
+                self.assertIn('error', r['trees'][index]['observations'][field])
+                self.assertEqual(r['trees'][index]['cleanup'], 'retain')
+
+    def test_malformed_listing_keeps_independent_tree_observations(self):
+        d = copy.deepcopy(self.example)
+        d['git']['repositories'][0]['listing'] = {'value': None}
+        code, r = self.run_cli(d)
+        self.assertEqual(code, 2)
+        self.assertEqual(len(r['trees']), 2)
+        self.assertEqual(r['trees'][1]['observations']['head']['value'], 'a'*40)
+
+    def test_duplicate_metadata_keeps_paths_and_reports_ambiguity(self):
+        for later in ({'threadId': 'child', 'error': 'later failed'},
+                      dict(self.example['export']['metadata'][1], status='failed',
+                           worktreePath='/other/tree')):
+            d = copy.deepcopy(self.example)
+            d['export']['metadata'].append(later)
+            code, r = self.run_cli(d)
+            self.assertEqual(code, 1)
+            child = r['threads'][1]
+            self.assertEqual(child['metadata']['worktreePath'], '/example/監査 tree')
+            self.assertEqual(len(child['metadata_observations']), 2)
+            self.assertEqual(child['git_comparison'], 'ambiguous')
+            self.assertIn('child', r['trees'][1]['owners'])
+            if 'error' in later:
+                self.assertIn('error', child['metadata_observations'][1])
+            else:
+                self.assertEqual(child['metadata_observations'][1]['status'], 'failed')
+                self.assertEqual(r['trees'][1]['cleanup_conditions']
+                                 ['no_failed_interrupted_waiting_owner'], 'observed_false')
+
+    def test_duplicate_thread_retains_conflicting_lifecycle(self):
+        d = copy.deepcopy(self.example)
+        d['export']['pages'][0]['threads'].append(
+            dict(d['export']['pages'][0]['threads'][1], status='failed'))
+        code, r = self.run_cli(d)
+        self.assertEqual(code, 1)
+        self.assertIn('list_observations', r['threads'][1])
+        self.assertEqual([t['status'] for t in r['threads'][1]['list_observations']],
+                         ['completed', 'failed'])
+        self.assertEqual(r['threads'][1]['git_comparison'], 'ambiguous')
+        self.assertEqual(r['trees'][1]['cleanup_conditions']
+                         ['no_failed_interrupted_waiting_owner'], 'observed_false')
+
+    def test_explicit_metadata_project_conflict_is_not_consistent(self):
+        d = copy.deepcopy(self.example)
+        d['export']['metadata'][1]['projectId'] = 'foreign'
+        code, r = self.run_cli(d)
+        self.assertEqual(code, 1)
+        self.assertIn('metadata_project_mismatch:child', r['issues'])
+        self.assertEqual(r['threads'][1]['metadata_observations'][0]['projectId'], 'foreign')
+        self.assertEqual(r['threads'][1]['git_comparison'], 'ambiguous')
+        del d['export']['metadata'][1]['projectId']
+        self.assertEqual(self.run_cli(d)[0], 0)
+
+    def test_invalid_metadata_field_preserves_independent_path(self):
+        d = copy.deepcopy(self.example)
+        d['export']['metadata'][1]['pendingRequestCount'] = True
+        code, r = self.run_cli(d)
+        self.assertEqual(code, 2)
+        self.assertEqual(r['threads'][1]['metadata']['worktreePath'], '/example/監査 tree')
+        self.assertEqual(r['threads'][1]['git_comparison'], 'ambiguous')
+        self.assertIn('child', r['trees'][1]['owners'])
+
 
 if __name__ == '__main__':
     unittest.main()
