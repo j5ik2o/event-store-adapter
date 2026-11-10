@@ -125,6 +125,11 @@ class InheritanceCLI(unittest.TestCase):
         self.invoke(2)
 
     def test_duplicate_json_keys_and_unreadable_json(self):
+        run = json.loads((self.root / 'old.json').read_text(encoding='utf-8'))
+        duplicate = json.dumps(run).replace('"verdict": "pass"',
+                                            '"verdict": "pass", "verdict": "pass"')
+        self.data['prior_runs'] = [save(self.root, 'old.json', duplicate.encode('utf-8'))]
+        self.assertIn('duplicate JSON key: verdict', self.invoke(2)['errors'][0])
         for raw in (b'{"schema_version":1,"schema_version":1}', b'null', b'\xff', b'[' * 2000):
             self.data['prior_runs'] = [save(self.root, 'old.json', raw)]
             self.invoke(2)
