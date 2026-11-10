@@ -223,7 +223,14 @@ v1.3.0 を 2026-10-17 に置いた（[#61](https://github.com/j5ik2o/event-store
 
 値の表 40 件、操作の場面 128 件（共通契約 42 件、DynamoDB 45 件、メモリ 7 件、SQLite 7 件、Spanner 14 件、Bigtable 12 件、3 つの保存先に共通の共有 1 件）、配置 1 件で、75 の規則を扱う。7 つの仕様の文書が定義する 124 の規則は、すべてがケースか対象外の理由を持つ。2026-10-19 に 6 言語へ配り、メモリの設定の共有の場面は 6 言語とも成功した。SQLite・Spanner・Bigtable の場面は、6 言語ともその保存先を提供しないので、理由付きの対象外と報告している（[運用方針](../operations/repository-policy.ja.md) の適合状況）。
 
-各リポジトリには `conformance/`（`.gitattributes` で改行の変換を止める）と `tools/conformance/manifest.py` を写し、CI で `manifest.py verify` と、`conformance/manifest.json` の SHA-256（v1.0.0 は `61c26614dbbfba88eebce72cc1d2b0220218839e74dcfb64c19268f7ee2302ce`、v1.1.0 は `0e4dfe44dec0a912ed9d6b28f0634af9fd0dc840895734790e87cf96772e1d50`、v1.2.0 は `432241f3a9e45fc169b3fcdead480b505832af1eed9f4f48357210daccce84eb`、v1.3.0 は `0157c012042afa9a19f0bff509a433a4bd5ddc5b674de864a41bec453c460691`）の照合を行う。データを配り直すときは、この値も更新する。
+v1.4.0 を 2026-11-10 に置いた（[#108](https://github.com/j5ik2o/event-store-adapter/pull/108)・[#109](https://github.com/j5ik2o/event-store-adapter/pull/109)。オーナーが 2026-11-10 に合意した。仕様の合意事項は P-61・P-62）。1.0.0〜1.3.0 のケースは変えずに、次を足した。
+
+- DynamoDB の項目サイズの規則（D-7）の境界の場面 4 件（`dynamodb/write-errors.json`）。上限の 409600 バイトをわずかに下回る項目は書き込み、わずかに超える項目は書き込みの前に契約違反にすることを、イベントとスナップショットのそれぞれで確かめる。
+- 共通契約に足した必須規則 W-10（確定したイベントは書き換えないし、削除しない）を、`coverage.json` の対象外に加えた。W-10 のケースは足していない。観測できる部分は既存のケースが確かめている。書き換え・削除の操作が存在しないことには、現時点で自動検査がない。
+
+値の表 40 件、操作の場面 132 件（共通契約 42 件、DynamoDB 49 件、メモリ 7 件、SQLite 7 件、Spanner 14 件、Bigtable 12 件、3 つの保存先に共通の共有 1 件）、配置 1 件で、75 の規則を扱う。7 つの仕様の文書が定義する 125 の規則は、すべてがケースか対象外の理由を持つ。6 言語への配布は [#112](https://github.com/j5ik2o/event-store-adapter/issues/112) で行う。
+
+各リポジトリには `conformance/`（`.gitattributes` で改行の変換を止める）と `tools/conformance/manifest.py` を写し、CI で `manifest.py verify` と、`conformance/manifest.json` の SHA-256（v1.0.0 は `61c26614dbbfba88eebce72cc1d2b0220218839e74dcfb64c19268f7ee2302ce`、v1.1.0 は `0e4dfe44dec0a912ed9d6b28f0634af9fd0dc840895734790e87cf96772e1d50`、v1.2.0 は `432241f3a9e45fc169b3fcdead480b505832af1eed9f4f48357210daccce84eb`、v1.3.0 は `0157c012042afa9a19f0bff509a433a4bd5ddc5b674de864a41bec453c460691`、v1.4.0 は `85acd58a39090fccc585c10660418cb2d96699968ca29b9c7855c2644c4b9ec2`）の照合を行う。データを配り直すときは、この値も更新する。
 
 ## 7. 旧データの移行（IP-D8、2026-10-05 合意）
 

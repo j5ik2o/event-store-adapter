@@ -1,6 +1,6 @@
 # 適合テストデータ v1
 
-共通契約・DynamoDB プロファイル・メモリプロファイル・SQLite プロファイル・Spanner プロファイル・Bigtable プロファイルの期待値を、言語に依存しない UTF-8 の JSON で配るデータである。データの版は `1.4.0` である。[共通契約](../docs/spec/core-contract.md)・[DynamoDB プロファイル](../docs/spec/storage/dynamodb.md)・[メモリプロファイル](../docs/spec/storage/memory.md)・[SQLite プロファイル](../docs/spec/storage/sqlite.md)・[Spanner プロファイル](../docs/spec/storage/spanner.md)・[Bigtable プロファイル](../docs/spec/storage/bigtable.md)が規範であり、このデータは規則を追加しない。[ハッシュ仕様](../docs/spec/storage/hash.md)が収録を求める FNV-1a 64 の4件と、Bigtable の封筒の固定バイナリ形式の値の表（BT-D6a）も含める。値40件、操作場面128件（共通42件・DynamoDB固有45件・メモリ固有7件・SQLite固有7件・Spanner固有14件・Bigtable固有12件・SQLite・Spanner・Bigtable に共通の共有1件）、配置1件の計169件で、75規則を対象とする。7つの仕様の文書が定義する124規則は、すべてがケースか `coverage.json` の対象外の理由を持つ。共通の場面は `memory`・`dynamodb`・`sqlite`・`spanner`・`bigtable` の5つの保存先を対象とする。今回の検証はデータと道具だけを対象とし、言語実装や保存先には実行しない。
+共通契約・DynamoDB プロファイル・メモリプロファイル・SQLite プロファイル・Spanner プロファイル・Bigtable プロファイルの期待値を、言語に依存しない UTF-8 の JSON で配るデータである。データの版は `1.4.0` である。[共通契約](../docs/spec/core-contract.md)・[DynamoDB プロファイル](../docs/spec/storage/dynamodb.md)・[メモリプロファイル](../docs/spec/storage/memory.md)・[SQLite プロファイル](../docs/spec/storage/sqlite.md)・[Spanner プロファイル](../docs/spec/storage/spanner.md)・[Bigtable プロファイル](../docs/spec/storage/bigtable.md)が規範であり、このデータは規則を追加しない。[ハッシュ仕様](../docs/spec/storage/hash.md)が収録を求める FNV-1a 64 の4件と、Bigtable の封筒の固定バイナリ形式の値の表（BT-D6a）も含める。値40件、操作場面132件（共通42件・DynamoDB固有49件・メモリ固有7件・SQLite固有7件・Spanner固有14件・Bigtable固有12件・SQLite・Spanner・Bigtable に共通の共有1件）、配置1件の計173件で、75規則を対象とする。7つの仕様の文書が定義する124規則は、すべてがケースか `coverage.json` の対象外の理由を持つ。共通の場面は `memory`・`dynamodb`・`sqlite`・`spanner`・`bigtable` の5つの保存先を対象とする。今回の検証はデータと道具だけを対象とし、言語実装や保存先には実行しない。
 
 ## ファイルと形式
 
@@ -284,7 +284,7 @@ uv run --project tools/conformance --locked python tools/conformance/validate.py
 
 `tools/conformance/reference_model.py` は、集約ごとのヘッド番号、ジャーナル、現在のスナップショット、履歴とTTL期限を状態として操作列を再生する。モデルは期待値を状態の更新に使わない。成功・エラー分類・規則番号・読み取りの全封筒・保持履歴・失敗通知を、独立に計算した結果と比較する。時刻の値域や項目サイズの明らかな超過、確定前の失敗、取り消し理由、履歴ページ、BatchGetItem の応答差し替えも扱う。
 
-`commit` の応答の消失（`replace-response`）は、差し込みの約束（送った要求の副作用は残る）に従い、書き込みを確定したものとして扱う。保持の更新・削除応答の失敗では確定状態が仕様から決まらないため、その操作と以後の状態依存操作を理由付きで飛ばす。現在の128場面では、この理由で飛ばす操作はない。Spanner のやり直しの上限、Bigtable の封筒の上限、Bigtable の書き出しの失敗の意味（新しい末尾の書き出しの失敗は追記の成功を変えない）、Spanner・Bigtable の記録した設定の食い違いも、モデルが独立に計算して期待と比較する。SDK要求の実測、物理属性の型、メッセージの実際の文言はモデルの対象外であり、場面ごとに実行器へ委ねる検査として明示する。項目サイズは既存ケースの属性値だけで上限超過を確かめ、厳密な境界のサイズ計算は扱わない。
+`commit` の応答の消失（`replace-response`）は、差し込みの約束（送った要求の副作用は残る）に従い、書き込みを確定したものとして扱う。保持の更新・削除応答の失敗では確定状態が仕様から決まらないため、その操作と以後の状態依存操作を理由付きで飛ばす。現在の132場面では、この理由で飛ばす操作はない。Spanner のやり直しの上限、Bigtable の封筒の上限、Bigtable の書き出しの失敗の意味（新しい末尾の書き出しの失敗は追記の成功を変えない）、Spanner・Bigtable の記録した設定の食い違いも、モデルが独立に計算して期待と比較する。SDK要求の実測、物理属性の型、メッセージの実際の文言はモデルの対象外であり、場面ごとに実行器へ委ねる検査として明示する。項目サイズは既存ケースの属性値だけで上限超過を確かめ、厳密な境界のサイズ計算は扱わない。
 
 T-13 の値域は整数のナノ秒で検査する。言語の時刻型へ変換した後の丸め・往復は実行器の検査であり、モデルが丸め方向を決めることはない。FNV-1a 64 の表は仕様の計算で別途照合する。Bigtable の封筒の固定バイナリ形式（ADR-0008、BT-D6a）は values/bigtable-envelope.json の値の表に収録し、`tools/conformance/data.py` が仕様の4章から独立に符号化・復元して期待値を照合する。
 
