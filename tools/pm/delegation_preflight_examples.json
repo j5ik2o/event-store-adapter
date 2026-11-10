@@ -1,0 +1,284 @@
+{
+  "sources": {
+    "rejection": {
+      "reference": "/tmp/pm-sweep-20261110210935/dispatch-java-rejection.json",
+      "extracted_response": {
+        "_tag": "OrchestratorMcpFailure",
+        "code": "invalid_request",
+        "message": "A local task runs in this thread's project. Omit target.projectId, or pass target.environmentId to run it in that environment's project."
+      },
+      "isError": true
+    },
+    "projects": {
+      "reference": "/tmp/pm-sweep-20261110210935/projects.json",
+      "extracted_projects": [
+        {
+          "id": "8bcc6d83-6862-46a6-9297-d753009fe0c8",
+          "workspaceRoot": "/Users/j5ik2o/Sources/j5ik2o.github.com/j5ik2o/event-store-adapter",
+          "repositoryIdentity": {
+            "canonicalKey": "j5ik2o.github.com/j5ik2o/event-store-adapter",
+            "locator": {
+              "source": "git-remote",
+              "remoteName": "origin",
+              "remoteUrl": "ssh://git@j5ik2o.github.com/j5ik2o/event-store-adapter.git"
+            },
+            "rootPath": "/Users/j5ik2o/Sources/j5ik2o.github.com/j5ik2o/event-store-adapter",
+            "displayName": "j5ik2o/event-store-adapter",
+            "provider": "github",
+            "owner": "j5ik2o",
+            "name": "event-store-adapter"
+          }
+        },
+        {
+          "id": "bf1b095f-2ee0-4be2-96d1-d0a1fd1339f8",
+          "workspaceRoot": "/Users/j5ik2o/Sources/j5ik2o.github.com/j5ik2o/event-store-adapter-java",
+          "repositoryIdentity": {
+            "canonicalKey": "j5ik2o.github.com/j5ik2o/event-store-adapter-java",
+            "locator": {
+              "source": "git-remote",
+              "remoteName": "origin",
+              "remoteUrl": "ssh://git@j5ik2o.github.com/j5ik2o/event-store-adapter-java.git"
+            },
+            "rootPath": "/Users/j5ik2o/Sources/j5ik2o.github.com/j5ik2o/event-store-adapter-java",
+            "displayName": "j5ik2o/event-store-adapter-java",
+            "provider": "github",
+            "owner": "j5ik2o",
+            "name": "event-store-adapter-java"
+          }
+        }
+      ]
+    },
+    "record": "https://github.com/j5ik2o/event-store-adapter-java/issues/818#issuecomment-6779461098",
+    "capabilities": {
+      "reference": "/tmp/pm-sweep-20261110210935/capabilities-after-error.json",
+      "interpretation": "Provider/model available; constraints=[] is not evidence of cross-project checkout support."
+    }
+  },
+  "cases": {
+    "common-alias": {
+      "source": "Synthetic metadata and git snapshot; not an actual assigned child.",
+      "expected": {
+        "exit": 0,
+        "plan": "compatible",
+        "checkout": "snapshot_match"
+      },
+      "input": {
+        "schema_version": 1,
+        "host_aliases": {
+          "j5ik2o.github.com": "github.com"
+        },
+        "requested": {
+          "repo": "https://github.com/j5ik2o/event-store-adapter.git",
+          "project_id": "8bcc6d83-6862-46a6-9297-d753009fe0c8",
+          "environment_id": null
+        },
+        "scope": {
+          "policy": "local_parent_project",
+          "project_id": "8bcc6d83-6862-46a6-9297-d753009fe0c8",
+          "environment_id": null,
+          "repo": "https://github.com/j5ik2o/event-store-adapter.git",
+          "source": "Synthetic local-parent policy control based on the extracted rejection message"
+        },
+        "assignment": {
+          "path": "/provided/common",
+          "repo": "https://github.com/j5ik2o/event-store-adapter.git",
+          "project_id": "8bcc6d83-6862-46a6-9297-d753009fe0c8",
+          "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "branch": "provided-branch",
+          "status": ""
+        },
+        "snapshot": {
+          "root": {
+            "value": "/provided/common"
+          },
+          "origin": {
+            "value": "ssh://git@j5ik2o.github.com/j5ik2o/event-store-adapter.git"
+          },
+          "head": {
+            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "branch": {
+            "value": "provided-branch"
+          },
+          "status": {
+            "value": ""
+          }
+        }
+      }
+    },
+    "java-local-rejection": {
+      "source": "Extracted target project and parent project identities from projects.json; local-parent restriction from dispatch-java-rejection.json. Assignment null represents no taskId/childThreadId. Other envelope fields synthesized. Raw sources are references only.",
+      "expected": {
+        "exit": 1,
+        "plan": "rejected",
+        "checkout": "not_observed"
+      },
+      "input": {
+        "schema_version": 1,
+        "host_aliases": {
+          "j5ik2o.github.com": "github.com"
+        },
+        "requested": {
+          "repo": "https://github.com/j5ik2o/event-store-adapter-java.git",
+          "project_id": "bf1b095f-2ee0-4be2-96d1-d0a1fd1339f8",
+          "environment_id": null
+        },
+        "scope": {
+          "policy": "local_parent_project",
+          "project_id": "8bcc6d83-6862-46a6-9297-d753009fe0c8",
+          "environment_id": null,
+          "repo": "https://github.com/j5ik2o/event-store-adapter.git",
+          "source": "Synthetic local-parent policy control based on the extracted rejection message"
+        },
+        "assignment": null,
+        "snapshot": {}
+      }
+    },
+    "java-target-common-checkout": {
+      "source": "Synthetic counterfactual; no Java child was started.",
+      "expected": {
+        "exit": 1,
+        "plan": "rejected",
+        "checkout": "mismatch"
+      },
+      "input": {
+        "schema_version": 1,
+        "host_aliases": {
+          "j5ik2o.github.com": "github.com"
+        },
+        "requested": {
+          "repo": "https://github.com/j5ik2o/event-store-adapter-java.git",
+          "project_id": "bf1b095f-2ee0-4be2-96d1-d0a1fd1339f8",
+          "environment_id": null
+        },
+        "scope": {
+          "policy": "local_parent_project",
+          "project_id": "8bcc6d83-6862-46a6-9297-d753009fe0c8",
+          "environment_id": null,
+          "repo": "https://github.com/j5ik2o/event-store-adapter.git",
+          "source": "Synthetic local-parent policy control based on the extracted rejection message"
+        },
+        "assignment": {
+          "path": "/provided/common",
+          "repo": "https://github.com/j5ik2o/event-store-adapter.git",
+          "project_id": "8bcc6d83-6862-46a6-9297-d753009fe0c8",
+          "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "branch": "provided-branch",
+          "status": ""
+        },
+        "snapshot": {
+          "root": {
+            "value": "/provided/common"
+          },
+          "origin": {
+            "value": "ssh://git@j5ik2o.github.com/j5ik2o/event-store-adapter.git"
+          },
+          "head": {
+            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "branch": {
+            "value": "provided-branch"
+          },
+          "status": {
+            "value": ""
+          }
+        }
+      }
+    },
+    "unknown-policy": {
+      "source": "Synthetic unknown scope; matching snapshot cannot confer permission.",
+      "expected": {
+        "exit": 1,
+        "plan": "unknown",
+        "checkout": "snapshot_match"
+      },
+      "input": {
+        "schema_version": 1,
+        "host_aliases": {
+          "j5ik2o.github.com": "github.com"
+        },
+        "requested": {
+          "repo": "https://github.com/j5ik2o/event-store-adapter.git",
+          "project_id": "8bcc6d83-6862-46a6-9297-d753009fe0c8",
+          "environment_id": null
+        },
+        "scope": {
+          "policy": "unknown",
+          "project_id": "8bcc6d83-6862-46a6-9297-d753009fe0c8",
+          "environment_id": null,
+          "repo": "https://github.com/j5ik2o/event-store-adapter.git",
+          "source": "Synthetic local-parent policy control based on the extracted rejection message"
+        },
+        "assignment": {
+          "path": "/provided/common",
+          "repo": "https://github.com/j5ik2o/event-store-adapter.git",
+          "project_id": "8bcc6d83-6862-46a6-9297-d753009fe0c8",
+          "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "branch": "provided-branch",
+          "status": ""
+        },
+        "snapshot": {
+          "root": {
+            "value": "/provided/common"
+          },
+          "origin": {
+            "value": "ssh://git@j5ik2o.github.com/j5ik2o/event-store-adapter.git"
+          },
+          "head": {
+            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "branch": {
+            "value": "provided-branch"
+          },
+          "status": {
+            "value": ""
+          }
+        }
+      }
+    },
+    "unassigned": {
+      "source": "Synthetic snapshot without assigned checkout.",
+      "expected": {
+        "exit": 1,
+        "plan": "compatible",
+        "checkout": "not_observed"
+      },
+      "input": {
+        "schema_version": 1,
+        "host_aliases": {
+          "j5ik2o.github.com": "github.com"
+        },
+        "requested": {
+          "repo": "https://github.com/j5ik2o/event-store-adapter.git",
+          "project_id": "8bcc6d83-6862-46a6-9297-d753009fe0c8",
+          "environment_id": null
+        },
+        "scope": {
+          "policy": "local_parent_project",
+          "project_id": "8bcc6d83-6862-46a6-9297-d753009fe0c8",
+          "environment_id": null,
+          "repo": "https://github.com/j5ik2o/event-store-adapter.git",
+          "source": "Synthetic local-parent policy control based on the extracted rejection message"
+        },
+        "assignment": null,
+        "snapshot": {
+          "root": {
+            "value": "/provided/common"
+          },
+          "origin": {
+            "value": "ssh://git@j5ik2o.github.com/j5ik2o/event-store-adapter.git"
+          },
+          "head": {
+            "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "branch": {
+            "value": "provided-branch"
+          },
+          "status": {
+            "value": ""
+          }
+        }
+      }
+    }
+  }
+}
