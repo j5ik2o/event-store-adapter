@@ -121,8 +121,11 @@ class Tables(HTMLParser):
             raise ValueError('text outside table cell')
 
     def finish(self, html):
-        self.feed(html)
-        self.close()
+        try:
+            self.feed(html)
+            self.close()
+        except (NotImplementedError, AssertionError) as exc:
+            raise ValueError('unsupported HTML parser input') from exc
         if self.table is not None or self.stack:
             raise ValueError('unclosed table')
         return self.tables

@@ -1,5 +1,6 @@
 """Exercise the offline CLI using observable exit codes and JSON results."""
 import copy
+from html.parser import HTMLParser
 import json
 from pathlib import Path
 import subprocess
@@ -105,6 +106,30 @@ class RenderedTableCheckTest(unittest.TestCase):
                                  '/nonexistent/rendered-table-input.html'], capture_output=True, text=True)
         self.assertEqual(result.returncode, 2)
         self.assertEqual(json.loads(result.stdout)['result'], 'UNKNOWN')
+
+    def test_marked_declaration_respects_runtime_parser_boundary(self):
+        declaration = '<![foo]>'
+        try:
+            HTMLParser().feed(declaration)
+        except (NotImplementedError, AssertionError):
+            expected = ('UNKNOWN', 'UNKNOWN')
+        else:
+            expected = ('FAIL', 'PASS')
+        self.invoke(declaration, expected[0])
+        self.invoke(declaration + self.positive(), expected[1])
+
+    def test_parser_failures_return_unknown_json(self):
+        for error in ('NotImplementedError', 'AssertionError'):
+            program = ('import html.parser, runpy, sys\n'
+                       'def unavailable(*args): raise ' + error + '("parser unavailable")\n'
+                       'html.parser.HTMLParser.feed = unavailable\n'
+                       'sys.argv = [sys.argv[1], "--language", "en", "--example", "positive"]\n'
+                       'runpy.run_path(sys.argv[0], run_name="__main__")\n')
+            run = subprocess.run([sys.executable, '-c', program, str(CLI)],
+                                 capture_output=True, text=True)
+            self.assertEqual(run.returncode, 2, run.stderr)
+            self.assertEqual(run.stderr, '')
+            self.assertEqual(json.loads(run.stdout)['result'], 'UNKNOWN')
 
 
 if __name__ == '__main__':
