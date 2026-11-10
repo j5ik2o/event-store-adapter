@@ -218,11 +218,126 @@ RECORDED = json.loads(r'''
 
 class CliTests(unittest.TestCase):
     def cli(self, capture):
+        return self.raw_cli(json.dumps(capture))
+
+    def raw_cli(self, payload):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'capture.json'
-            path.write_text(json.dumps(capture))
+            path.write_text(payload)
             proc = subprocess.run([sys.executable, str(SCRIPT), '--replay', str(path)], capture_output=True, text=True)
         return proc.returncode, json.loads(proc.stdout), proc.stderr
+
+    def test_duplicate_status_context_preserves_every_observation(self):
+        for states in [('success', 'failure'), ('failure', 'success')]:
+            with self.subTest(states=states):
+                capture = sample()
+                response(capture, '/status?')['body'] = {
+                    'sha': HEAD, 'total_count': 2,
+                    'statuses': [{'id': i + 7, 'context': 'other', 'state': state}
+                                 for i, state in enumerate(states)]}
+                code, report, _ = self.cli(capture)
+                self.assertEqual(code, 2)
+                self.assertTrue(report['execution']['observed_failure'])
+                self.assertEqual(report['execution']['state'], 'unknown')
+                self.assertEqual(len(report['commit_statuses']), 2)
+
+    def test_missing_response_body_preserves_prior_failure(self):
+        capture = copy.deepcopy(RECORDED['php35'])
+        del response(capture, '/jobs?')['body']
+        code, report, _ = self.cli(capture)
+        self.assertEqual(code, 2)
+        self.assertEqual(report['execution'].get('observed_failure'), True)
+        self.assertTrue(report['acquisition_errors'])
+        self.assertGreater(report['counts']['check_runs'], 0)
+
+    def test_pagination_terminator_must_be_null(self):
+        for marker in [False, 0, '', [], {}]:
+            with self.subTest(marker=marker):
+                capture = sample()
+                response(capture, '/check-runs?')['next'] = marker
+                code, report, _ = self.cli(capture)
+                self.assertEqual(code, 2)
+                self.assertEqual(report['execution']['state'], 'unknown')
+                self.assertTrue(report['acquisition_errors'])
+
+    def test_duplicate_json_key_is_rejected(self):
+        payload = json.dumps(sample()).replace(
+            '"conclusion": "success"',
+            '"conclusion": "failure", "conclusion": "success"', 1)
+        code, report, stderr = self.raw_cli(payload)
+        self.assertEqual(code, 2)
+        self.assertEqual(report['execution']['state'], 'unknown')
+        self.assertIn('duplicate JSON key', stderr)
+
+    def test_nonfinite_json_constants_are_rejected(self):
+        for constant in ['NaN', 'Infinity', '-Infinity']:
+            with self.subTest(constant=constant):
+                payload = json.dumps(sample()).replace('"conclusion": "success"',
+                                                       '"conclusion": ' + constant, 1)
+                code, report, _ = self.raw_cli(payload)
+                self.assertEqual(code, 2)
+                self.assertEqual(report['execution']['state'], 'unknown')
+
+    def test_malformed_policy_preserves_failure_evidence(self):
+        for checks in [True, [], {}, {'checks': None},
+                       {'checks': [{'context': 1}]}, {'contexts': [1]}]:
+            with self.subTest(checks=checks):
+                capture = copy.deepcopy(RECORDED['php35'])
+                response(capture, '/protection')['body']['required_status_checks'] = checks
+                code, report, _ = self.cli(capture)
+                self.assertEqual(code, 2)
+                self.assertEqual(report['execution'].get('observed_failure'), True)
+                self.assertEqual(report['configuration']['state'], 'unknown')
+                self.assertTrue(report['acquisition_errors'])
+        for rule in [{}, {'type': []},
+                     {'type': 'required_status_checks', 'parameters': None}]:
+            with self.subTest(rule=rule):
+                capture = copy.deepcopy(RECORDED['php35'])
+                response(capture, '/rules/')['body'] = [rule]
+                code, report, _ = self.cli(capture)
+                self.assertEqual(code, 2)
+                self.assertEqual(report['execution'].get('observed_failure'), True)
+        capture = sample()
+        response(capture, '/protection')['body']['required_status_checks'] = None
+        response(capture, '/rules/')['body'] = [{'type': 'future_rule', 'parameters': {}}]
+        code, report, _ = self.cli(capture)
+        self.assertEqual((code, report['required_gate']['state']), (0, 'none'))
+        self.assertEqual(report['acquisition_errors'], [])
+
+    def test_malformed_collection_and_identity_preserve_failure(self):
+        for kind in ['row', 'id', 'app', 'check_suite', 'app-id', 'attempt', 'envelope']:
+            with self.subTest(kind=kind):
+                capture = copy.deepcopy(RECORDED['php35'])
+                if kind == 'row':
+                    value = response(capture, '/check-runs?')['body']
+                    value['check_runs'].append(None)
+                    value['total_count'] += 1
+                elif kind in ['id', 'app', 'check_suite']:
+                    response(capture, '/check-runs?')['body']['check_runs'][0][kind] = []
+                elif kind == 'app-id':
+                    response(capture, '/check-runs?')['body']['check_runs'][0]['app']['id'] = True
+                elif kind == 'attempt':
+                    del response(capture, '/actions/runs?')['body']['workflow_runs'][0]['run_attempt']
+                else:
+                    path = next(k for k in capture['responses'] if '/jobs?' in k)
+                    capture['responses'][path] = True
+                code, report, _ = self.cli(capture)
+                self.assertEqual(code, 2)
+                self.assertEqual(report['execution'].get('observed_failure'), True)
+                self.assertTrue(report['acquisition_errors'])
+
+    def test_target_and_file_errors_identify_missing_input(self):
+        with tempfile.TemporaryDirectory() as directory:
+            missing = str(Path(directory) / 'missing.capture.json')
+            for args, expected in [([], ['--repo', '--head', '--branch']),
+                                   (['--replay', missing], ['missing.capture.json'])]:
+                with self.subTest(args=args):
+                    proc = subprocess.run([sys.executable, str(SCRIPT), *args],
+                                          capture_output=True, text=True)
+                    self.assertEqual(proc.returncode, 2)
+                    self.assertEqual(json.loads(proc.stdout)['execution']['state'], 'unknown')
+                    for text in expected:
+                        self.assertIn(text, proc.stderr)
 
     def test_schema_version_rejects_boolean_and_float(self):
         for version in [True, 1.0]:

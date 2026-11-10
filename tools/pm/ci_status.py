@@ -11,6 +11,33 @@ from pathlib import Path
 from urllib.parse import quote
 
 
+def decode_json(payload):
+    def unique_object(pairs):
+        result = dict(pairs)
+        if len(result) != len(pairs):
+            raise ValueError('duplicate JSON key')
+        return result
+
+    def invalid_constant(value):
+        raise ValueError('invalid JSON constant: ' + value)
+
+    return json.loads(payload, object_pairs_hook=unique_object,
+                      parse_constant=invalid_constant)
+
+
+def required_entries(rows, app_key):
+    if not isinstance(rows, list):
+        raise ValueError('required checks must be a list')
+    result = []
+    for row in rows:
+        if (not isinstance(row, dict) or not isinstance(row.get('context'), str)
+                or not row['context'] or
+                (row.get(app_key) is not None and type(row[app_key]) is not int)):
+            raise ValueError('invalid required check')
+        result.append({'context': row['context'], 'app_id': row.get(app_key)})
+    return result
+
+
 class Probe:
     def __init__(self, capture, live=False):
         self.capture = capture
@@ -33,18 +60,29 @@ class Probe:
                     raise ValueError('incomplete gh response')
                 links = re.findall(r'<([^>]+)>; rel="next"', header)
                 links = [x.removeprefix('https://api.github.com/') for x in links]
-                responses[path] = {'http_status': code, 'body': json.loads(body),
+                responses[path] = {'http_status': code, 'body': decode_json(body),
                                    'next': links[0] if links else None}
             except (OSError, ValueError, IndexError, subprocess.TimeoutExpired):
                 responses[path] = {'http_status': None, 'body': None, 'next': None}
         value = responses.get(path)
-        if not isinstance(value, dict) or value.get('http_status') != 200:
+        if (not isinstance(value, dict) or type(value.get('http_status')) is not int
+                or value['http_status'] != 200):
             self.errors.append({'path': path, 'reason': 'unavailable',
-                                'http_status': value.get('http_status') if value else None})
+                                'http_status': value.get('http_status') if isinstance(value, dict) else None})
+            return None
+        if 'body' not in value:
+            self.errors.append({'path': path, 'reason': 'response_body_missing'})
             return None
         if 'next' not in value:
             self.errors.append({'path': path, 'reason': 'pagination_metadata_missing'})
-        return copy.deepcopy(value)
+        elif value['next'] is not None and (not isinstance(value['next'], str) or not value['next']):
+            self.errors.append({'path': path, 'reason': 'invalid_next_page'})
+            value = dict(value, next=None)
+        try:
+            return copy.deepcopy(value)
+        except RecursionError:
+            self.errors.append({'path': path, 'reason': 'response_depth_exceeded'})
+            return None
 
     def one(self, path):
         value = self.get(path)
@@ -61,6 +99,9 @@ class Probe:
             if value is None:
                 break
             body = value['body']
+            if key and not isinstance(body, dict):
+                self.errors.append({'path': path, 'reason': 'invalid_list'})
+                break
             rows = body.get(key) if key and isinstance(body, dict) else body
             if not isinstance(rows, list):
                 self.errors.append({'path': path, 'reason': 'invalid_list'})
@@ -72,7 +113,11 @@ class Probe:
                 if type(count) is not int or (total is not None and total != count):
                     self.errors.append({'path': path, 'reason': 'invalid_or_changed_total'})
                 total = count
-            result.extend(rows)
+            for row in rows:
+                if not isinstance(row, dict):
+                    self.errors.append({'path': path, 'reason': 'invalid_list_row'})
+                else:
+                    result.append(row)
             next_path = value.get('next')
             if next_path and not next_path.startswith('repos/' + self.capture['repository'] + '/'):
                 self.errors.append({'path': path, 'reason': 'foreign_next_page'})
@@ -107,19 +152,34 @@ def evaluate(probe):
         protection = probe.one(base + '/protection')
         if isinstance(protection, dict) and 'required_status_checks' in protection:
             checks = protection.get('required_status_checks')
-            if checks:
-                required.extend({'context': x['context'], 'app_id': x.get('app_id')}
-                                for x in checks.get('checks', []))
-                names = {x['context'] for x in required}
-                required.extend({'context': x, 'app_id': None}
-                                for x in checks.get('contexts', []) if x not in names)
+            if checks is not None:
+                try:
+                    if not isinstance(checks, dict) or not {'checks', 'contexts'}.intersection(checks):
+                        raise ValueError('invalid required check configuration')
+                    entries = required_entries(checks.get('checks', []), 'app_id')
+                    contexts = checks.get('contexts', [])
+                    if not isinstance(contexts, list) or any(not isinstance(x, str) or not x for x in contexts):
+                        raise ValueError('invalid required context names')
+                    names = {x['context'] for x in entries}
+                    entries.extend({'context': x, 'app_id': None} for x in contexts if x not in names)
+                    required.extend(entries)
+                except ValueError:
+                    probe.errors.append({'path': base, 'reason': 'invalid_required_status_checks'})
         else:
             probe.errors.append({'path': base, 'reason': 'protection_unknown'})
     for rule in rules:
-        if rule['type'] == 'required_status_checks':
-            required.extend({'context': x['context'], 'app_id': x.get('integration_id')}
-                            for x in rule['parameters']['required_status_checks'])
-        if rule['type'] == 'workflows':
+        kind = rule.get('type')
+        if not isinstance(kind, str) or not kind:
+            probe.errors.append({'path': base, 'reason': 'invalid_branch_rule'})
+        elif kind == 'required_status_checks':
+            parameters = rule.get('parameters')
+            try:
+                if not isinstance(parameters, dict):
+                    raise ValueError('invalid required check parameters')
+                required.extend(required_entries(parameters.get('required_status_checks'), 'integration_id'))
+            except ValueError:
+                probe.errors.append({'path': base, 'reason': 'invalid_required_status_checks'})
+        elif kind == 'workflows':
             probe.errors.append({'path': base, 'reason': 'required_workflow_policy_not_evaluated'})
     config_known = not probe.errors and protected is not None
     checks = probe.listing(root + '/commits/' + head + '/check-runs?per_page=100&filter=latest', 'check_runs')
@@ -128,10 +188,16 @@ def evaluate(probe):
     runs = probe.listing(root + '/actions/runs?head_sha=' + head + '&per_page=100', 'workflow_runs')
     jobs = []
     for run in runs:
+        run['observed_job_count'] = 0
+        if (type(run.get('id')) is not int or run['id'] <= 0
+                or type(run.get('run_attempt')) is not int or run['run_attempt'] <= 0):
+            probe.errors.append({'reason': 'invalid_workflow_run_identity', 'id': run.get('id')})
+            continue
         rows = probe.listing(root + '/actions/runs/' + str(run['id']) + '/attempts/' + str(run['run_attempt']) + '/jobs?per_page=100', 'jobs')
         run['observed_job_count'] = len(rows)
         for row in rows:
-            if row.get('run_id') != run['id'] or row.get('run_attempt') != run['run_attempt']:
+            if (type(row.get('run_id')) is not int or type(row.get('run_attempt')) is not int
+                    or row.get('run_id') != run['id'] or row.get('run_attempt') != run['run_attempt']):
                 probe.errors.append({'reason': 'foreign_job_run_or_attempt', 'id': row.get('id')})
         jobs.extend(rows)
     for kind, rows in [('checks', checks), ('suites', suites), ('runs', runs), ('jobs', jobs)]:
@@ -139,30 +205,45 @@ def evaluate(probe):
         for row in rows:
             if type(row.get('id')) is not int or row['id'] <= 0 or row.get('id') in ids or row.get('head_sha') != head:
                 probe.errors.append({'reason': 'duplicate_or_foreign_head', 'kind': kind, 'id': row.get('id')})
-            ids.add(row.get('id'))
-    status_ids = [x.get('id') for x in statuses]
-    if len(status_ids) != len(set(status_ids)) or any(type(x) is not int or x <= 0 for x in status_ids):
-        probe.errors.append({'reason': 'duplicate_status'})
-    # The combined endpoint returns the latest state of each status context.
-    latest = {}
+            if type(row.get('id')) is int:
+                ids.add(row['id'])
+    for row in checks:
+        for field in ['app', 'check_suite']:
+            reference = row.get(field)
+            if (not isinstance(reference, dict) or type(reference.get('id')) is not int
+                    or reference['id'] <= 0):
+                probe.errors.append({'reason': 'invalid_check_reference', 'field': field, 'id': row.get('id')})
+    status_ids, status_contexts = set(), set()
     for row in statuses:
-        latest.setdefault(row['context'], row)
+        identifier, context = row.get('id'), row.get('context')
+        if type(identifier) is not int or identifier <= 0 or identifier in status_ids:
+            probe.errors.append({'reason': 'invalid_or_duplicate_status_id'})
+        else:
+            status_ids.add(identifier)
+        if not isinstance(context, str) or not context:
+            probe.errors.append({'reason': 'invalid_status_context'})
+        elif context in status_contexts:
+            probe.errors.append({'reason': 'duplicate_status_context', 'context': context})
+        else:
+            status_contexts.add(context)
     gate = []
     for req in required:
         matches = [x for x in checks if x.get('name') == req['context'] and
-                   (req['app_id'] in (None, -1) or x.get('app', {}).get('id') == req['app_id'])]
+                   (req['app_id'] in (None, -1) or
+                    (isinstance(x.get('app'), dict) and x['app'].get('id') == req['app_id']))]
         states = [outcome(x) for x in matches]
-        if req['context'] in latest:
-            states.append(outcome(latest[req['context']], True) if req['app_id'] in (None, -1) else 'unknown')
+        states.extend(outcome(x, True) if req['app_id'] in (None, -1) else 'unknown'
+                      for x in statuses if x.get('context') == req['context'])
         accepted = bool(states) and len(matches) <= 1 and all(x in ('success', 'skipped', 'neutral') for x in states)
         gate.append(dict(req, observed=states or ['absent'], accepted=accepted))
     policy = 'unknown' if not config_known or probe.errors else (
         'none' if not gate else 'accepted' if all(x['accepted'] for x in gate) else 'not_accepted')
     for suite in suites:
-        suite['observed_check_count'] = sum(x.get('check_suite', {}).get('id') == suite['id'] for x in checks)
+        suite['observed_check_count'] = sum(isinstance(x.get('check_suite'), dict)
+                                            and x['check_suite'].get('id') == suite['id'] for x in checks)
         suite['observed_actions_job_count'] = sum(x['observed_job_count'] for x in runs if x.get('check_suite_id') == suite['id'])
     observations = [outcome(x) for rows in (checks, suites, runs, jobs) for x in rows]
-    observations += [outcome(x, True) for x in latest.values()]
+    observations += [outcome(x, True) for x in statuses]
     failed = any(x in ('failure', 'error', 'timed_out', 'cancelled', 'action_required', 'startup_failure') for x in observations)
     empty_suite = any(x['observed_check_count'] == 0 for x in suites)
     execution = 'unknown' if probe.errors else 'failure' if failed else (
@@ -179,7 +260,7 @@ def evaluate(probe):
             'test_execution': {'state': 'unverified', 'reason': 'Job and step names do not prove test contents or nonzero tests.',
                                'successful_job_ids': [x['id'] for x in jobs if outcome(x) == 'success']},
             'counts': {k: len(v) for k, v in [('check_runs', checks), ('commit_statuses', statuses), ('suites', suites), ('workflow_runs', runs), ('jobs', jobs)]},
-            'check_runs': checks, 'commit_statuses': list(latest.values()), 'suites': suites,
+            'check_runs': checks, 'commit_statuses': statuses, 'suites': suites,
             'workflow_runs': runs, 'jobs': jobs, 'acquisition_errors': probe.errors}
 
 
@@ -194,9 +275,13 @@ def main():
     try:
         if args.replay:
             if args.repo or args.head or args.branch:
-                parser.error('--replay cannot be combined with live target flags')
-            capture = json.loads(args.replay.read_text())
+                raise ValueError('--replay cannot be combined with live target flags')
+            capture = decode_json(args.replay.read_text())
         else:
+            missing = [flag for flag, value in [('--repo', args.repo), ('--head', args.head),
+                                                ('--branch', args.branch)] if not value]
+            if missing:
+                raise ValueError('required target arguments: ' + ', '.join(missing))
             capture = {'schema_version': 1, 'repository': args.repo, 'head': args.head,
                        'branch': args.branch, 'captured_at': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'responses': {}}
         if (type(capture['schema_version']) is not int or capture['schema_version'] != 1
@@ -215,7 +300,7 @@ def main():
         return code
     except (OSError, ValueError, KeyError, TypeError, AttributeError, RecursionError) as exc:
         print(json.dumps({'schema_version': 1, 'execution': {'state': 'unknown'}, 'error': 'invalid_input_or_response'}))
-        print('Invalid input, response, or output path: ' + type(exc).__name__, file=sys.stderr)
+        print('Invalid input, response, or output path: ' + type(exc).__name__ + ': ' + str(exc), file=sys.stderr)
         return 2
 
 
