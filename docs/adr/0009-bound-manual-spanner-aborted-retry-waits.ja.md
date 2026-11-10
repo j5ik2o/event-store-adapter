@@ -16,7 +16,7 @@ status: accepted
 | --- | --- |
 | [Java main d0237ddcd76149fae8296fedea1f4b1f1d281ae5](https://github.com/j5ik2o/event-store-adapter-java/blob/d0237ddcd76149fae8296fedea1f4b1f1d281ae5/spanner/src/main/java/com/github/j5ik2o/event/store/adapter/java/spanner/SpannerTransactions.java) | `SpannerTransactions.runReadWrite` が毎回 `TransactionManager` を生成する。宣言 SDK は 6.127.0。 |
 | [Java 公開 5.2.0 sources](https://repo.maven.apache.org/maven2/io/github/j5ik2o/event-store-adapter-java-spanner/5.2.0/event-store-adapter-java-spanner-5.2.0-sources.jar) | 入口は固定 main と bytes 一致。[公開 POM](https://repo.maven.apache.org/maven2/io/github/j5ik2o/event-store-adapter-java-spanner/5.2.0/event-store-adapter-java-spanner-5.2.0.pom) も SDK 6.127.0。tag commit は 0ec46b15ba44b4dfb45b4261dfafd6af6d79efbc。 |
-| [JS main 4f4f5b800aea89b7e880a77cc90d76929dc889bc](https://github.com/j5ik2o/event-store-adapter-js/blob/4f4f5b800aea89b7e880a77cc90d76929dc889bc/packages/library/src/internal/spanner-read-write-transaction.ts) | 毎回 `getTransaction` を呼ぶ。lock は 9.1.0、optional peer は `^8.7.1 || ^9.0.0`。利用者の版は一意ではない。 |
+| [JS main 4f4f5b800aea89b7e880a77cc90d76929dc889bc](https://github.com/j5ik2o/event-store-adapter-js/blob/4f4f5b800aea89b7e880a77cc90d76929dc889bc/packages/library/src/internal/spanner-read-write-transaction.ts) | 毎回 `getTransaction` を呼ぶ。lock は 9.1.0、optional peer は `^8.7.1 \|\| ^9.0.0`。利用者の版は一意ではない。 |
 
 どちらも SDK 自動 transaction runner の retry loop を通らず、意図的な ABORTED backoff がない。RPC・session 取得・rollback・close の待ちは別に存在し得る。以下の本設計の挙動は実装済み・公開済みではない。
 
