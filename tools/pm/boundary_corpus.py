@@ -128,7 +128,7 @@ def check(result, expected, output):
         problems.append('exit: expected %s, got %s' % (expected['exit'], result['exit']))
     try:
         report = json.loads(result['stdout'])
-    except ValueError:
+    except (ValueError, RecursionError):
         return problems + ['stdout is not one JSON value']
     if not isinstance(report, dict):
         return problems + ['stdout is not a JSON object']
@@ -156,7 +156,12 @@ def check(result, expected, output):
 
 
 def retention(result, fixture):
-    report = json.loads(result['stdout'])
+    try:
+        report = json.loads(result['stdout'])
+    except (ValueError, RecursionError):
+        return ['retention: stdout is not one JSON value']
+    if not isinstance(report, dict) or not isinstance(report.get('counts'), dict):
+        return ['retention: missing report object or counts']
     arrays = {'check_runs': 'check_runs', 'suites': 'check_suites',
               'workflow_runs': 'workflow_runs', 'jobs': 'jobs', 'commit_statuses': 'statuses'}
     problems = []
@@ -165,11 +170,15 @@ def retention(result, fixture):
                 if isinstance(response.get('body'), dict)
                 for row in response['body'].get(source, [])]
         actual = report.get(name, [])
-        count = report.get('counts', {}).get(name)
-        if type(count) is not int or count != len(rows) or len(actual) != len(rows):
+        count = report['counts'].get(name)
+        if (not isinstance(actual, list) or type(count) is not int
+                or count != len(rows) or len(actual) != len(rows)):
             problems.append(name + ': lost rows or counts')
             continue
         for original, observed in zip(rows, actual):
+            if not isinstance(observed, dict):
+                problems.append(name + ': raw observation is not an object')
+                continue
             if any(k not in observed or json.dumps(observed[k], sort_keys=True) !=
                    json.dumps(v, sort_keys=True) for k, v in original.items()):
                 problems.append(name + ': raw observation changed')
@@ -213,7 +222,7 @@ def main():
     parser.add_argument('--case', action='append', dest='ids', help='Select exact case ID; repeatable')
     parser.add_argument('--historical-dir', type=Path, help='Explicit trusted source directory: SHA/target.py')
     args = parser.parse_args()
-    root = args.output or Path(tempfile.mkdtemp(prefix='pm-boundary-corpus-')) / 'run'
+    root = (args.output or Path(tempfile.mkdtemp(prefix='pm-boundary-corpus-')) / 'run').resolve()
     if root.exists():
         parser.error('--output must name a new directory')
     root.mkdir(parents=True, exist_ok=False)

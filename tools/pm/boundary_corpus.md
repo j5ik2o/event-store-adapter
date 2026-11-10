@@ -9,6 +9,8 @@ python3 -B -m unittest discover -s tools/pm -p test_boundary_corpus.py -v
 
 The runner prints the evidence directory. To choose a location, pass `--output /path/to/new/run`. The directory must not exist. Keep it to inspect inputs, exact commands, stdout, stderr, exit codes, generated manifests, source SHA256 values, results, and the evidence SHA256 manifest. It creates local files only inside that directory. It never imports existing test modules.
 
+Relative output locations are resolved from the caller's working directory before fixtures run. If an executed target emits invalid JSON or malformed retention evidence, the case remains a contract mismatch; those observations do not become incomplete execution.
+
 To rerun one contrast, select its exact ID. Repeat `--case` to select several. A selected run establishes only those cases.
 
 ```sh
