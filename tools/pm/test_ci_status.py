@@ -250,6 +250,30 @@ class CliTests(unittest.TestCase):
         self.assertTrue(report['acquisition_errors'])
         self.assertGreater(report['counts']['check_runs'], 0)
 
+    def test_missing_collection_ids_preserve_failure_evidence(self):
+        for fragment, key in [('/check-runs?', 'check_runs'), ('/check-suites?', 'check_suites'),
+                              ('/actions/runs?', 'workflow_runs'), ('/jobs?', 'jobs'),
+                              ('/status?', 'statuses')]:
+            with self.subTest(collection=key):
+                capture = copy.deepcopy(RECORDED['php35'])
+                body = response(capture, fragment)['body']
+                if key == 'statuses':
+                    body.update(total_count=1, statuses=[{'id': 7, 'context': 'other', 'state': 'failure'}])
+                del body[key][0]['id']
+                code, report, _ = self.cli(capture)
+                self.assertEqual(code, 2)
+                self.assertEqual(report['execution'].get('observed_failure'), True)
+                self.assertTrue(report['acquisition_errors'])
+
+    def test_capture_time_requires_a_nonempty_string(self):
+        for value in [None, False, 100, '']:
+            with self.subTest(captured_at=value):
+                capture = sample()
+                capture['captured_at'] = value
+                code, report, _ = self.cli(capture)
+                self.assertEqual(code, 2)
+                self.assertEqual(report['execution']['state'], 'unknown')
+
     def test_pagination_terminator_must_be_null(self):
         for marker in [False, 0, '', [], {}]:
             with self.subTest(marker=marker):

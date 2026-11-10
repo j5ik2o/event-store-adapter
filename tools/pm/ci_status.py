@@ -45,6 +45,15 @@ def required_entries(rows, app_key):
     return result
 
 
+def positive_id(value):
+    return value if type(value) is int and value > 0 else None
+
+
+def reference_id(row, field):
+    reference = row.get(field)
+    return positive_id(reference.get('id')) if isinstance(reference, dict) else None
+
+
 class Probe:
     def __init__(self, capture, live=False):
         self.capture = capture
@@ -196,34 +205,32 @@ def evaluate(probe):
     jobs = []
     for run in runs:
         run['observed_job_count'] = 0
-        if (type(run.get('id')) is not int or run['id'] <= 0
-                or type(run.get('run_attempt')) is not int or run['run_attempt'] <= 0):
+        run_id, attempt = positive_id(run.get('id')), positive_id(run.get('run_attempt'))
+        if run_id is None or attempt is None:
             probe.errors.append({'reason': 'invalid_workflow_run_identity', 'id': run.get('id')})
             continue
-        rows = probe.listing(root + '/actions/runs/' + str(run['id']) + '/attempts/' + str(run['run_attempt']) + '/jobs?per_page=100', 'jobs')
+        rows = probe.listing(root + '/actions/runs/' + str(run_id) + '/attempts/' + str(attempt) + '/jobs?per_page=100', 'jobs')
         run['observed_job_count'] = len(rows)
         for row in rows:
-            if (type(row.get('run_id')) is not int or type(row.get('run_attempt')) is not int
-                    or row.get('run_id') != run['id'] or row.get('run_attempt') != run['run_attempt']):
+            if positive_id(row.get('run_id')) != run_id or positive_id(row.get('run_attempt')) != attempt:
                 probe.errors.append({'reason': 'foreign_job_run_or_attempt', 'id': row.get('id')})
         jobs.extend(rows)
     for kind, rows in [('checks', checks), ('suites', suites), ('runs', runs), ('jobs', jobs)]:
         ids = set()
         for row in rows:
-            if type(row.get('id')) is not int or row['id'] <= 0 or row.get('id') in ids or row.get('head_sha') != head:
+            identifier = positive_id(row.get('id'))
+            if identifier is None or identifier in ids or row.get('head_sha') != head:
                 probe.errors.append({'reason': 'duplicate_or_foreign_head', 'kind': kind, 'id': row.get('id')})
-            if type(row.get('id')) is int:
-                ids.add(row['id'])
+            if identifier is not None:
+                ids.add(identifier)
     for row in checks:
         for field in ['app', 'check_suite']:
-            reference = row.get(field)
-            if (not isinstance(reference, dict) or type(reference.get('id')) is not int
-                    or reference['id'] <= 0):
+            if reference_id(row, field) is None:
                 probe.errors.append({'reason': 'invalid_check_reference', 'field': field, 'id': row.get('id')})
     status_ids, status_contexts = set(), set()
     for row in statuses:
-        identifier, context = row.get('id'), row.get('context')
-        if type(identifier) is not int or identifier <= 0 or identifier in status_ids:
+        identifier, context = positive_id(row.get('id')), row.get('context')
+        if identifier is None or identifier in status_ids:
             probe.errors.append({'reason': 'invalid_or_duplicate_status_id'})
         else:
             status_ids.add(identifier)
@@ -236,8 +243,7 @@ def evaluate(probe):
     gate = []
     for req in required:
         matches = [x for x in checks if x.get('name') == req['context'] and
-                   (req['app_id'] in (None, -1) or
-                    (isinstance(x.get('app'), dict) and x['app'].get('id') == req['app_id']))]
+                   (req['app_id'] in (None, -1) or reference_id(x, 'app') == req['app_id'])]
         states = [outcome(x) for x in matches]
         states.extend(outcome(x, True) if req['app_id'] in (None, -1) else 'unknown'
                       for x in statuses if x.get('context') == req['context'])
@@ -246,9 +252,13 @@ def evaluate(probe):
     policy = 'unknown' if not config_known or probe.errors else (
         'none' if not gate else 'accepted' if all(x['accepted'] for x in gate) else 'not_accepted')
     for suite in suites:
-        suite['observed_check_count'] = sum(isinstance(x.get('check_suite'), dict)
-                                            and x['check_suite'].get('id') == suite['id'] for x in checks)
-        suite['observed_actions_job_count'] = sum(x['observed_job_count'] for x in runs if x.get('check_suite_id') == suite['id'])
+        suite_id = positive_id(suite.get('id'))
+        suite['observed_check_count'] = 0
+        suite['observed_actions_job_count'] = 0
+        if suite_id is not None:
+            suite['observed_check_count'] = sum(reference_id(x, 'check_suite') == suite_id for x in checks)
+            suite['observed_actions_job_count'] = sum(x['observed_job_count'] for x in runs
+                                                      if positive_id(x.get('check_suite_id')) == suite_id)
     observations = [outcome(x) for rows in (checks, suites, runs, jobs) for x in rows]
     observations += [outcome(x, True) for x in statuses]
     failed = any(x in ('failure', 'error', 'timed_out', 'cancelled', 'action_required', 'startup_failure') for x in observations)
@@ -294,6 +304,7 @@ def main():
         if (type(capture['schema_version']) is not int or capture['schema_version'] != 1
                 or not re.fullmatch(r'[\w.-]+/[\w.-]+', capture['repository'] or '')
                 or not re.fullmatch(r'[0-9a-f]{40}', capture['head'] or '') or not capture['branch']
+                or not isinstance(capture.get('captured_at'), str) or not capture['captured_at']
                 or not isinstance(capture['responses'], dict)):
             raise ValueError('invalid capture or target')
         probe = Probe(capture, live=not args.replay)

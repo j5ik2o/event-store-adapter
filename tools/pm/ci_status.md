@@ -30,6 +30,8 @@ The combined-status endpoint promises the latest state per context. Repeated con
 
 Malformed response envelopes, required-check configuration, rows, and identifiers add acquisition errors without discarding other successfully parsed observations. This includes a missing response body after a failed check was already observed. Invalid raw JSON cannot establish trustworthy observations; it produces the smaller invalid-input envelope instead.
 
+Association calculations use only validated positive integer identifiers. An invalid suite identifier leaves association counts at zero and the aggregate unknown; the raw suite and independently observed failures remain in the report. The capture's `captured_at` must be a nonempty string before acquisition, but replay does not authenticate that author-supplied timestamp.
+
 `test_execution` always reports `unverified`. Successful job IDs and each job's steps provide pointers for further investigation. Job or step names do not prove test commands, test selection, assertions, nonzero test counts, or environment coverage. A green test command that skips every environment requires logs or artifacts to distinguish it from executed tests. This probe does not fetch those artifacts or certify that evidence.
 
 The arrays retain API conclusions and identifiers, including unknown or null conclusions. `counts` separates check runs, commit statuses, suites, workflow runs, and jobs. Suite counts describe observed associations, not a claim that an external app has Actions jobs. `observed_check_count` covers the latest checks returned by the commit endpoint.
