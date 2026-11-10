@@ -40,6 +40,8 @@ without an observed collision. FAIL can also contain unknowns. Inspect both
 `findings` and `unknowns`; later errors do not erase earlier observations.
 Duplicate JSON keys, malformed JSON, missing effective project names, unresolved
 volume names, unsupported mounts and anonymous mounts produce unknowns.
+Nonempty or malformed `volumes_from` also produces unknowns because inherited
+mounts are not resolved. An empty list adds no inherited mounts.
 This validates the fields it consumes, not the whole Compose/YAML schema.
 
 - A project collision is hazardous even without a named volume: cleanup can
@@ -51,6 +53,9 @@ This validates the fields it consumes, not the whole Compose/YAML schema.
 - External volumes and bind paths can be shared, but `down -v` does not delete
   those volumes or host directories. They still fail this conservative isolation
   check. Read-only source-code mounts can therefore require human interpretation.
+  Bind paths overlap when either directory contains the other, using normalized
+  POSIX path components. Findings retain both original paths. This lexical check
+  does not resolve symlinks or prove the filesystem entry's type.
 - Image-declared anonymous volumes and current containers are not inventoried.
   No source authenticity, same-daemon/host, simultaneous-state, symlink/path alias,
   remote-driver backing-store isolation, or complete deletion-range guarantee is

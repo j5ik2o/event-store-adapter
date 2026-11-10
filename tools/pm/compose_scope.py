@@ -2,6 +2,7 @@
 """Compare saved Compose effective-config envelopes; never invokes Docker."""
 import argparse
 import json
+import posixpath
 import sys
 from pathlib import Path
 
@@ -75,6 +76,8 @@ def observe(path, role, errors):
         if not isinstance(value, dict):
             error('service must be object: ' + service)
             continue
+        if 'volumes_from' in value and value['volumes_from'] != []:
+            error('unresolved volumes_from storage: ' + service)
         mounts = value.get('volumes', [])
         if not isinstance(mounts, list):
             error('service volumes must be array: ' + service)
@@ -107,10 +110,19 @@ def compare(normal_path, e2e_path):
         for right in e2e['resources']:
             if (left['kind'] == 'bind') != (right['kind'] == 'bind'):
                 continue
-            if left['identity'] == right['identity']:
-                item = {'kind': 'shared_storage', 'identity': left['identity'],
+            identity = left['identity']
+            shared = identity == right['identity']
+            if left['kind'] == 'bind':
+                normal_bind = posixpath.normpath('/' + left['identity'].lstrip('/'))
+                e2e_bind = posixpath.normpath('/' + right['identity'].lstrip('/'))
+                identity = posixpath.commonpath([normal_bind, e2e_bind])
+                shared = identity in [normal_bind, e2e_bind]
+            if shared:
+                item = {'kind': 'shared_storage', 'identity': identity,
                         'normal_kind': left['kind'], 'e2e_kind': right['kind'],
                         'e2e_down_v_removal_candidate': right['down_v_removal_candidate']}
+                if left['kind'] == 'bind':
+                    item.update(normal_identity=left['identity'], e2e_identity=right['identity'])
                 if item not in findings:
                     findings.append(item)
     status = 'FAIL' if findings else 'UNKNOWN' if errors else 'PASS'

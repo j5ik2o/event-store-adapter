@@ -71,6 +71,43 @@ class ComposeScopeTests(unittest.TestCase):
                 self.assertTrue(result['unknowns'])
                 self.assertEqual(result['observations'][0]['project'], 'demo')
 
+    def test_volumes_from_cannot_pass_as_isolated(self):
+        for role in [0, 1]:
+            for inherited in [['container:normal-db'], ['db:ro'], None, False, 'db']:
+                pair = [copy.deepcopy(EXAMPLES['normal']), copy.deepcopy(EXAMPLES['isolated'])]
+                pair[role]['config']['services']['db']['volumes_from'] = inherited
+                result = self.run_cli(*pair, 2)
+                self.assertTrue(any('volumes_from' in x for x in result['unknowns']))
+                self.assertEqual(len(result['observations'][role]['resources']), 1)
+        e2e = copy.deepcopy(EXAMPLES['isolated'])
+        e2e['config']['services']['db']['volumes_from'] = []
+        self.run_cli(EXAMPLES['normal'], e2e, 0)
+        e2e = copy.deepcopy(EXAMPLES['danger'])
+        e2e['config']['services']['db']['volumes_from'] = ['db']
+        result = self.run_cli(EXAMPLES['normal'], e2e, 1)
+        self.assertEqual(len(result['findings']), 2)
+        self.assertTrue(result['unknowns'])
+
+    def test_bind_directory_overlap_uses_path_components(self):
+        for left, right, code in [('/srv/app-data', '/srv/app-data/db', 1),
+                                  ('/srv/app-data/db', '/srv/app-data', 1),
+                                  ('/srv/app-data', '/srv/app-database', 0),
+                                  ('/srv/app-data/a', '/srv/app-data/b', 0),
+                                  ('/srv/app-data/', '/srv/app-data/./db', 1),
+                                  ('/srv/app-data', '//srv/app-data/db', 1),
+                                  ('/srv/app-data/a/..', '/srv/app-data/db', 1),
+                                  ('/', '/srv/app-data', 1)]:
+            pair = [copy.deepcopy(EXAMPLES['normal']), copy.deepcopy(EXAMPLES['isolated'])]
+            for data, source in zip(pair, [left, right]):
+                data['config']['volumes'] = {}
+                data['config']['services']['db']['volumes'] = [
+                    {'type': 'bind', 'source': source, 'target': '/data'}]
+            result = self.run_cli(*pair, code)
+            if code:
+                self.assertEqual(result['findings'][0]['kind'], 'shared_storage')
+                self.assertFalse(result['findings'][0]['e2e_down_v_removal_candidate'])
+                self.assertEqual(result['observations'][1]['down_v_named_candidates'], [])
+
     def test_each_required_field_and_missing_file(self):
         for key in ['argv', 'compose_version', 'config']:
             e2e = copy.deepcopy(EXAMPLES['isolated'])
