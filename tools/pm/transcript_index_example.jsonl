@@ -1,0 +1,5 @@
+{"type":"session_meta","payload":{"id":"synthetic","cwd":"/synthetic/example"}}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"checkpoint120 synthetic control. 新規行動の証拠を確認する。"}]}}
+{"type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"opaque-runtime-arguments"}}
+{"type":"response_item","payload":{"type":"function_call_output","output":"synthetic test run: 3 passed\nNo historical execution is established."}}
+{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Old reviewer conclusion, not new execution evidence."}]}}
