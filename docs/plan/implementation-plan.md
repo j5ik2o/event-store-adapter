@@ -241,7 +241,7 @@ v1.4.0 was placed on 2026-11-10 ([#108](https://github.com/j5ik2o/event-store-ad
 
 It covers 40 value-table cases, 132 operation scenarios (42 common contract, 49 DynamoDB, 7 memory, 7 SQLite, 14 Spanner, 12 Bigtable, and 1 shared scenario common to the three storage backends), and 1 layout case, with 75 rules. All of the 125 rules defined by the seven specification documents have either a case or a reason for being not applicable. The distribution to the six languages is done in [#112](https://github.com/j5ik2o/event-store-adapter/issues/112).
 
-v1.5.0 was placed on 2026-11-12 ([#157](https://github.com/j5ik2o/event-store-adapter/issues/157). The owner agreed on 2026-11-12. The agreed item of the specification is P-63). Without changing the cases of 1.0.0 to 1.4.0, we changed the following.
+v1.5.0 was placed on 2026-11-11 ([#157](https://github.com/j5ik2o/event-store-adapter/issues/157). The owner agreed on 2026-11-11. The agreed item of the specification is P-63). Without changing the cases of 1.0.0 to 1.4.0, we changed the following.
 
 - Added the mandatory rules L-1 (an implementation that provides asynchronous operations provides, for every storage backend, an entry point at which the I/O of the storage backend does not block the caller's execution context) and L-2 (running on a different execution resource does not change the results, the error classification, or the rules of the commit point), which were added to 8.1 of the common contract, to the exclusions in `coverage.json`. Neither appears in the results of the operations, so no cases were added.
 - Made the Schema of `coverage.json` accept the rule number prefix `L`.

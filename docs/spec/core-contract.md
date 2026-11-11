@@ -178,8 +178,8 @@ The following are not defined by the specification.
 
 The expression of asynchrony is left to the language, but the entry points of asynchronous operations follow the two rules below.
 
-- **MUST L-1**: An implementation that provides asynchronous operations MUST provide, for every storage backend, an entry point at which the I/O of the storage backend does not block the caller's execution context (a thread, an event loop, or a worker of the runtime). If the driver of the storage backend has only synchronous I/O, the implementation provides an entry point that runs the operations on a bounded execution resource (a thread pool for blocking work). The implementation MUST NOT drop support for a storage backend on the ground that it blocks (agreed 2026-11-12, P-63).
-- **MUST L-2**: Running an operation on a different execution resource does not change the results of the 4 operations, the error classification, or the rules of the commit point. Cancelling the wait for the result does not undo a committed write (agreed 2026-11-12, P-63).
+- **MUST L-1**: An implementation that provides asynchronous operations MUST provide, for every storage backend, an entry point at which the I/O of the storage backend does not block the caller's execution context (a thread, an event loop, or a worker of the runtime). If the driver of the storage backend has only synchronous I/O, the implementation provides an entry point that runs the operations on a bounded execution resource (a thread pool for blocking work). The implementation MUST NOT drop support for a storage backend on the ground that it blocks (agreed 2026-11-11, P-63).
+- **MUST L-2**: Running an operation on a different execution resource does not change the results of the 4 operations, the error classification, or the rules of the commit point. Cancelling the wait for the result does not undo a committed write (agreed 2026-11-11, P-63).
 
 The following are not defined by L-1 and L-2, and are left to the language.
 
