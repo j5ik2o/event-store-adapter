@@ -143,7 +143,7 @@ def specification_rules(spec_root):
     # 判断番号のうち、DynamoDB の D-n と Bigtable の BT-D6a（封筒の値の表の rules）だけは網羅の対象にする。
     active = (defined | set(re.findall(r"^\| (D-\d+) \|", dynamo, re.M))
               | set(re.findall(r"^\| (BT-D6a) \|", bigtable, re.M)))
-    mentioned = set(re.findall(r"\b(?:K|T|H|W|R|E|S|SP|DY|D|F|MEM|SQ|SPN|BT)-\d+\b|\bBT-D6a\b", texts))
+    mentioned = set(re.findall(r"\b(?:K|T|H|W|R|E|S|SP|DY|D|F|L|MEM|SQ|SPN|BT)-\d+\b|\bBT-D6a\b", texts))
     return active, mentioned, defined
 
 

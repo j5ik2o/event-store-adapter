@@ -8,11 +8,11 @@
     },
     {
       "path": "COVERAGE.md",
-      "sha256": "ee5f13fd8356387ba1b98314b1904e4ca24da6df3dd9f95263e2ef11a9a2db61"
+      "sha256": "ff785f14703c2845a7962f2788f160c89987a5b3d441322610c95264f5bb6447"
     },
     {
       "path": "README.md",
-      "sha256": "af0e139a5f3a4a4fc3a3382e9606d3c57685787a31b1cd0b60efd0fc5bf79dfb"
+      "sha256": "b375f21f850e865b01218daac0d86391e8c462565459f842a3ce65a8c7e4fa98"
     },
     {
       "path": "bigtable/configuration.json",
@@ -28,7 +28,7 @@
     },
     {
       "path": "coverage.json",
-      "sha256": "b06b1de8055110b880dd2bf3c31fd7fb0b2c4de522c0dacfe4a706f214ba6f11"
+      "sha256": "b75ac835f876e65aa33c8e2c7ee358043885824c17dc9f7966ce357d9611e14d"
     },
     {
       "path": "dynamodb/configuration.json",
@@ -88,7 +88,7 @@
     },
     {
       "path": "schema/coverage.schema.json",
-      "sha256": "7295fd6cd0fad3e556ef8c65926efc6873dcf6e0fccef5139297c1afe3e70d80"
+      "sha256": "a6a61fbdf54f4819aa729e526efc5db44953f7b5b97e9f103beba19b1d84bd01"
     },
     {
       "path": "schema/layout.schema.json",

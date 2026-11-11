@@ -171,8 +171,26 @@ The following are not defined by the specification.
 
 - The names of operations, types, and errors, and how errors are returned
 - How to construct envelopes (constructor, builder, factory, and so on)
-- The expression of asynchrony (async/await, Future, callbacks, and so on)
+- The expression of asynchrony (async/await, Future, callbacks, and so on). The entry points of asynchronous operations follow the rules in 8.1
 - The language-level types for integers and time (it suffices to satisfy the ranges of T-3 and T-9)
+
+### 8.1 Entry points of asynchronous operations
+
+The expression of asynchrony is left to the language, but the entry points of asynchronous operations follow the two rules below.
+
+- **MUST L-1**: An implementation that provides asynchronous operations MUST provide, for every storage backend, an entry point at which the I/O of the storage backend does not block the caller's execution context (a thread, an event loop, or a worker of the runtime). If the driver of the storage backend has only synchronous I/O, the implementation provides an entry point that runs the operations on a bounded execution resource (a thread pool for blocking work). The implementation MUST NOT drop support for a storage backend on the ground that it blocks (agreed 2026-11-12, P-63).
+- **MUST L-2**: Running an operation on a different execution resource does not change the results of the 4 operations, the error classification, or the rules of the commit point. Cancelling the wait for the result does not undo a committed write (agreed 2026-11-12, P-63).
+
+The following are not defined by L-1 and L-2, and are left to the language.
+
+- The expression of asynchrony (`CompletableFuture`, `suspend` functions, `Future`, `async fn`, `Promise`, and so on)
+- The details of the meaning of cancellation (whether a cancellation before the run skips the operation, and how a cancellation during the run is handled)
+- How the execution resource is built (the number of workers, the bound of the queue, the type of the rejection when the queue is full or after closing, the shape of `close` and `drain`, and whether the user passes the execution resource or the implementation owns it)
+- Whether to keep an existing entry point (such as `createAsync`, which runs in the caller)
+- The memory storage backend, which has no I/O (not covered by L-1)
+- An implementation that provides only a synchronous API (Go). The caller chooses whether to call it concurrently, so L-1 applies only to an implementation that has an asynchronous entry point
+
+> Note (transition measures): A combination that has no such entry point when L-1 is added is treated as in transition. The combinations and the order of the transition are in [the transition measures for L-1 in the README](README.md#transition-measures-for-l-1). The transition measures are not the end state.
 
 ## 9. Open items
 
