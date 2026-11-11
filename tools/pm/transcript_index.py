@@ -81,11 +81,22 @@ def resolve(args):
                     'session_meta_sha256': hashlib.sha256(first).hexdigest()}
 
 
+KIND_MAX_BYTES = 64
+
+
+def event_kind(value):
+    if not isinstance(value, str):
+        return 'unknown'
+    if len(value.encode('utf-8')) > KIND_MAX_BYTES:
+        return 'type_too_long'
+    return value
+
+
 def excerpt(event):
     payload = event.get('payload', {})
     if not isinstance(payload, dict):
         return 'unknown', '', 'opaque'
-    kind = payload.get('type', event.get('type', 'unknown'))
+    kind = event_kind(payload.get('type', event.get('type')))
     if kind == 'message' and payload.get('role') == 'user':
         content = payload.get('content', [])
         if isinstance(content, list):
@@ -101,7 +112,7 @@ def excerpt(event):
     if kind in ('function_call_output', 'custom_tool_call_output'):
         output = payload.get('output')
         return 'tool_result', output if isinstance(output, str) else '', 'known_text_fields_only' if isinstance(output, str) else 'opaque'
-    return str(kind), '', 'opaque_not_decoded'
+    return kind, '', 'opaque_not_decoded'
 
 
 def reviewed_range(value):

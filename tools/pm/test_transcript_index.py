@@ -117,6 +117,36 @@ class TranscriptCLI(unittest.TestCase):
         self.assertNotIn('SECRET', json.dumps(value))
         self.assertIn('opaque', value['entries'][0]['visibility'])
 
+    def test_kind_reproduces_only_short_string_types(self):
+        long = 'x' * 307
+        cases = [
+            (b'{"type":"response_item","payload":{"type":1e999}}', 'unknown'),
+            (b'{"type":-1e999}', 'unknown'),
+            (b'{"type":"response_item","payload":{"type":{"api_key":"sk-SECRET-VALUE"}}}', 'unknown'),
+            (b'{"type":"response_item","payload":{"type":["SECRET-LIST"]}}', 'unknown'),
+            (b'{"type":"response_item","payload":{"type":true}}', 'unknown'),
+            (b'{"type":false}', 'unknown'),
+            (b'{"type":"response_item","payload":{"type":null}}', 'unknown'),
+            (b'{"type":"response_item","payload":{"type":7}}', 'unknown'),
+            (b'{"type":"response_item","payload":{"type":2.5}}', 'unknown'),
+            (('{"type":"%s"}' % long).encode(), 'type_too_long'),
+            (('{"type":"response_item","payload":{"type":"%s"}}' % long).encode(), 'type_too_long'),
+            (('{"type":"%s"}' % ('y' * 64)).encode(), 'y' * 64),
+            (('{"type":"%s"}' % ('y' * 65)).encode(), 'type_too_long'),
+            (('{"type":"%s"}' % ('界' * 21)).encode(), '界' * 21),
+            (('{"type":"%s"}' % ('界' * 22)).encode(), 'type_too_long'),
+            (b'{"type":"event_msg","payload":{"type":"inter_agent_communication_metadata"}}',
+             'inter_agent_communication_metadata'),
+        ]
+        self.source.write_bytes(b''.join(raw + b'\n' for raw, _ in cases))
+        value = self.run_cli('--end', str(len(cases)), '--byte-budget', '100000',
+                             '--excerpt-budget', '0')
+        self.assertEqual([e['kind'] for e in value['entries']], [kind for _, kind in cases])
+        self.assertEqual(value['excerpt_bytes'], 0)
+        text = json.dumps(value)
+        for leaked in ('inf', 'SECRET', long):
+            self.assertNotIn(leaked, text)
+
     def test_tiny_budget_and_event_without_hash_block(self):
         self.run_cli('--byte-budget', '1', success=False)
         self.run_cli('--excerpt-budget', '-1', success=False)
