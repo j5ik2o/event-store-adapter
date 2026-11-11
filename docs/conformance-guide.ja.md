@@ -6,7 +6,7 @@
 
 この案内は、[`conformance/README.md`](../conformance/README.md) の開発者向けの説明を、`docs/` に置き直したものである。英語版は [conformance-guide.md](conformance-guide.md) である。
 
-- `conformance/README.md` は配布データの一部で、配布物の版（`1.4.0`）に固定している。SHA-256 は `conformance/manifest.json` に載っている。日本語の README はそのまま保持し、変更も翻訳もしない。
+- `conformance/README.md` は配布データの一部で、配布物の版（`1.5.0`）に固定している。SHA-256 は `conformance/manifest.json` に載っている。日本語の README はそのまま保持し、変更も翻訳もしない。
 - 規範は [`docs/spec/`](spec/README.md) の文書である。データは規則を追加しない。
 - [`conformance/COVERAGE.md`](../conformance/COVERAGE.md) は網羅表である。生成した固定データ（`validate.py --update-coverage` で生成する）なので、参照するだけにして、手で編集しない。
 - 下の表の中のパス（`values/`、`scenarios/core/` など）は、`conformance/` からの相対パスである。
@@ -14,7 +14,7 @@
 
 ## 概要
 
-共通契約・DynamoDB プロファイル・メモリプロファイル・SQLite プロファイル・Spanner プロファイル・Bigtable プロファイルの期待値を、言語に依存しない UTF-8 の JSON で配るデータである。データの版は `1.4.0` である。[共通契約](spec/core-contract.md)・[DynamoDB プロファイル](spec/storage/dynamodb.md)・[メモリプロファイル](spec/storage/memory.md)・[SQLite プロファイル](spec/storage/sqlite.md)・[Spanner プロファイル](spec/storage/spanner.md)・[Bigtable プロファイル](spec/storage/bigtable.md)が規範であり、このデータは規則を追加しない。[ハッシュ仕様](spec/storage/hash.md)が収録を求める FNV-1a 64 の4件と、Bigtable の封筒の固定バイナリ形式の値の表（BT-D6a）も含める。値40件、操作場面132件（共通42件・DynamoDB固有49件・メモリ固有7件・SQLite固有7件・Spanner固有14件・Bigtable固有12件・SQLite・Spanner・Bigtable に共通の共有1件）、配置1件の計173件で、75規則を対象とする。7つの仕様の文書が定義する125規則は、すべてがケースか `coverage.json` の対象外の理由を持つ。共通の場面は `memory`・`dynamodb`・`sqlite`・`spanner`・`bigtable` の5つの保存先を対象とする。今回の検証はデータと道具だけを対象とし、言語実装や保存先には実行しない。
+共通契約・DynamoDB プロファイル・メモリプロファイル・SQLite プロファイル・Spanner プロファイル・Bigtable プロファイルの期待値を、言語に依存しない UTF-8 の JSON で配るデータである。データの版は `1.5.0` である。[共通契約](spec/core-contract.md)・[DynamoDB プロファイル](spec/storage/dynamodb.md)・[メモリプロファイル](spec/storage/memory.md)・[SQLite プロファイル](spec/storage/sqlite.md)・[Spanner プロファイル](spec/storage/spanner.md)・[Bigtable プロファイル](spec/storage/bigtable.md)が規範であり、このデータは規則を追加しない。[ハッシュ仕様](spec/storage/hash.md)が収録を求める FNV-1a 64 の4件と、Bigtable の封筒の固定バイナリ形式の値の表（BT-D6a）も含める。値40件、操作場面132件（共通42件・DynamoDB固有49件・メモリ固有7件・SQLite固有7件・Spanner固有14件・Bigtable固有12件・SQLite・Spanner・Bigtable に共通の共有1件）、配置1件の計173件で、75規則を対象とする。7つの仕様の文書が定義する127規則は、すべてがケースか `coverage.json` の対象外の理由を持つ。共通の場面は `memory`・`dynamodb`・`sqlite`・`spanner`・`bigtable` の5つの保存先を対象とする。今回の検証はデータと道具だけを対象とし、言語実装や保存先には実行しない。
 
 ## ファイルと形式
 

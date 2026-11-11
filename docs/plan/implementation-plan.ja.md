@@ -230,7 +230,14 @@ v1.4.0 を 2026-11-10 に置いた（[#108](https://github.com/j5ik2o/event-stor
 
 値の表 40 件、操作の場面 132 件（共通契約 42 件、DynamoDB 49 件、メモリ 7 件、SQLite 7 件、Spanner 14 件、Bigtable 12 件、3 つの保存先に共通の共有 1 件）、配置 1 件で、75 の規則を扱う。7 つの仕様の文書が定義する 125 の規則は、すべてがケースか対象外の理由を持つ。6 言語への配布は [#112](https://github.com/j5ik2o/event-store-adapter/issues/112) で行う。
 
-各リポジトリには `conformance/`（`.gitattributes` で改行の変換を止める）と `tools/conformance/manifest.py` を写し、CI で `manifest.py verify` と、`conformance/manifest.json` の SHA-256（v1.0.0 は `61c26614dbbfba88eebce72cc1d2b0220218839e74dcfb64c19268f7ee2302ce`、v1.1.0 は `0e4dfe44dec0a912ed9d6b28f0634af9fd0dc840895734790e87cf96772e1d50`、v1.2.0 は `432241f3a9e45fc169b3fcdead480b505832af1eed9f4f48357210daccce84eb`、v1.3.0 は `0157c012042afa9a19f0bff509a433a4bd5ddc5b674de864a41bec453c460691`、v1.4.0 は `abc120f80fc300195f61bd831b0139957e73bb45f8de57c0cb0590c44ee567da`）の照合を行う。データを配り直すときは、この値も更新する。
+v1.5.0 を 2026-11-11 に置いた（[#157](https://github.com/j5ik2o/event-store-adapter/issues/157)。オーナーが 2026-11-11 に合意した。仕様の合意事項は P-63）。1.0.0〜1.4.0 のケースは変えずに、次を変えた。
+
+- 共通契約 8.1 に足した必須規則 L-1（非同期の操作を提供する実装は、どの保存先でも、保存先の I/O が呼び出し元の実行文脈を塞がない入口を提供する）と L-2（別の実行資源で実行しても、結果、エラーの分類、確定点の規則は変わらない）を、`coverage.json` の対象外に加えた。どちらも操作の結果に現れないので、ケースは足していない。
+- `coverage.json` の Schema が規則番号の接頭辞 `L` を受け付けるようにした。
+
+値の表 40 件、操作の場面 132 件（共通契約 42 件、DynamoDB 49 件、メモリ 7 件、SQLite 7 件、Spanner 14 件、Bigtable 12 件、3 つの保存先に共通の共有 1 件）、配置 1 件で、75 の規則を扱う。7 つの仕様の文書が定義する 127 の規則は、すべてがケースか対象外の理由を持つ。6 言語への配布は別に行う。
+
+各リポジトリには `conformance/`（`.gitattributes` で改行の変換を止める）と `tools/conformance/manifest.py` を写し、CI で `manifest.py verify` と、`conformance/manifest.json` の SHA-256（v1.0.0 は `61c26614dbbfba88eebce72cc1d2b0220218839e74dcfb64c19268f7ee2302ce`、v1.1.0 は `0e4dfe44dec0a912ed9d6b28f0634af9fd0dc840895734790e87cf96772e1d50`、v1.2.0 は `432241f3a9e45fc169b3fcdead480b505832af1eed9f4f48357210daccce84eb`、v1.3.0 は `0157c012042afa9a19f0bff509a433a4bd5ddc5b674de864a41bec453c460691`、v1.4.0 は `abc120f80fc300195f61bd831b0139957e73bb45f8de57c0cb0590c44ee567da`、v1.5.0 は `a5ec3e5cc659329891eb4f995fbdbd68cde2fe90b9166d4f103bdf7341b263ad`）の照合を行う。データを配り直すときは、この値も更新する。
 
 ## 7. 旧データの移行（IP-D8、2026-10-05 合意）
 
