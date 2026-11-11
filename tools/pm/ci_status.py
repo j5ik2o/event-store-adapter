@@ -156,10 +156,7 @@ def outcome(row, status=False):
     return row.get('conclusion') or 'unknown'
 
 
-def evaluate(probe):
-    c = probe.capture
-    root = 'repos/' + c['repository']
-    head, branch = c['head'], quote(c['branch'], safe='')
+def required_contexts(probe, root, branch):
     base = root + '/branches/' + branch
     branch_info = probe.one(base)
     rules = probe.listing(root + '/rules/branches/' + branch + '?per_page=100')
@@ -201,6 +198,50 @@ def evaluate(probe):
                 probe.errors.append({'path': base, 'reason': 'invalid_required_status_checks'})
         elif kind == 'workflows':
             probe.errors.append({'path': base, 'reason': 'required_workflow_policy_not_evaluated'})
+    return protected, required
+
+
+def check_rows(probe, head, kinds, statuses):
+    for kind, rows in kinds.items():
+        ids = set()
+        for row in rows:
+            lifecycle = row.get('status')
+            nullable_status = lifecycle is None and kind in ('suites', 'runs')
+            if 'status' not in row or (not nullable_status and
+                    (not isinstance(lifecycle, str) or lifecycle not in LIFECYCLE_STATUSES)):
+                probe.errors.append({'reason': 'invalid_lifecycle_status', 'kind': kind, 'id': row.get('id')})
+            identifier = positive_id(row.get('id'))
+            if identifier is None or identifier in ids or row.get('head_sha') != head:
+                probe.errors.append({'reason': 'duplicate_or_foreign_head', 'kind': kind, 'id': row.get('id')})
+            if identifier is not None:
+                ids.add(identifier)
+    for row in kinds['checks']:
+        for field in ['app', 'check_suite']:
+            if reference_id(row, field) is None:
+                probe.errors.append({'reason': 'invalid_check_reference', 'field': field, 'id': row.get('id')})
+    for run in kinds['runs']:
+        if 'check_suite_id' in run and positive_id(run['check_suite_id']) is None:
+            probe.errors.append({'reason': 'invalid_workflow_suite_reference', 'id': run.get('id')})
+    status_ids, status_contexts = set(), set()
+    for row in statuses:
+        identifier, context = positive_id(row.get('id')), row.get('context')
+        if identifier is None or identifier in status_ids:
+            probe.errors.append({'reason': 'invalid_or_duplicate_status_id'})
+        else:
+            status_ids.add(identifier)
+        if not isinstance(context, str) or not context:
+            probe.errors.append({'reason': 'invalid_status_context'})
+        elif context in status_contexts:
+            probe.errors.append({'reason': 'duplicate_status_context', 'context': context})
+        else:
+            status_contexts.add(context)
+
+
+def evaluate(probe):
+    c = probe.capture
+    root = 'repos/' + c['repository']
+    head, branch = c['head'], quote(c['branch'], safe='')
+    protected, required = required_contexts(probe, root, branch)
     config_known = not probe.errors and protected is not None
     checks = probe.listing(root + '/commits/' + head + '/check-runs?per_page=100&filter=latest', 'check_runs')
     statuses = probe.listing(root + '/commits/' + head + '/status?per_page=100', 'statuses')
@@ -219,39 +260,7 @@ def evaluate(probe):
             if positive_id(row.get('run_id')) != run_id or positive_id(row.get('run_attempt')) != attempt:
                 probe.errors.append({'reason': 'foreign_job_run_or_attempt', 'id': row.get('id')})
         jobs.extend(rows)
-    for kind, rows in [('checks', checks), ('suites', suites), ('runs', runs), ('jobs', jobs)]:
-        ids = set()
-        for row in rows:
-            lifecycle = row.get('status')
-            nullable_status = lifecycle is None and kind in ('suites', 'runs')
-            if 'status' not in row or (not nullable_status and
-                    (not isinstance(lifecycle, str) or lifecycle not in LIFECYCLE_STATUSES)):
-                probe.errors.append({'reason': 'invalid_lifecycle_status', 'kind': kind, 'id': row.get('id')})
-            identifier = positive_id(row.get('id'))
-            if identifier is None or identifier in ids or row.get('head_sha') != head:
-                probe.errors.append({'reason': 'duplicate_or_foreign_head', 'kind': kind, 'id': row.get('id')})
-            if identifier is not None:
-                ids.add(identifier)
-    for row in checks:
-        for field in ['app', 'check_suite']:
-            if reference_id(row, field) is None:
-                probe.errors.append({'reason': 'invalid_check_reference', 'field': field, 'id': row.get('id')})
-    for run in runs:
-        if 'check_suite_id' in run and positive_id(run['check_suite_id']) is None:
-            probe.errors.append({'reason': 'invalid_workflow_suite_reference', 'id': run.get('id')})
-    status_ids, status_contexts = set(), set()
-    for row in statuses:
-        identifier, context = positive_id(row.get('id')), row.get('context')
-        if identifier is None or identifier in status_ids:
-            probe.errors.append({'reason': 'invalid_or_duplicate_status_id'})
-        else:
-            status_ids.add(identifier)
-        if not isinstance(context, str) or not context:
-            probe.errors.append({'reason': 'invalid_status_context'})
-        elif context in status_contexts:
-            probe.errors.append({'reason': 'duplicate_status_context', 'context': context})
-        else:
-            status_contexts.add(context)
+    check_rows(probe, head, {'checks': checks, 'suites': suites, 'runs': runs, 'jobs': jobs}, statuses)
     gate = []
     for req in required:
         matches = [x for x in checks if x.get('name') == req['context'] and
