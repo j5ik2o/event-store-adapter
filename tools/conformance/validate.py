@@ -436,6 +436,51 @@ def check_fault(case, fault, where):
         raise ValueError(f"{where}: CancellationReasonsはTransactionCanceledExceptionだけに指定できる")
 
 
+def check_faults(case, events, snapshots, where):
+    for fault in case.get("faults", []):
+        operation = fault["operation"]
+        if operation == 0:
+            if "initialization" not in case:
+                raise ValueError(f"{where}: 初期化の障害に初期化期待値がない")
+        elif type(operation) is not int or not 1 <= operation <= len(case["steps"]):
+            raise ValueError(f"{where}: 障害の操作番号が範囲外: {operation}")
+        op = "initialize" if operation == 0 else case["steps"][operation - 1]["op"]
+        if fault["phase"] not in PHASES[op]:
+            raise ValueError(f"{where}: 障害の段階が対象操作にない: {fault['phase']}")
+        check_fault(case, fault, where)
+        interleaved = fault["details"].get("interleaved_operation")
+        if interleaved:
+            if interleaved.get("op") not in {"persistEvent", "persistEventAndSnapshot"}:
+                raise ValueError(f"{where}: 差し込み操作が書き込みではない")
+            arguments = interleaved["arguments"]
+            if arguments.get("event") not in events:
+                raise ValueError(f"{where}: 差し込みイベントが未定義")
+            if interleaved["op"] == "persistEventAndSnapshot" and arguments.get("snapshot") not in snapshots:
+                raise ValueError(f"{where}: 差し込みスナップショットが未定義")
+
+
+def check_store_backends(case, where):
+    # 期限切れ方式と変更フィードを提供しない保存先（メモリ: MEM-3・MEM-12、SQLite: SQ-11・SQ-20、
+    # Bigtable: BT-13・BT-17、Spanner の変更フィード: SPN-17）
+    store, backends = case["store"], case["backends"]
+    if len(backends) == 1 and ((store["retention_mode"] == "ttl" and backends[0] in NO_TTL_BACKENDS)
+                               or (store.get("change_feed") and backends[0] in NO_CHANGE_FEED_BACKENDS)):
+        category = case.get("initialization", {}).get("expect", {}).get("error", {}).get("category")
+        if category != "configuration":
+            raise ValueError(f"{where}: {backends[0]}が提供しない設定を求める場面は、生成の configuration エラーを期待する")
+    if store.get("change_feed") and not (len(backends) == 1 and backends[0] in NO_CHANGE_FEED_BACKENDS):
+        raise ValueError(f"{where}: change_feed を求める場面は backends が1つの保存先だけでなければならない")
+    for name, only in (("lock_wait_milliseconds", "sqlite"), ("transaction_retry_limit", "spanner"),
+                       ("ttl_grace_days", "spanner"), ("envelope_limit_bytes", "bigtable")):
+        if name in store and backends != [only]:
+            raise ValueError(f"{where}: {name} は backends が {only} だけの場面に置く")
+    if backends == ["spanner"] and store["retention_mode"] == "ttl" and "ttl_grace_days" not in store:
+        raise ValueError(f"{where}: spanner の ttl の場面は store.ttl_grace_days を指定する")
+    for backend in sorted(NO_TTL_BACKENDS):
+        if store["retention_mode"] == "ttl" and backend in backends and backends != [backend]:
+            raise ValueError(f"{where}: {backend} を含む ttl の要求は backends が {backend} だけでなければならない")
+
+
 def check_case(case, data_format, where, active):
     assert_rules(case["rules"], active, where)
     expectations = [case["expect"]] if data_format == "values" else []
@@ -477,49 +522,12 @@ def check_case(case, data_format, where, active):
         check_provider_faults(case, where)
         check_seeded_configuration(case, where)
         check_payload_mutations(case, where)
-        for fault in case.get("faults", []):
-            operation = fault["operation"]
-            if operation == 0:
-                if "initialization" not in case:
-                    raise ValueError(f"{where}: 初期化の障害に初期化期待値がない")
-            elif type(operation) is not int or not 1 <= operation <= len(case["steps"]):
-                raise ValueError(f"{where}: 障害の操作番号が範囲外: {operation}")
-            op = "initialize" if operation == 0 else case["steps"][operation - 1]["op"]
-            if fault["phase"] not in PHASES[op]:
-                raise ValueError(f"{where}: 障害の段階が対象操作にない: {fault['phase']}")
-            check_fault(case, fault, where)
-            interleaved = fault["details"].get("interleaved_operation")
-            if interleaved:
-                if interleaved.get("op") not in {"persistEvent", "persistEventAndSnapshot"}:
-                    raise ValueError(f"{where}: 差し込み操作が書き込みではない")
-                arguments = interleaved["arguments"]
-                if arguments.get("event") not in events:
-                    raise ValueError(f"{where}: 差し込みイベントが未定義")
-                if interleaved["op"] == "persistEventAndSnapshot" and arguments.get("snapshot") not in snapshots:
-                    raise ValueError(f"{where}: 差し込みスナップショットが未定義")
+        check_faults(case, events, snapshots, where)
         if case.get("requires") == ["ttl"] and case["store"]["retention_mode"] != "ttl":
             raise ValueError(f"{where}: TTL 能力条件と保持方式が不一致")
         if "DY-19" in case["rules"] or any("request_scope" in step.get("observe", {}) for step in case["steps"]):
             check_single_aggregate_scope(case, where)
-        # 期限切れ方式と変更フィードを提供しない保存先（メモリ: MEM-3・MEM-12、SQLite: SQ-11・SQ-20、
-        # Bigtable: BT-13・BT-17、Spanner の変更フィード: SPN-17）
-        store, backends = case["store"], case["backends"]
-        if len(backends) == 1 and ((store["retention_mode"] == "ttl" and backends[0] in NO_TTL_BACKENDS)
-                                   or (store.get("change_feed") and backends[0] in NO_CHANGE_FEED_BACKENDS)):
-            category = case.get("initialization", {}).get("expect", {}).get("error", {}).get("category")
-            if category != "configuration":
-                raise ValueError(f"{where}: {backends[0]}が提供しない設定を求める場面は、生成の configuration エラーを期待する")
-        if store.get("change_feed") and not (len(backends) == 1 and backends[0] in NO_CHANGE_FEED_BACKENDS):
-            raise ValueError(f"{where}: change_feed を求める場面は backends が1つの保存先だけでなければならない")
-        for name, only in (("lock_wait_milliseconds", "sqlite"), ("transaction_retry_limit", "spanner"),
-                           ("ttl_grace_days", "spanner"), ("envelope_limit_bytes", "bigtable")):
-            if name in store and backends != [only]:
-                raise ValueError(f"{where}: {name} は backends が {only} だけの場面に置く")
-        if backends == ["spanner"] and store["retention_mode"] == "ttl" and "ttl_grace_days" not in store:
-            raise ValueError(f"{where}: spanner の ttl の場面は store.ttl_grace_days を指定する")
-        for backend in sorted(NO_TTL_BACKENDS):
-            if store["retention_mode"] == "ttl" and backend in backends and backends != [backend]:
-                raise ValueError(f"{where}: {backend} を含む ttl の要求は backends が {backend} だけでなければならない")
+        check_store_backends(case, where)
     elif data_format == "values":
         required_input = {"buildAid": "aggregate_id", "validateOccurredAt": "iso8601",
                           "validateSeqNr": "seq_nr", "fnv1a64": "utf8"}.get(case["operation"])

@@ -61,6 +61,25 @@ def integer(value):
     require(type(value) is int and value >= 0, 'expected nonnegative integer')
 
 
+def nullable_string(value):
+    require(value is None or type(value) is str, 'invalid metadata string')
+
+
+METADATA_FIELDS = {
+    'worktreePath': lambda value: require(value is None or (type(value) is str and Path(value).is_absolute()),
+                                          'invalid metadata path'),
+    'branch': nullable_string,
+    'updatedAt': timestamp,
+    'parentThreadId': nullable_string,
+    'relationshipToParent': lambda value: require(value is None or value in ('fork', 'subagent'),
+                                                  'invalid relationship'),
+    'status': lambda value: require(type(value) is str and value in STATUSES, 'invalid status'),
+    'projectId': string,
+    'pendingRequestCount': integer,
+}
+OPTIONAL_METADATA_FIELDS = {'projectId', 'pendingRequestCount'}
+
+
 def now():
     return datetime.now(timezone.utc).isoformat()
 
@@ -125,25 +144,28 @@ def capture(roots):
     return output
 
 
-def audit(export, observed, ledger):
-    require(type(export) is dict and type(observed) is dict, 'expected objects')
-    require(type(export.get('schema_version')) is int and export['schema_version'] == 1,
-            'schema_version must be integer 1')
-    for obj in (export, observed):
-        string(obj['source'])
-        timestamp(obj['at'])
-    require(type(export.get('includeSubagents')) is bool, 'includeSubagents must be boolean')
-    require(type(export.get('filters')) is dict, 'filters must be an object')
-    require(type(export.get('auditPaths', [])) is list and all(type(p) is str for p in export.get('auditPaths', [])), 'invalid auditPaths')
-    project, parent = string(export['projectId']), string(export['parentThreadId'])
-    pages, metadata = export['pages'], export['metadata']
-    require(type(pages) is list and type(metadata) is list, 'expected page/metadata lists')
-    issues, invalid, threads, metas = [], [], {}, {}
-    thread_observations, metadata_observations, ambiguous = {}, {}, set()
-    if export.get('includeSubagents') is not True:
-        issues.append('includeSubagents_not_true')
-    if export.get('filters') != {}:
-        issues.append('unknown_or_filtered_scope')
+def saved_observations(tree, path, invalid):
+    saved, obs = tree.get('observations'), {}
+    if type(saved) is not dict:
+        invalid.append('invalid_git_observations:' + path)
+        saved = {}
+    for field, value in saved.items():
+        valid = (field in GIT and type(value) is dict and set(value) in
+                 ({'value'}, {'error'}) and type(next(iter(value.values()))) is str)
+        if not valid:
+            invalid.append('invalid_git_observation:' + path + ':' + field)
+            if field in GIT:
+                obs[field] = {'error': 'invalid saved observation'}
+        else:
+            obs[field] = dict(value)
+    origin = obs.get('origin', {}).get('value')
+    if origin is not None and not re.fullmatch(r'github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', origin):
+        obs['origin'] = {'error': 'unrecognized saved origin identity'}
+    return obs
+
+
+def read_pages(pages, project, issues, invalid, ambiguous):
+    threads, thread_observations = {}, {}
     cursor, totals, cursors = None, [], set()
     for i, page in enumerate(pages):
         try:
@@ -191,6 +213,11 @@ def audit(export, observed, ledger):
             invalid.append('invalid_page:' + str(i))
     if not pages or cursor is not None or not totals or len(set(totals)) != 1 or totals[0] != len(threads):
         issues.append('incomplete_pagination_or_total')
+    return threads, thread_observations
+
+
+def read_metadata(metadata, project, threads, issues, invalid, ambiguous):
+    metas, metadata_observations = {}, {}
     for m in metadata:
         try:
             tid = string(m['threadId'])
@@ -205,27 +232,12 @@ def audit(export, observed, ledger):
                 issues.append('metadata_failure:' + tid)
                 ambiguous.add(tid)
                 continue
-            for key in ('worktreePath', 'branch', 'updatedAt', 'parentThreadId',
-                        'relationshipToParent', 'status', 'projectId', 'pendingRequestCount'):
-                if key in ('projectId', 'pendingRequestCount') and key not in m:
+            for key, check in METADATA_FIELDS.items():
+                if key in OPTIONAL_METADATA_FIELDS and key not in m:
                     continue
                 try:
                     value = m[key]
-                    if key == 'worktreePath':
-                        require(value is None or (type(value) is str and Path(value).is_absolute()),
-                                'invalid metadata path')
-                    elif key in ('branch', 'parentThreadId'):
-                        require(value is None or type(value) is str, 'invalid metadata string')
-                    elif key == 'updatedAt':
-                        timestamp(value)
-                    elif key == 'pendingRequestCount':
-                        integer(value)
-                    elif key == 'projectId':
-                        string(value)
-                    elif key == 'status':
-                        require(type(value) is str and value in STATUSES, 'invalid status')
-                    else:
-                        require(value is None or value in ('fork', 'subagent'), 'invalid relationship')
+                    check(value)
                     record[key] = value
                 except (ValueError, KeyError, TypeError):
                     invalid.append('invalid_metadata_field:' + tid + ':' + key)
@@ -240,28 +252,10 @@ def audit(export, observed, ledger):
                 ambiguous.add(tid)
         except (ValueError, KeyError, TypeError):
             invalid.append('invalid_metadata')
-    if parent not in threads:
-        issues.append('parent_missing')
-    children = {parent}
-    for tid, t in threads.items():
-        seen, p = {tid}, t['parentThreadId']
-        while p is not None:
-            if p in seen:
-                issues.append('graph_cycle:' + tid)
-                break
-            seen.add(p)
-            if p not in threads:
-                issues.append('missing_parent:' + tid)
-                break
-            if p == parent:
-                children.add(tid)
-            p = threads[p]['parentThreadId']
-    require(type(ledger) is dict and type(ledger.get('repositories')) is list
-            and bool(ledger['repositories']), 'invalid ledger')
-    names = [string(r['repo']) for r in ledger['repositories']]
-    require(len(set(names)) == len(names) and all(re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', n)
-            for n in names), 'invalid or duplicate ledger repository')
-    expected = set(names)
+    return metas, metadata_observations
+
+
+def read_repositories(observed, export, thread_observations, metadata_observations, issues, invalid):
     require(type(observed['repositories']) is list, 'invalid git repositories')
     repos, trees = set(), []
     for repo in observed['repositories']:
@@ -299,22 +293,7 @@ def audit(export, observed, ledger):
                 except (ValueError, TypeError):
                     invalid.append('invalid_git_tree_timestamp:' + path)
                     at = None
-                saved, obs = tree.get('observations'), {}
-                if type(saved) is not dict:
-                    invalid.append('invalid_git_observations:' + path)
-                    saved = {}
-                for field, value in saved.items():
-                    valid = (field in GIT and type(value) is dict and set(value) in
-                             ({'value'}, {'error'}) and type(next(iter(value.values()))) is str)
-                    if not valid:
-                        invalid.append('invalid_git_observation:' + path + ':' + field)
-                        if field in GIT:
-                            obs[field] = {'error': 'invalid saved observation'}
-                    else:
-                        obs[field] = dict(value)
-                origin = obs.get('origin', {}).get('value')
-                if origin is not None and not re.fullmatch(r'github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', origin):
-                    obs['origin'] = {'error': 'unrecognized saved origin identity'}
+                obs = saved_observations(tree, path, invalid)
                 values = {k: v.get('value') for k, v in obs.items()}
                 if any('value' not in obs.get(k, {}) for k in GIT if k != 'worktrees'):
                     issues.append('git_observation_unknown:' + path)
@@ -345,11 +324,10 @@ def audit(export, observed, ledger):
                     cleanup='retain', cleanup_conditions=conditions))
         except (ValueError, KeyError, TypeError, StopIteration):
             invalid.append('invalid_git_repository')
-    issues.extend('missing_repository:' + r for r in sorted(expected - repos))
-    issues.extend('unexpected_repository:' + r for r in sorted(repos - expected))
-    for tid, t in threads.items():
-        t['list_observations'] = thread_observations[tid]
-        t['metadata_observations'] = metadata_observations.get(tid, [])
+    return repos, trees
+
+
+def compare_children(children, threads, metas, trees, issues, ambiguous):
     for tid in sorted(children & threads.keys()):
         m = metas.get(tid, {})
         t = threads[tid]
@@ -374,6 +352,58 @@ def audit(export, observed, ledger):
         if tid in ambiguous:
             t['git_comparison'] = 'ambiguous'
         t['stale'] = 'not_assessed_single_observation'
+
+
+def audit(export, observed, ledger):
+    require(type(export) is dict and type(observed) is dict, 'expected objects')
+    require(type(export.get('schema_version')) is int and export['schema_version'] == 1,
+            'schema_version must be integer 1')
+    for obj in (export, observed):
+        string(obj['source'])
+        timestamp(obj['at'])
+    require(type(export.get('includeSubagents')) is bool, 'includeSubagents must be boolean')
+    require(type(export.get('filters')) is dict, 'filters must be an object')
+    require(type(export.get('auditPaths', [])) is list and all(type(p) is str for p in export.get('auditPaths', [])), 'invalid auditPaths')
+    project, parent = string(export['projectId']), string(export['parentThreadId'])
+    pages, metadata = export['pages'], export['metadata']
+    require(type(pages) is list and type(metadata) is list, 'expected page/metadata lists')
+    issues, invalid, ambiguous = [], [], set()
+    if export.get('includeSubagents') is not True:
+        issues.append('includeSubagents_not_true')
+    if export.get('filters') != {}:
+        issues.append('unknown_or_filtered_scope')
+    threads, thread_observations = read_pages(pages, project, issues, invalid, ambiguous)
+    metas, metadata_observations = read_metadata(metadata, project, threads, issues, invalid, ambiguous)
+    if parent not in threads:
+        issues.append('parent_missing')
+    children = {parent}
+    for tid, t in threads.items():
+        seen, p = {tid}, t['parentThreadId']
+        while p is not None:
+            if p in seen:
+                issues.append('graph_cycle:' + tid)
+                break
+            seen.add(p)
+            if p not in threads:
+                issues.append('missing_parent:' + tid)
+                break
+            if p == parent:
+                children.add(tid)
+            p = threads[p]['parentThreadId']
+    require(type(ledger) is dict and type(ledger.get('repositories')) is list
+            and bool(ledger['repositories']), 'invalid ledger')
+    names = [string(r['repo']) for r in ledger['repositories']]
+    require(len(set(names)) == len(names) and all(re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', n)
+            for n in names), 'invalid or duplicate ledger repository')
+    expected = set(names)
+    repos, trees = read_repositories(observed, export, thread_observations, metadata_observations,
+                                     issues, invalid)
+    issues.extend('missing_repository:' + r for r in sorted(expected - repos))
+    issues.extend('unexpected_repository:' + r for r in sorted(repos - expected))
+    for tid, t in threads.items():
+        t['list_observations'] = thread_observations[tid]
+        t['metadata_observations'] = metadata_observations.get(tid, [])
+    compare_children(children, threads, metas, trees, issues, ambiguous)
     result = dict(schema_version=1, status='invalid_input' if invalid else 'review_required' if issues else 'consistent',
                   sources=[{'source': x['source'], 'at': x['at']} for x in (export, observed)],
                   projectId=project, parentThreadId=parent, issues=issues, errors=invalid,

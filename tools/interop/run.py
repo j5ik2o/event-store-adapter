@@ -17,7 +17,7 @@ import uuid
 import boto3
 from botocore.config import Config
 from build import external_output
-from query_observer import QueryObserver, item_bytes
+from query_observer import QueryObserver
 
 HERE = Path(__file__).resolve().parent
 PINS = json.loads((HERE / "snapshots.json").read_text())

@@ -2,7 +2,7 @@
 name = "dynamodb-emulator-spike"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["boto3==1.42.70"]
+dependencies = ["boto3==1.42.70", "botocore==1.42.97"]
 
 [tool.uv]
 package = false

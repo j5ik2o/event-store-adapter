@@ -28,6 +28,18 @@ def item_bytes(item):
     return size
 
 
+def fitting_item_count(sizes):
+    used, count = 0, 0
+    for size in sizes:
+        if used + size > PAGE_BYTES:
+            break
+        used += size
+        count += 1
+    if count == 0:
+        raise ValueError("no real item fits in one page")
+    return count
+
+
 class QueryObserver:
     def __init__(self, upstream, journal, output):
         self.upstream = upstream
@@ -55,36 +67,8 @@ class QueryObserver:
                     raw = response.read()
                     status = response.status
                     content_type = response.headers.get("Content-Type", "application/x-amz-json-1.0")
-                outgoing = raw
                 operation = self.headers.get("X-Amz-Target", "").split(".")[-1]
-                if operation == "Query" and status == 200:
-                    sent, received = json.loads(body), json.loads(raw)
-                    if sent.get("TableName") == observer.journal:
-                        items = received.get("Items", [])
-                        sizes = [item_bytes(item) for item in items]
-                        effective = received
-                        corrected = False
-                        if observer.correct_oversized_pages and sum(sizes) > PAGE_BYTES:
-                            used, count = 0, 0
-                            for size in sizes:
-                                if used + size > PAGE_BYTES:
-                                    break
-                                used += size
-                                count += 1
-                            if count == 0:
-                                raise ValueError("no real item fits in one page")
-                            last = items[count - 1]
-                            effective = dict(received, Items=items[:count], Count=count, ScannedCount=count,
-                                             LastEvaluatedKey={"aid": last["aid"], "seq_nr": last["seq_nr"]})
-                            outgoing = json.dumps(effective, separators=(",", ":")).encode()
-                            corrected = True
-                        row = {"context": dict(observer.context), "request": sent, "raw_response": received,
-                               "effective_response": effective, "actual_item_bytes": sizes,
-                               "raw_bytes": sum(sizes), "corrected_from_actual_prefix": corrected}
-                        with observer.lock:
-                            observer.records.append(row)
-                            with observer.output.open("a") as stream:
-                                stream.write(json.dumps(row, ensure_ascii=False) + "\n")
+                outgoing = observer.observe_query(body, raw) if operation == "Query" and status == 200 else raw
                 self.send_response(status)
                 self.send_header("Content-Type", content_type)
                 self.send_header("Content-Length", str(len(outgoing)))
@@ -98,6 +82,29 @@ class QueryObserver:
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
         self.endpoint = f"http://127.0.0.1:{self.server.server_port}"
+
+    def observe_query(self, body, raw):
+        sent, received = json.loads(body), json.loads(raw)
+        if sent.get("TableName") != self.journal:
+            return raw
+        items = received.get("Items", [])
+        sizes = [item_bytes(item) for item in items]
+        effective, outgoing, corrected = received, raw, False
+        if self.correct_oversized_pages and sum(sizes) > PAGE_BYTES:
+            count = fitting_item_count(sizes)
+            last = items[count - 1]
+            effective = dict(received, Items=items[:count], Count=count, ScannedCount=count,
+                             LastEvaluatedKey={"aid": last["aid"], "seq_nr": last["seq_nr"]})
+            outgoing = json.dumps(effective, separators=(",", ":")).encode()
+            corrected = True
+        row = {"context": dict(self.context), "request": sent, "raw_response": received,
+               "effective_response": effective, "actual_item_bytes": sizes,
+               "raw_bytes": sum(sizes), "corrected_from_actual_prefix": corrected}
+        with self.lock:
+            self.records.append(row)
+            with self.output.open("a") as stream:
+                stream.write(json.dumps(row, ensure_ascii=False) + "\n")
+        return outgoing
 
     def close(self):
         self.server.shutdown()
