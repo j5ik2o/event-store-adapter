@@ -145,8 +145,7 @@ L-1 を足した時点（2026-11-11）で入口のない組み合わせは、移
 
 | 組み合わせ | 状態 | 移行の順序 |
 |:--|:--|:--|
-| Java の SQLite、Spanner | 入口あり（[java#824](https://github.com/j5ik2o/event-store-adapter-java/pull/824)、[java#830](https://github.com/j5ik2o/event-store-adapter-java/pull/830)） | 済み |
-| Java の Bigtable | 作業中（[java#832](https://github.com/j5ik2o/event-store-adapter-java/pull/832)） | 1 |
+| Java の SQLite、Spanner、Bigtable | 入口が main に入った（[java#824](https://github.com/j5ik2o/event-store-adapter-java/pull/824)、[java#830](https://github.com/j5ik2o/event-store-adapter-java/pull/830)、[java#832](https://github.com/j5ik2o/event-store-adapter-java/pull/832)）。`createOffloaded` を含む公開版はまだない（最新の公開版は 2026-11-10 の v5.2.0） | 1（main では済み） |
 | Kotlin・Scala の SQLite、Spanner、Bigtable | Java の `createOffloaded` を含む正式版の公開待ち（公開にはオーナーの承認が要る） | 2（Java の公開のあと） |
 | Rust の SQLite | 新しい作業（[rs#356](https://github.com/j5ik2o/event-store-adapter-rs/issues/356)） | 1 と並行 |
 | TypeScript の SQLite | 新しい作業（[js#1134](https://github.com/j5ik2o/event-store-adapter-js/issues/1134)） | 1 と並行 |

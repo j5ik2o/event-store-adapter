@@ -147,8 +147,7 @@ A combination that has no entry point of L-1 when L-1 is added (2026-11-11) is t
 
 | Combination | Status | Order of the transition |
 |:--|:--|:--|
-| Java's SQLite and Spanner | Entry point available ([java#824](https://github.com/j5ik2o/event-store-adapter-java/pull/824), [java#830](https://github.com/j5ik2o/event-store-adapter-java/pull/830)) | Done |
-| Java's Bigtable | In progress ([java#832](https://github.com/j5ik2o/event-store-adapter-java/pull/832)) | 1 |
+| Java's SQLite, Spanner, and Bigtable | The entry point is in main ([java#824](https://github.com/j5ik2o/event-store-adapter-java/pull/824), [java#830](https://github.com/j5ik2o/event-store-adapter-java/pull/830), [java#832](https://github.com/j5ik2o/event-store-adapter-java/pull/832)). No released version includes `createOffloaded` yet (the latest release is v5.2.0 of 2026-11-10) | 1 (done in main) |
 | Kotlin's and Scala's SQLite, Spanner, and Bigtable | Waiting for the release of the Java version that includes `createOffloaded` (the release needs the owner's approval) | 2 (after the Java release) |
 | Rust's SQLite | New work ([rs#356](https://github.com/j5ik2o/event-store-adapter-rs/issues/356)) | In parallel with 1 |
 | TypeScript's SQLite | New work ([js#1134](https://github.com/j5ik2o/event-store-adapter-js/issues/1134)) | In parallel with 1 |
