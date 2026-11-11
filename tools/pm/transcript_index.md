@@ -52,11 +52,11 @@ Retrieve every source event required by the review and record that acquisition s
 
 ## Handle blocked inputs
 
-The CLI validates every line, including lines outside the requested range. It rejects malformed JSON, duplicate keys at any depth, nonfinite numbers, non-object events, partial final lines, empty sources, reversed or out-of-source ranges, and source changes during acquisition. Missing budgets or identity arguments also block use. A budget too small for the manifest fails rather than silently dropping its required fields.
+The CLI validates every line, including lines outside the requested range. It rejects malformed JSON, duplicate keys at any depth, non-JSON `NaN` and `Infinity` tokens, non-object events, partial final lines, empty sources, reversed or out-of-source ranges, and source changes during acquisition. Numeric overflow in opaque payloads is not interpreted as a decoded value. Missing budgets or identity arguments also block use. A budget too small for the manifest fails rather than silently dropping its required fields.
 
 A live append changes the whole-source hash. Capture a new bounded index instead of reusing an old hash. The CLI reads the source and database without modifying either. It parses one event at a time, so a giant event can require memory proportional to that event. It hashes the whole source and validates all events, even for a narrow range. It does not support compressed rollouts, decrypt runtime fields, redact secrets, scan other projects, or automatically integrate with reviewers.
 
-The checkpoint120 report described an approximately 9MB unlimited export. This fixture and the tests reproduce that size problem synthetically. They do not recover the original checkpoint120 source, old reviewer input, or historical execution. Independent review remains the PM's responsibility.
+The checkpoint120 report described an approximately 9MB unlimited export. This fixture and the tests reproduce that size problem synthetically. Independent review confirmed that the current parent rollout and a surviving export are accessible, and that the export matches its saved manifest hash. Exact agreement with the rollout snapshot at checkpoint120 remains unproven because its original byte count and hash were not recorded. Current indexing and synthetic examples do not establish that historical equivalence or review completeness. See the [independent evidence and remaining acceptance gap](https://github.com/j5ik2o/event-store-adapter/pull/154#issuecomment-6781885739).
 
 ## Run behavior tests
 
