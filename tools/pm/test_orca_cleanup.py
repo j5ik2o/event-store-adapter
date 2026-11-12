@@ -52,6 +52,9 @@ class WorkerTest(unittest.TestCase):
     def test_settled_exited_releases(self):
         self.assertEqual(decide_worker(worker(liveness='exited', activity=None), 'term_me')[0], 'release')
 
+    def test_coordinator_terminal_keeps_when_run_from_another_terminal(self):
+        self.assertEqual(decide_worker(worker(terminal='term_coord'), 'term_patrol', set(), {'term_coord'})[0], 'keep')
+
     def test_own_terminal_keeps(self):
         self.assertEqual(decide_worker(worker(terminal='term_me'), 'term_me')[0], 'keep')
 
@@ -139,7 +142,7 @@ class JudgementTest(unittest.TestCase):
         self.assertTrue(needs_judgement(action, reason))
 
     def test_plain_keeps_do_not_need_judgement(self):
-        self.assertFalse(needs_judgement('keep', 'coordinator 自身のターミナル'))
+        self.assertFalse(needs_judgement('keep', 'coordinator のターミナル'))
         self.assertTrue(needs_judgement('list', '並列 worktree'))
 
 

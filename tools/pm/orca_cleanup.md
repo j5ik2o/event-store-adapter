@@ -2,7 +2,7 @@
 
 `orca_cleanup.py` takes stock of the Orca worktrees of the ESA repositories (the umbrella repository, the six `event-store-adapter-*` repositories and the seven `cqrs-es-example*` repositories) and of the workers of the coordinator's Runs. It removes only what passes mechanical safety checks. Anything it cannot check is kept and listed with the reason. A person's "probably fine" is never a condition.
 
-The ESA coordinator runs it each time the patrol automation ("ESA 見回り", every 30 minutes) wakes it:
+The patrol automation ("ESA 見回り", every 30 minutes) runs it on Spark through `esa_patrol.py` (see `esa_patrol.md`). It can also be run directly:
 
 ```sh
 python3 tools/pm/orca_cleanup.py --run <run_id> --automation <patrol_automation_id> --apply

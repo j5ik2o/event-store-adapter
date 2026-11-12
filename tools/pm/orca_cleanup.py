@@ -85,9 +85,9 @@ def decide_worktree(facts):
     return 'remove', '3 条件を満たす（PR マージ済み・クリーン・未 push なし）'
 
 
-def decide_worker(worker, own_terminal, released_terminals=frozenset()):
+def decide_worker(worker, own_terminal, released_terminals=frozenset(), protected=frozenset()):
     """worker: worker-show result merged with worker-list. Returns (action, reason)."""
-    if worker.get('terminal') == own_terminal:
+    if worker.get('terminal') == own_terminal or worker.get('terminal') in protected:
         return 'keep', 'coordinator 自身のターミナル'
     if not worker.get('terminal'):
         return 'skip', 'ターミナルを持たない'
@@ -304,7 +304,7 @@ def needs_judgement(action, reason):
     return action == 'list' or '停滞' in reason or reason.startswith('確認不能')
 
 
-def inventory(runs, apply, automations=()):
+def inventory(runs, apply, automations=(), coordinator_terminals=()):
     own_terminal = os.environ.get('ORCA_TERMINAL_HANDLE')
     seat = os.environ.get('ORCA_WORKTREE_ID')
     result = {'at': datetime.now(timezone.utc).isoformat(), 'apply': apply,
@@ -334,7 +334,7 @@ def inventory(runs, apply, automations=()):
             observed = dict(observation(worker), observed_from=before, observed_to=now())
             # Recorded before any skip, so that a worker seen live and later exited is measured.
             result['observations'].append(dict(observed, dispatch=item['dispatchId']))
-            action, reason = decide_worker(worker, own_terminal, released)
+            action, reason = decide_worker(worker, own_terminal, released, set(coordinator_terminals))
             if action == 'release' and not own_terminal:
                 action, reason = 'keep', '確認不能: 自分のターミナルを確かめられない'
             if action == 'skip':
@@ -369,8 +369,10 @@ def inventory(runs, apply, automations=()):
             terminal_worktrees.add(term.get('worktreeId'))
             if term.get('worktreeId') not in esa_ids:
                 continue
-            if own_terminal and term['handle'] == own_terminal:
-                reason = 'coordinator 自身のターミナル'
+            if term['handle'] in coordinator_terminals:
+                reason = 'coordinator のターミナル'
+            elif own_terminal and term['handle'] == own_terminal:
+                reason = 'この棚卸しを実行しているターミナル'
             elif term.get('ptyId') in patrol:
                 reason = '見回り automation のセッション（reuse-session で常設）'
             else:
@@ -409,6 +411,8 @@ def main(argv=None):
     parser.add_argument('--run', action='append', default=[], help='coordinator の Run ID（複数可）')
     parser.add_argument('--automation', action='append', default=[],
                         help='見回り automation の ID（そのセッションのターミナルを常設として扱う）')
+    parser.add_argument('--coordinator-terminal', action='append', default=[],
+                        help='coordinator のターミナル（別のターミナルから実行するときに守る）')
     parser.add_argument('--apply', action='store_true', help='条件を満たすものを実際に消す')
     parser.add_argument('--log', type=Path, default=LOG)
     parser.add_argument('--exit-report', action='store_true',
@@ -421,7 +425,7 @@ def main(argv=None):
         return 0
     if not args.run:
         parser.error('--run is required unless --exit-report is given')
-    result = inventory(args.run, args.apply, args.automation)
+    result = inventory(args.run, args.apply, args.automation, args.coordinator_terminal)
     result['summary'] = summary(result)
     args.log.parent.mkdir(parents=True, exist_ok=True)
     with args.log.open('a', encoding='utf-8') as log:
