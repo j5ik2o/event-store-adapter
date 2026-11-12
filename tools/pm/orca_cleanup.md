@@ -12,9 +12,9 @@ Without `--apply` it changes nothing and prints what it would do. Each run appen
 
 ## Worktree removal: all three facts must be observed
 
-1. The branch has a merged PR (`gh pr list --head <branch> --state merged`).
+1. A merged PR of the branch contains HEAD (`gh pr list --head <branch> --state merged`): its head is HEAD, or HEAD is an ancestor of its head, fetched from `pull/<number>/head` and checked against the head GitHub reports. This covers a branch updated on GitHub after the tree last pushed. An older PR of the same branch name does not count.
 2. The worktree is clean: `git status --porcelain --untracked-files=all` prints nothing.
-3. No commit is unpushed: `git rev-list HEAD --not --remotes` prints nothing, or HEAD is the head commit of a merged PR, which keeps the commits on GitHub after the remote branch is deleted.
+3. No commit is unpushed: `git rev-list HEAD --not --remotes` prints nothing, or a merged PR contains HEAD as in 1, which keeps the commits on GitHub after the remote branch is deleted.
 
 These are always kept:
 
