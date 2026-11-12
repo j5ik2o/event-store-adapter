@@ -15,13 +15,20 @@ import orca_cleanup
 from orca_cleanup import PROJECTS, run, run_json
 
 STATE = Path.home() / '.local' / 'state' / 'esa-orca-cleanup' / 'patrol.json'
+LIMIT = 1000
+
+
+def complete(items):
+    """gh returns at most --limit items; a full page may be cut off, so it counts as unread."""
+    return None if items is None or len(items) >= LIMIT else items
 
 
 def open_prs():
     """{'repo#number': title} for every open PR, or None when a repository cannot be read."""
     found = {}
     for repo in PROJECTS.values():
-        prs = run_json(['gh', 'pr', 'list', '-R', repo, '--state', 'open', '--json', 'number,title', '--limit', '100'])
+        prs = complete(run_json(['gh', 'pr', 'list', '-R', repo, '--state', 'open', '--json', 'number,title',
+                                 '--limit', str(LIMIT)]))
         if prs is None:
             return None
         for pr in prs:
@@ -33,8 +40,8 @@ def new_issues(since):
     """['repo#number title'] for issues opened at or after since, or None on failure."""
     found = []
     for repo in PROJECTS.values():
-        issues = run_json(['gh', 'issue', 'list', '-R', repo, '--state', 'all', '--search', f'created:>={since}',
-                           '--json', 'number,title', '--limit', '100'])
+        issues = complete(run_json(['gh', 'issue', 'list', '-R', repo, '--state', 'all', '--search',
+                                    f'created:>={since}', '--json', 'number,title', '--limit', str(LIMIT)]))
         if issues is None:
             return None
         found += [f"{repo}#{issue['number']} {issue['title']}" for issue in issues]
@@ -90,18 +97,26 @@ def main(argv=None):
     with args.log.open('a', encoding='utf-8') as log:
         log.write(json.dumps(dict(cleanup, patrol={'prs': prs, 'issues': issues, 'report': lines}),
                              ensure_ascii=False) + '\n')
+    # A report that could not be sent is kept and sent again with the next one: the cleanup it
+    # describes cannot be observed a second time.
+    outgoing = state.get('unsent', []) + lines
     sent = None
-    if lines and not args.no_send:
-        body = '【ESA】見回り（Spark）\n' + '\n'.join(lines)
+    if outgoing and not args.no_send:
+        body = '【ESA】見回り（Spark）\n' + '\n'.join(outgoing)
         sent = run(['orca', 'orchestration', 'send', '--to', f'run:{args.run}', '--type', 'status',
                     '--subject', '【ESA】見回りの報告', '--body', body, '--json'])
-    # Keep the previous PR set when this one could not be read, so a change is not lost.
-    new_state = {'last_at': started, 'prs': prs if prs is not None else state.get('prs')}
-    if not args.no_send and (not lines or sent is not None):
+    if not args.no_send:
+        new_state = {
+            # The search start advances only when the issues were read, so none are skipped.
+            'last_at': started if issues is not None else state.get('last_at'),
+            # Keep the previous PR set when this one could not be read, so a change is not lost.
+            'prs': prs if prs is not None else state.get('prs'),
+            'unsent': [] if sent is not None else outgoing,
+        }
         args.state.parent.mkdir(parents=True, exist_ok=True)
         args.state.write_text(json.dumps(new_state, ensure_ascii=False))
-    print(json.dumps({'report': lines, 'sent': sent is not None, 'summary': cleanup['summary']}, ensure_ascii=False))
-    return 0 if args.no_send or not lines or sent is not None else 1
+    print(json.dumps({'report': outgoing, 'sent': sent is not None, 'summary': cleanup['summary']}, ensure_ascii=False))
+    return 0 if args.no_send or not outgoing or sent is not None else 1
 
 
 if __name__ == '__main__':

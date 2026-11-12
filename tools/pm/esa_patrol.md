@@ -13,7 +13,7 @@ Each run:
 2. Lists the open PRs of the ESA repositories and the issues opened since the previous patrol.
 3. Writes to the Run inbox only when something was removed or released, something needs a judgement, an error occurred, a PR was opened or closed, or an issue was opened. A quiet patrol sends nothing.
 
-The previous PR set and time are kept in `~/.local/state/esa-orca-cleanup/patrol.json`. The first run only records them. When the report cannot be sent, the state is not advanced, so the next patrol reports the same changes again. The cleanup log line also carries the patrol's PRs, issues and report.
+The previous PR set, the search start for issues and any unsent report are kept in `~/.local/state/esa-orca-cleanup/patrol.json`. The first run only records them. A list that cannot be read, or that fills a whole page of 1000, counts as unread: the previous PR set and search start are kept, so no change is skipped. A report that cannot be sent is kept and sent with the next one, because the cleanup it describes cannot be observed again. The cleanup log line also carries the patrol's PRs, issues and report.
 
 `--no-send` prints the report without sending it or advancing the state.
 
