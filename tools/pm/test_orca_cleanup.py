@@ -84,9 +84,11 @@ class ObserveTest(unittest.TestCase):
     WT = {'id': 'r::/w', 'path': '/w', 'projectId': 'github:j5ik2o/event-store-adapter-java',
           'branch': 'refs/heads/topic', 'isMainWorktree': False, 'comment': ''}
 
-    def observe(self, prs, unpushed='', ancestor=False, fetched='new'):
+    def observe(self, prs, unpushed='', ancestor=False, fetched='new', fetch_ok=True):
         def fake_run(args, cwd=None):
             command = args[3]
+            if command == 'fetch' and not fetch_ok:
+                return None
             if command == 'rev-parse':
                 return 'abc\n' if args[4] == 'HEAD' else fetched + '\n'
             if command == 'merge-base':
@@ -124,7 +126,20 @@ class ObserveTest(unittest.TestCase):
 
     def test_a_pull_ref_that_is_not_the_reported_head_keeps(self):
         facts = self.observe([{'number': 3, 'headRefOid': 'new'}], unpushed='abc\n', ancestor=True, fetched='other')
-        self.assertFalse(facts['merged_pr'])
+        self.assertIsNone(facts['merged_pr'])
+        self.assertTrue(decide_worktree(facts)[1].startswith('確認不能'))
+
+    def test_a_failed_pull_ref_fetch_is_unverified_not_unmerged(self):
+        facts = self.observe([{'number': 3, 'headRefOid': 'new'}], unpushed='abc\n', ancestor=True, fetch_ok=False)
+        self.assertIsNone(facts['merged_pr'])
+        self.assertEqual(decide_worktree(facts)[0], 'keep')
+        self.assertTrue(decide_worktree(facts)[1].startswith('確認不能'))
+
+    def test_one_containing_pr_proves_merge_even_if_another_cannot_be_fetched(self):
+        prs = [{'number': 3, 'headRefOid': 'new'}, {'number': 4, 'headRefOid': 'abc'}]
+        facts = self.observe(prs, unpushed='abc\n', fetch_ok=False)
+        self.assertTrue(facts['merged_pr'])
+        self.assertEqual(decide_worktree(facts)[0], 'remove')
 
     def test_unpushed_commits_without_a_matching_pr_keep(self):
         facts = self.observe([], unpushed='abc\n')
