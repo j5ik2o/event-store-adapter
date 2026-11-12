@@ -234,6 +234,72 @@ def complete_list(args, key):
     return data['result'][key]
 
 
+def observation(worker):
+    """What the owner asked to measure: waitingOnHuman and liveness of settled workers, with
+    the completion time, so that --exit-report can bound the time until the process exits."""
+    observed = {key: worker.get(key) for key in ('state', 'liveness', 'activity', 'waitingOnHuman', 'agent')}
+    if worker.get('state') in SETTLED:
+        full = run_json(['orca', 'orchestration', 'worker-show', '--dispatch', worker['dispatchId'], '--json', '--full'])
+        observed['completedAt'] = ((full or {}).get('result', {}).get('dispatch') or {}).get('completedAt')
+    return observed
+
+
+def now():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def parse_time(value):
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
+    except ValueError:
+        return None
+    # Orca prints some timestamps without a zone; they are UTC.
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def exit_report(lines):
+    """Per settled worker: the waitingOnHuman values seen while it was live, and bounds on the
+    seconds from completion to exit (last live observation, first exited observation)."""
+    workers = {}
+    for line in lines:
+        for observed in json.loads(line).get('observations', []):
+            if observed.get('state') not in SETTLED:
+                continue
+            row = workers.setdefault(observed['dispatch'], {
+                'dispatch': observed['dispatch'], 'agent': observed.get('agent'), 'completedAt': None,
+                'waitingOnHuman_while_live': {}, 'last_live_at': None, 'first_exited_at': None})
+            row['completedAt'] = row['completedAt'] or observed.get('completedAt')
+            if observed.get('liveness') == 'live':
+                value = str(observed.get('waitingOnHuman'))
+                row['waitingOnHuman_while_live'][value] = row['waitingOnHuman_while_live'].get(value, 0) + 1
+                if row['first_exited_at'] is None:
+                    # It was still live when the observation started.
+                    row['last_live_at'] = observed['observed_from']
+            elif observed.get('liveness') == 'exited' and row['first_exited_at'] is None:
+                # It had exited by the time the observation ended.
+                row['first_exited_at'] = observed['observed_to']
+    rows = []
+    for row in workers.values():
+        done = parse_time(row['completedAt'])
+        live, exited = parse_time(row['last_live_at']), parse_time(row['first_exited_at'])
+        row['exit_after_seconds_min'] = round((live - done).total_seconds()) if done and live else 0 if done and exited else None
+        row['exit_after_seconds_max'] = round((exited - done).total_seconds()) if done and exited else None
+        rows.append(row)
+    values = {}
+    for row in rows:
+        for value, count in row['waitingOnHuman_while_live'].items():
+            values[value] = values.get(value, 0) + count
+    # Only a worker seen live after completion and later exited bounds the time to exit; one
+    # first seen already exited only says it exited before the first observation.
+    return {'workers': rows, 'waitingOnHuman_while_live': values,
+            'measured': sum(1 for row in rows if row['last_live_at'] and row['first_exited_at']),
+            'still_live': sum(1 for row in rows if row['last_live_at'] and not row['first_exited_at']),
+            'exited_before_first_observation': sum(1 for row in rows if row['first_exited_at'] and not row['last_live_at']),
+            'liveness_not_observed': sum(1 for row in rows if not row['first_exited_at'] and not row['last_live_at'])}
+
+
 def needs_judgement(action, reason):
     return action == 'list' or '停滞' in reason or reason.startswith('確認不能')
 
@@ -242,7 +308,7 @@ def inventory(runs, apply, automations=()):
     own_terminal = os.environ.get('ORCA_TERMINAL_HANDLE')
     seat = os.environ.get('ORCA_WORKTREE_ID')
     result = {'at': datetime.now(timezone.utc).isoformat(), 'apply': apply,
-              'workers': [], 'worktrees': [], 'terminals': [], 'errors': []}
+              'workers': [], 'worktrees': [], 'terminals': [], 'observations': [], 'errors': []}
     if not own_terminal:
         result['errors'].append('ORCA_TERMINAL_HANDLE がない: 自分のターミナルを守れないので何も解放しない')
 
@@ -262,8 +328,12 @@ def inventory(runs, apply, automations=()):
             continue
         released = {w.get('terminal') for w in listed if w.get('terminalState') == 'released'}
         for item in listed:
+            before = now()
             shown = run_json(['orca', 'orchestration', 'worker-show', '--dispatch', item['dispatchId'], '--json'])
             worker = dict(item, **(shown['result'] if shown else {}))
+            observed = dict(observation(worker), observed_from=before, observed_to=now())
+            # Recorded before any skip, so that a worker seen live and later exited is measured.
+            result['observations'].append(dict(observed, dispatch=item['dispatchId']))
             action, reason = decide_worker(worker, own_terminal, released)
             if action == 'release' and not own_terminal:
                 action, reason = 'keep', '確認不能: 自分のターミナルを確かめられない'
@@ -336,12 +406,21 @@ def summary(result):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument('--run', action='append', required=True, help='coordinator の Run ID（複数可）')
+    parser.add_argument('--run', action='append', default=[], help='coordinator の Run ID（複数可）')
     parser.add_argument('--automation', action='append', default=[],
                         help='見回り automation の ID（そのセッションのターミナルを常設として扱う）')
     parser.add_argument('--apply', action='store_true', help='条件を満たすものを実際に消す')
     parser.add_argument('--log', type=Path, default=LOG)
+    parser.add_argument('--exit-report', action='store_true',
+                        help='棚卸しをせず、log から完了後のワーカーの waitingOnHuman と exited までの時間を集計する')
     args = parser.parse_args(argv)
+    if args.exit_report:
+        with args.log.open(encoding='utf-8') as log:
+            json.dump(exit_report(log), sys.stdout, ensure_ascii=False, indent=1)
+        sys.stdout.write('\n')
+        return 0
+    if not args.run:
+        parser.error('--run is required unless --exit-report is given')
     result = inventory(args.run, args.apply, args.automation)
     result['summary'] = summary(result)
     args.log.parent.mkdir(parents=True, exist_ok=True)
