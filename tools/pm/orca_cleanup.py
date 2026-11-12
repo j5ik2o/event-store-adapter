@@ -144,10 +144,13 @@ def contains(path, pr, head):
 def merged_into(path, prs, head):
     """True when some merged PR contains HEAD; None when none does but one could not be
     observed; False when every one was observed and none contains it."""
-    results = [contains(path, pr, head) for pr in prs]
-    if True in results:
-        return True
-    return None if None in results else False
+    unobserved = False
+    for pr in prs:
+        found = contains(path, pr, head)
+        if found:
+            return True
+        unobserved = unobserved or found is None
+    return None if unobserved else False
 
 
 def observe_worktree(wt, seat, attached):
