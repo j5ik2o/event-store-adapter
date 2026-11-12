@@ -70,7 +70,7 @@ def decide_worktree(facts):
     if facts['seat']:
         return 'keep', 'coordinator の座'
     if facts['attached'] is not False:
-        return 'keep', '生きているワーカーかターミナルがある' if facts['attached'] else '付いているターミナルを確かめられない'
+        return 'keep', '生きているワーカーかターミナルがある' if facts['attached'] else '確認不能: 付いているワーカーかターミナルを確かめられない'
     missing = [name for name in ('merged_pr', 'clean', 'unpushed_free') if facts[name] is None]
     if missing:
         return 'keep', '確認不能: ' + ', '.join(missing)
@@ -122,9 +122,8 @@ def branch_name(ref):
 
 
 def merged_prs(repo, branch):
-    data = run_json(['gh', 'pr', 'list', '-R', repo, '--head', branch, '--state', 'merged',
-                     '--json', 'number,headRefOid', '--limit', '20'])
-    return data
+    return run_json(['gh', 'pr', 'list', '-R', repo, '--head', branch, '--state', 'merged',
+                     '--json', 'number,headRefOid', '--limit', '100'])
 
 
 def observe_worktree(wt, seat, attached):
@@ -145,25 +144,37 @@ def observe_worktree(wt, seat, attached):
         return facts, detail
     head = run(['git', '-C', path, 'rev-parse', 'HEAD'])
     head = head.strip() if head else None
+    detail['head'] = head
     status = run(['git', '-C', path, 'status', '--porcelain', '--untracked-files=all'])
     if status is not None:
         facts['clean'] = status.strip() == ''
     prs = merged_prs(repo, branch) if branch else None
+    # Only a merged PR whose head is this HEAD proves this tree's work was merged; an older
+    # PR of the same branch name does not.
+    merged_here = None if prs is None or head is None else any(p['headRefOid'] == head for p in prs)
+    facts['merged_pr'] = merged_here
     if prs is not None:
-        facts['merged_pr'] = len(prs) > 0
         detail['prs'] = [p['number'] for p in prs]
     unpushed = run(['git', '-C', path, 'rev-list', 'HEAD', '--not', '--remotes'])
     if unpushed is not None:
-        if unpushed.strip() == '':
-            facts['unpushed_free'] = True
-        elif head and prs is not None:
-            # A deleted remote branch drops its refs; a merged PR whose head is this HEAD still
-            # holds every commit on GitHub.
-            facts['unpushed_free'] = any(p['headRefOid'] == head for p in prs)
-        else:
-            facts['unpushed_free'] = None if head is None else False
-    detail['head'] = head
+        # A deleted remote branch drops its refs, but the merged PR whose head is HEAD keeps
+        # every commit on GitHub.
+        facts['unpushed_free'] = unpushed.strip() == '' or bool(merged_here)
     return facts, detail
+
+
+def all_workers(run_id):
+    """Every worker of one Run, across pages. None when any page cannot be read."""
+    workers, cursor = [], None
+    while True:
+        args = ['orca', 'orchestration', 'worker-list', '--run', run_id, '--limit', '100', '--json']
+        page = run_json(args + (['--cursor', cursor] if cursor else []))
+        if page is None:
+            return None
+        workers += page['result']['workers']
+        cursor = page['result'].get('nextCursor')
+        if not cursor:
+            return workers
 
 
 def other_live_workspaces(own_runs):
@@ -177,10 +188,10 @@ def other_live_workspaces(own_runs):
         for item in page['result']['runs']:
             if item['id'] in own_runs:
                 continue
-            workers = run_json(['orca', 'orchestration', 'worker-list', '--run', item['id'], '--json'])
+            workers = all_workers(item['id'])
             if workers is None:
                 return None
-            for worker in workers['result']['workers']:
+            for worker in workers:
                 if worker.get('liveness') != 'exited' or worker.get('terminalState') == 'retained':
                     held.add(worker.get('workspace'))
         cursor = page['result'].get('nextCursor')
@@ -201,24 +212,47 @@ def automation_ptys(automations):
     return ptys
 
 
+def complete_list(args, key):
+    """Items of an Orca list, or None when it failed or was truncated."""
+    data = run_json(args)
+    if data is None or data['result'].get('truncated'):
+        return None
+    return data['result'][key]
+
+
+def needs_judgement(action, reason):
+    return action == 'list' or '停滞' in reason or reason.startswith('確認不能')
+
+
 def inventory(runs, apply, automations=()):
     own_terminal = os.environ.get('ORCA_TERMINAL_HANDLE')
     seat = os.environ.get('ORCA_WORKTREE_ID')
     result = {'at': datetime.now(timezone.utc).isoformat(), 'apply': apply,
               'workers': [], 'worktrees': [], 'terminals': [], 'errors': []}
+    if not own_terminal:
+        result['errors'].append('ORCA_TERMINAL_HANDLE がない: 自分のターミナルを守れないので何も解放しない')
 
+    worktrees = complete_list(['orca', 'worktree', 'list', '--json', '--limit', '1000'], 'worktrees')
+    if worktrees is None:
+        result['errors'].append('worktree list に失敗したか打ち切られた')
+        return result
+    esa_ids = {wt['id'] for wt in worktrees if wt.get('projectId') in PROJECTS}
+
+    attachment_known = True
     live_workspaces = set()
     for run_id in runs:
-        listed = run_json(['orca', 'orchestration', 'worker-list', '--run', run_id, '--json'])
+        listed = all_workers(run_id)
         if listed is None:
             result['errors'].append(f'worker-list に失敗: {run_id}')
+            attachment_known = False
             continue
-        released = {w.get('terminal') for w in listed['result']['workers']
-                    if w.get('terminalState') == 'released'}
-        for item in listed['result']['workers']:
+        released = {w.get('terminal') for w in listed if w.get('terminalState') == 'released'}
+        for item in listed:
             shown = run_json(['orca', 'orchestration', 'worker-show', '--dispatch', item['dispatchId'], '--json'])
             worker = dict(item, **(shown['result'] if shown else {}))
             action, reason = decide_worker(worker, own_terminal, released)
+            if action == 'release' and not own_terminal:
+                action, reason = 'keep', '確認不能: 自分のターミナルを確かめられない'
             if action == 'skip':
                 continue
             entry = {'dispatch': item['dispatchId'], 'task': item.get('taskId'),
@@ -227,72 +261,63 @@ def inventory(runs, apply, automations=()):
                 done = run_json(['orca', 'orchestration', 'worker-release', '--dispatch', item['dispatchId'], '--json'])
                 entry['done'] = bool(done and done.get('ok'))
                 if not entry['done']:
-                    entry['action'], entry['reason'] = 'keep', 'release に失敗'
+                    entry['action'], entry['reason'] = 'keep', '確認不能: release に失敗'
             if entry['action'] != 'release' or not apply:
                 live_workspaces.add(item.get('workspace'))
+            entry['needs_judgement'] = needs_judgement(entry['action'], entry['reason'])
             result['workers'].append(entry)
 
     others = other_live_workspaces(set(runs))
     if others is None:
         result['errors'].append('ほかの Run のワーカーを確かめられない')
+        attachment_known = False
     else:
         live_workspaces |= others
 
-    terminals = run_json(['orca', 'terminal', 'list', '--json', '--limit', '500'])
-    terminal_worktrees = None
+    terminals = complete_list(['orca', 'terminal', 'list', '--json', '--limit', '1000'], 'terminals')
+    terminal_worktrees = set()
     if terminals is None:
-        result['errors'].append('terminal list に失敗')
+        result['errors'].append('terminal list に失敗したか打ち切られた')
+        attachment_known = False
     else:
-        terminal_worktrees = set()
         patrol = automation_ptys(automations) or set()
-        for term in terminals['result']['terminals']:
-            path = term.get('worktreePath') or ''
-            if not any(f'/{name}' in path for name in REPOS):
-                continue
+        for term in terminals:
             terminal_worktrees.add(term.get('worktreeId'))
-            if term['handle'] == own_terminal:
+            if term.get('worktreeId') not in esa_ids:
+                continue
+            if own_terminal and term['handle'] == own_terminal:
                 reason = 'coordinator 自身のターミナル'
             elif term.get('ptyId') in patrol:
                 reason = '見回り automation のセッション（reuse-session で常設）'
             else:
                 reason = '確認不能: 対応するタスクが分からない（Run のワーカーではない）'
             result['terminals'].append({'handle': term['handle'], 'title': term.get('title'),
-                                        'worktree': term.get('worktreeId'), 'action': 'keep', 'reason': reason})
+                                        'worktree': term.get('worktreeId'), 'action': 'keep', 'reason': reason,
+                                        'needs_judgement': needs_judgement('keep', reason)})
 
-    worktrees = run_json(['orca', 'worktree', 'list', '--json', '--limit', '500'])
-    if worktrees is None:
-        result['errors'].append('worktree list に失敗')
-        return result
-    for wt in worktrees['result']['worktrees']:
-        if wt.get('projectId') not in PROJECTS:
+    for wt in worktrees:
+        if wt['id'] not in esa_ids or wt.get('isMainWorktree'):
             continue
-        if terminal_worktrees is None or others is None:
-            attached = None
-        else:
-            attached = wt['id'] in live_workspaces or wt['id'] in terminal_worktrees
+        attached = (wt['id'] in live_workspaces or wt['id'] in terminal_worktrees) if attachment_known else None
         facts, detail = observe_worktree(wt, seat, attached)
         action, reason = decide_worktree(facts)
-        if facts['main']:
-            continue
         entry = dict(detail, id=wt['id'], action=action, reason=reason, facts=facts)
         if action == 'remove' and apply:
             done = run_json(['orca', 'worktree', 'rm', '--worktree', f"id:{wt['id']}", '--delete-branch', '--json'])
             entry['done'] = bool(done and done.get('ok'))
             if not entry['done']:
-                entry['action'], entry['reason'] = 'keep', 'worktree rm に失敗'
+                entry['action'], entry['reason'] = 'keep', '確認不能: worktree rm に失敗'
+        entry['needs_judgement'] = needs_judgement(entry['action'], entry['reason'])
         result['worktrees'].append(entry)
     return result
 
 
 def summary(result):
-    removed = [w for w in result['worktrees'] if w['action'] == 'remove' and w.get('done')]
-    released = [w for w in result['workers'] if w['action'] == 'release' and w.get('done')]
-    pending = ([w for w in result['worktrees'] if w['action'] == 'list']
-               + [w for w in result['workers'] if '停滞' in w['reason']]
-               + [w for w in result['worktrees'] + result['workers'] + result['terminals']
-                  if w['reason'].startswith('確認不能') and 'coordinator' not in w['reason']])
-    return {'removed_worktrees': len(removed), 'released_workers': len(released),
-            'needs_judgement': len(pending), 'errors': len(result['errors'])}
+    entries = result['worktrees'] + result['workers'] + result['terminals']
+    return {'removed_worktrees': sum(1 for w in result['worktrees'] if w['action'] == 'remove' and w.get('done')),
+            'released_workers': sum(1 for w in result['workers'] if w['action'] == 'release' and w.get('done')),
+            'needs_judgement': sum(1 for w in entries if w.get('needs_judgement')),
+            'errors': len(result['errors'])}
 
 
 def main(argv=None):

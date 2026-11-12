@@ -1,6 +1,7 @@
 import unittest
 
-from orca_cleanup import decide_worker, decide_worktree
+import orca_cleanup
+from orca_cleanup import decide_worker, decide_worktree, needs_judgement, observe_worktree
 
 SAFE = {'main': False, 'seat': False, 'parallel': False, 'attached': False,
         'merged_pr': True, 'clean': True, 'unpushed_free': True}
@@ -73,6 +74,51 @@ class WorkerTest(unittest.TestCase):
 
     def test_already_released_is_skipped(self):
         self.assertEqual(decide_worker(worker(terminalState='released', liveness='exited'), 'term_me')[0], 'skip')
+
+
+class ObserveTest(unittest.TestCase):
+    WT = {'id': 'r::/w', 'path': '/w', 'projectId': 'github:j5ik2o/event-store-adapter-java',
+          'branch': 'refs/heads/topic', 'isMainWorktree': False, 'comment': ''}
+
+    def observe(self, prs, unpushed=''):
+        outputs = {'rev-parse': 'abc\n', 'status': '', 'rev-list': unpushed}
+        original_run, original_json = orca_cleanup.run, orca_cleanup.run_json
+        orca_cleanup.run = lambda args, cwd=None: outputs[args[3]]
+        orca_cleanup.run_json = lambda args: prs
+        try:
+            return observe_worktree(self.WT, 'seat', False)[0]
+        finally:
+            orca_cleanup.run, orca_cleanup.run_json = original_run, original_json
+
+    def test_an_older_merged_pr_of_the_same_branch_is_not_this_head(self):
+        facts = self.observe([{'number': 1, 'headRefOid': 'old'}])
+        self.assertFalse(facts['merged_pr'])
+        self.assertEqual(decide_worktree(facts)[0], 'keep')
+
+    def test_the_merged_pr_of_this_head_proves_merge_and_push(self):
+        facts = self.observe([{'number': 2, 'headRefOid': 'abc'}], unpushed='abc\n')
+        self.assertTrue(facts['merged_pr'])
+        self.assertTrue(facts['unpushed_free'])
+        self.assertEqual(decide_worktree(facts)[0], 'remove')
+
+    def test_unpushed_commits_without_a_matching_pr_keep(self):
+        facts = self.observe([], unpushed='abc\n')
+        self.assertFalse(facts['unpushed_free'])
+
+    def test_unreadable_pr_list_is_unverified(self):
+        facts = self.observe(None)
+        self.assertIsNone(facts['merged_pr'])
+        self.assertTrue(decide_worktree(facts)[1].startswith('確認不能'))
+
+
+class JudgementTest(unittest.TestCase):
+    def test_unverified_attachment_needs_judgement(self):
+        action, reason = decide_worktree(facts(attached=None))
+        self.assertTrue(needs_judgement(action, reason))
+
+    def test_plain_keeps_do_not_need_judgement(self):
+        self.assertFalse(needs_judgement('keep', 'coordinator 自身のターミナル'))
+        self.assertTrue(needs_judgement('list', '並列 worktree'))
 
 
 if __name__ == '__main__':
