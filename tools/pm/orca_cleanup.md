@@ -5,7 +5,7 @@
 The ESA coordinator runs it each time the patrol automation ("ESA 見回り", every 30 minutes) wakes it:
 
 ```sh
-python3 tools/pm/orca_cleanup.py --run <run_id> --apply
+python3 tools/pm/orca_cleanup.py --run <run_id> --automation <patrol_automation_id> --apply
 ```
 
 Without `--apply` it changes nothing and prints what it would do. Each run appends one JSON line to `~/.local/state/esa-orca-cleanup/log.jsonl` with what was removed, what was kept and why. It exits 1 when part of the inventory could not be observed. In that case the affected items are kept.
@@ -26,7 +26,7 @@ Removal uses `orca worktree rm --worktree id:<id> --delete-branch`. Child worktr
 
 ## Worker terminal release
 
-A worker of the given Runs is released (`orca orchestration worker-release`) only when its task is settled and either its process has exited, or `worker-show` reports it `live` and `idle` with `waitingOnHuman` `no`. A worker waiting for input is kept and reported as stalled. `waitingOnHuman: unknown` or `liveness: unverifiable` counts as not observable, so the worker is kept. The coordinator's own terminal is never touched. Terminals in ESA worktrees that do not belong to a worker of these Runs are listed but never closed, because their task cannot be identified.
+A worker of the given Runs is released (`orca orchestration worker-release`) only when its task is settled and either its process has exited, or `worker-show` reports it `live` and `idle` with `waitingOnHuman` `no`. A worker waiting for input is kept and reported as stalled. `waitingOnHuman: unknown` or `liveness: unverifiable` counts as not observable, so the worker is kept. The coordinator's own terminal is never touched. The session terminal of each `--automation` (matched by the PTY in its run history) is the patrol itself and stays. Other terminals in ESA worktrees that do not belong to a worker of these Runs are listed but never closed, because their task cannot be identified.
 
 ## Report
 

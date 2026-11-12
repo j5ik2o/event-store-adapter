@@ -188,7 +188,20 @@ def other_live_workspaces(own_runs):
             return held
 
 
-def inventory(runs, apply):
+def automation_ptys(automations):
+    """PTYs of the patrol automations' sessions. None when they cannot be observed."""
+    ptys = set()
+    for automation in automations:
+        runs = run_json(['orca', 'automations', 'runs', '--id', automation, '--limit', '20', '--json'])
+        if runs is None:
+            return None
+        for item in runs['result'].get('runs', []):
+            if item.get('terminalPtyId'):
+                ptys.add(item['terminalPtyId'])
+    return ptys
+
+
+def inventory(runs, apply, automations=()):
     own_terminal = os.environ.get('ORCA_TERMINAL_HANDLE')
     seat = os.environ.get('ORCA_WORKTREE_ID')
     result = {'at': datetime.now(timezone.utc).isoformat(), 'apply': apply,
@@ -231,13 +244,18 @@ def inventory(runs, apply):
         result['errors'].append('terminal list に失敗')
     else:
         terminal_worktrees = set()
+        patrol = automation_ptys(automations) or set()
         for term in terminals['result']['terminals']:
             path = term.get('worktreePath') or ''
             if not any(f'/{name}' in path for name in REPOS):
                 continue
             terminal_worktrees.add(term.get('worktreeId'))
-            reason = ('coordinator 自身のターミナル' if term['handle'] == own_terminal
-                      else '確認不能: 対応するタスクが分からない（Run のワーカーではない）')
+            if term['handle'] == own_terminal:
+                reason = 'coordinator 自身のターミナル'
+            elif term.get('ptyId') in patrol:
+                reason = '見回り automation のセッション（reuse-session で常設）'
+            else:
+                reason = '確認不能: 対応するタスクが分からない（Run のワーカーではない）'
             result['terminals'].append({'handle': term['handle'], 'title': term.get('title'),
                                         'worktree': term.get('worktreeId'), 'action': 'keep', 'reason': reason})
 
@@ -280,10 +298,12 @@ def summary(result):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--run', action='append', required=True, help='coordinator の Run ID（複数可）')
+    parser.add_argument('--automation', action='append', default=[],
+                        help='見回り automation の ID（そのセッションのターミナルを常設として扱う）')
     parser.add_argument('--apply', action='store_true', help='条件を満たすものを実際に消す')
     parser.add_argument('--log', type=Path, default=LOG)
     args = parser.parse_args(argv)
-    result = inventory(args.run, args.apply)
+    result = inventory(args.run, args.apply, args.automation)
     result['summary'] = summary(result)
     args.log.parent.mkdir(parents=True, exist_ok=True)
     with args.log.open('a', encoding='utf-8') as log:
