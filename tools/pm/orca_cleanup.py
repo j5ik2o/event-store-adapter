@@ -126,6 +126,20 @@ def merged_prs(repo, branch):
                      '--json', 'number,headRefOid', '--limit', '100'])
 
 
+def contains(path, pr, head):
+    """True when the merged PR's head is HEAD, or HEAD is its ancestor (the branch was
+    updated on GitHub after this tree last pushed). The PR head is fetched from its pull ref
+    and must be the commit GitHub reports."""
+    if pr['headRefOid'] == head:
+        return True
+    if run(['git', '-C', path, 'fetch', '-q', 'origin', f"pull/{pr['number']}/head"]) is None:
+        return False
+    fetched = run(['git', '-C', path, 'rev-parse', 'FETCH_HEAD'])
+    if not fetched or fetched.strip() != pr['headRefOid']:
+        return False
+    return run(['git', '-C', path, 'merge-base', '--is-ancestor', head, pr['headRefOid']]) is not None
+
+
 def observe_worktree(wt, seat, attached):
     path = wt['path']
     repo = PROJECTS[wt['projectId']]
@@ -149,9 +163,9 @@ def observe_worktree(wt, seat, attached):
     if status is not None:
         facts['clean'] = status.strip() == ''
     prs = merged_prs(repo, branch) if branch else None
-    # Only a merged PR whose head is this HEAD proves this tree's work was merged; an older
+    # Only a merged PR that contains this HEAD proves this tree's work was merged; an older
     # PR of the same branch name does not.
-    merged_here = None if prs is None or head is None else any(p['headRefOid'] == head for p in prs)
+    merged_here = None if prs is None or head is None else any(contains(path, p, head) for p in prs)
     facts['merged_pr'] = merged_here
     if prs is not None:
         detail['prs'] = [p['number'] for p in prs]

@@ -80,10 +80,16 @@ class ObserveTest(unittest.TestCase):
     WT = {'id': 'r::/w', 'path': '/w', 'projectId': 'github:j5ik2o/event-store-adapter-java',
           'branch': 'refs/heads/topic', 'isMainWorktree': False, 'comment': ''}
 
-    def observe(self, prs, unpushed=''):
-        outputs = {'rev-parse': 'abc\n', 'status': '', 'rev-list': unpushed}
+    def observe(self, prs, unpushed='', ancestor=False, fetched='new'):
+        def fake_run(args, cwd=None):
+            command = args[3]
+            if command == 'rev-parse':
+                return 'abc\n' if args[4] == 'HEAD' else fetched + '\n'
+            if command == 'merge-base':
+                return '' if ancestor else None
+            return {'status': '', 'rev-list': unpushed, 'fetch': ''}[command]
         original_run, original_json = orca_cleanup.run, orca_cleanup.run_json
-        orca_cleanup.run = lambda args, cwd=None: outputs[args[3]]
+        orca_cleanup.run = fake_run
         orca_cleanup.run_json = lambda args: prs
         try:
             return observe_worktree(self.WT, 'seat', False)[0]
@@ -100,6 +106,21 @@ class ObserveTest(unittest.TestCase):
         self.assertTrue(facts['merged_pr'])
         self.assertTrue(facts['unpushed_free'])
         self.assertEqual(decide_worktree(facts)[0], 'remove')
+
+    def test_a_head_contained_in_the_updated_merged_pr_proves_merge_and_push(self):
+        facts = self.observe([{'number': 3, 'headRefOid': 'new'}], unpushed='abc\n', ancestor=True)
+        self.assertTrue(facts['merged_pr'])
+        self.assertTrue(facts['unpushed_free'])
+        self.assertEqual(decide_worktree(facts)[0], 'remove')
+
+    def test_a_head_beyond_the_merged_pr_keeps(self):
+        facts = self.observe([{'number': 3, 'headRefOid': 'new'}], unpushed='abc\n', ancestor=False)
+        self.assertFalse(facts['merged_pr'])
+        self.assertEqual(decide_worktree(facts)[0], 'keep')
+
+    def test_a_pull_ref_that_is_not_the_reported_head_keeps(self):
+        facts = self.observe([{'number': 3, 'headRefOid': 'new'}], unpushed='abc\n', ancestor=True, fetched='other')
+        self.assertFalse(facts['merged_pr'])
 
     def test_unpushed_commits_without_a_matching_pr_keep(self):
         facts = self.observe([], unpushed='abc\n')
