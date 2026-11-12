@@ -144,10 +144,10 @@ class JudgementTest(unittest.TestCase):
 
 
 class ExitReportTest(unittest.TestCase):
-    def line(self, at, liveness, waiting='unknown'):
-        return json.dumps({'at': at, 'workers': [{'dispatch': 'ctx_1', 'observed': {
-            'state': 'succeeded', 'liveness': liveness, 'waitingOnHuman': waiting, 'agent': 'claude',
-            'completedAt': '2026-11-12T10:00:00Z'}}]})
+    def line(self, at, liveness, waiting='unknown', completed='2026-11-12T10:00:00Z', dispatch='ctx_1'):
+        return json.dumps({'at': 'inventory start', 'observations': [{
+            'dispatch': dispatch, 'state': 'succeeded', 'liveness': liveness, 'waitingOnHuman': waiting,
+            'agent': 'claude', 'completedAt': completed, 'observed_from': at, 'observed_to': at}]})
 
     def test_bounds_the_time_from_completion_to_exit(self):
         report = exit_report([self.line('2026-11-12T10:30:00+00:00', 'live'),
@@ -156,16 +156,33 @@ class ExitReportTest(unittest.TestCase):
         row = report['workers'][0]
         self.assertEqual((row['exit_after_seconds_min'], row['exit_after_seconds_max']), (1800, 3600))
         self.assertEqual(report['waitingOnHuman_while_live'], {'unknown': 1})
-        self.assertEqual((report['exited'], report['still_live']), (1, 0))
+        self.assertEqual((report['measured'], report['still_live']), (1, 0))
 
     def test_a_worker_still_live_has_no_upper_bound(self):
         row = exit_report([self.line('2026-11-12T10:30:00+00:00', 'live', 'no')])['workers'][0]
         self.assertIsNone(row['exit_after_seconds_max'])
         self.assertEqual(row['waitingOnHuman_while_live'], {'no': 1})
 
+    def test_a_missing_completion_time_is_filled_by_a_later_observation(self):
+        report = exit_report([self.line('2026-11-12T10:30:00+00:00', 'live', completed=None),
+                              self.line('2026-11-12T11:00:00+00:00', 'exited')])
+        self.assertEqual(report['workers'][0]['exit_after_seconds_max'], 3600)
+
+    def test_bounds_use_the_observation_window_not_the_inventory_start(self):
+        line = json.dumps({'at': '2026-11-12T10:00:00+00:00', 'observations': [{
+            'dispatch': 'ctx_3', 'state': 'succeeded', 'liveness': 'exited', 'completedAt': '2026-11-12T10:00:00Z',
+            'observed_from': '2026-11-12T10:01:00+00:00', 'observed_to': '2026-11-12T10:05:00+00:00'}]})
+        self.assertEqual(exit_report([line])['workers'][0]['exit_after_seconds_max'], 300)
+
+    def test_workers_never_seen_live_are_counted_apart(self):
+        report = exit_report([self.line('2026-11-12T11:00:00+00:00', 'exited', dispatch='ctx_4'),
+                              self.line('2026-11-12T11:00:00+00:00', 'unverifiable', dispatch='ctx_5')])
+        self.assertEqual((report['measured'], report['exited_before_first_observation'],
+                          report['liveness_not_observed']), (0, 1, 1))
+
     def test_unsettled_workers_are_not_counted(self):
-        line = json.dumps({'at': '2026-11-12T10:30:00+00:00', 'workers': [
-            {'dispatch': 'ctx_2', 'observed': {'state': 'ready', 'liveness': 'live'}}]})
+        line = json.dumps({'at': '2026-11-12T10:30:00+00:00', 'observations': [
+            {'dispatch': 'ctx_2', 'state': 'ready', 'liveness': 'live'}]})
         self.assertEqual(exit_report([line])['workers'], [])
 
 

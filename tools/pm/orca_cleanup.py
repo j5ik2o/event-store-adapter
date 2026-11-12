@@ -244,6 +244,10 @@ def observation(worker):
     return observed
 
 
+def now():
+    return datetime.now(timezone.utc).isoformat()
+
+
 def parse_time(value):
     if not value:
         return None
@@ -260,23 +264,22 @@ def exit_report(lines):
     seconds from completion to exit (last live observation, first exited observation)."""
     workers = {}
     for line in lines:
-        record = json.loads(line)
-        at = parse_time(record.get('at'))
-        for entry in record.get('workers', []):
-            observed = entry.get('observed')
-            if not observed or observed.get('state') not in SETTLED:
+        for observed in json.loads(line).get('observations', []):
+            if observed.get('state') not in SETTLED:
                 continue
-            row = workers.setdefault(entry['dispatch'], {
-                'dispatch': entry['dispatch'], 'agent': observed.get('agent'),
-                'completedAt': observed.get('completedAt'), 'waitingOnHuman_while_live': {},
-                'last_live_at': None, 'first_exited_at': None})
+            row = workers.setdefault(observed['dispatch'], {
+                'dispatch': observed['dispatch'], 'agent': observed.get('agent'), 'completedAt': None,
+                'waitingOnHuman_while_live': {}, 'last_live_at': None, 'first_exited_at': None})
+            row['completedAt'] = row['completedAt'] or observed.get('completedAt')
             if observed.get('liveness') == 'live':
                 value = str(observed.get('waitingOnHuman'))
                 row['waitingOnHuman_while_live'][value] = row['waitingOnHuman_while_live'].get(value, 0) + 1
                 if row['first_exited_at'] is None:
-                    row['last_live_at'] = record['at']
+                    # It was still live when the observation started.
+                    row['last_live_at'] = observed['observed_from']
             elif observed.get('liveness') == 'exited' and row['first_exited_at'] is None:
-                row['first_exited_at'] = record['at']
+                # It had exited by the time the observation ended.
+                row['first_exited_at'] = observed['observed_to']
     rows = []
     for row in workers.values():
         done = parse_time(row['completedAt'])
@@ -288,9 +291,13 @@ def exit_report(lines):
     for row in rows:
         for value, count in row['waitingOnHuman_while_live'].items():
             values[value] = values.get(value, 0) + count
+    # Only a worker seen live after completion and later exited bounds the time to exit; one
+    # first seen already exited only says it exited before the first observation.
     return {'workers': rows, 'waitingOnHuman_while_live': values,
-            'exited': sum(1 for row in rows if row['first_exited_at']),
-            'still_live': sum(1 for row in rows if not row['first_exited_at'])}
+            'measured': sum(1 for row in rows if row['last_live_at'] and row['first_exited_at']),
+            'still_live': sum(1 for row in rows if row['last_live_at'] and not row['first_exited_at']),
+            'exited_before_first_observation': sum(1 for row in rows if row['first_exited_at'] and not row['last_live_at']),
+            'liveness_not_observed': sum(1 for row in rows if not row['first_exited_at'] and not row['last_live_at'])}
 
 
 def needs_judgement(action, reason):
@@ -301,7 +308,7 @@ def inventory(runs, apply, automations=()):
     own_terminal = os.environ.get('ORCA_TERMINAL_HANDLE')
     seat = os.environ.get('ORCA_WORKTREE_ID')
     result = {'at': datetime.now(timezone.utc).isoformat(), 'apply': apply,
-              'workers': [], 'worktrees': [], 'terminals': [], 'errors': []}
+              'workers': [], 'worktrees': [], 'terminals': [], 'observations': [], 'errors': []}
     if not own_terminal:
         result['errors'].append('ORCA_TERMINAL_HANDLE がない: 自分のターミナルを守れないので何も解放しない')
 
@@ -321,16 +328,19 @@ def inventory(runs, apply, automations=()):
             continue
         released = {w.get('terminal') for w in listed if w.get('terminalState') == 'released'}
         for item in listed:
+            before = now()
             shown = run_json(['orca', 'orchestration', 'worker-show', '--dispatch', item['dispatchId'], '--json'])
             worker = dict(item, **(shown['result'] if shown else {}))
+            observed = dict(observation(worker), observed_from=before, observed_to=now())
+            # Recorded before any skip, so that a worker seen live and later exited is measured.
+            result['observations'].append(dict(observed, dispatch=item['dispatchId']))
             action, reason = decide_worker(worker, own_terminal, released)
             if action == 'release' and not own_terminal:
                 action, reason = 'keep', '確認不能: 自分のターミナルを確かめられない'
             if action == 'skip':
                 continue
             entry = {'dispatch': item['dispatchId'], 'task': item.get('taskId'),
-                     'workspace': item.get('workspace'), 'action': action, 'reason': reason,
-                     'observed': observation(worker)}
+                     'workspace': item.get('workspace'), 'action': action, 'reason': reason}
             if action == 'release' and apply:
                 done = run_json(['orca', 'orchestration', 'worker-release', '--dispatch', item['dispatchId'], '--json'])
                 entry['done'] = bool(done and done.get('ok'))

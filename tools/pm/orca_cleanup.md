@@ -30,13 +30,13 @@ A worker of the given Runs is released (`orca orchestration worker-release`) onl
 
 ## Measuring when settled workers exit
 
-Each worker entry in the log carries `observed`: its state, liveness, activity, `waitingOnHuman`, agent and, once settled, the dispatch's `completedAt`. The owner asked for this (2026-11-12) to decide whether `waitingOnHuman: unknown` on an idle structured worker can ever be treated as safe. Until then the rule stays strict.
+Each log line carries `observations`: for every worker of the Runs, including ones skipped because their terminal is gone, its state, liveness, activity, `waitingOnHuman`, agent, the dispatch's `completedAt` once settled, and the window (`observed_from`, `observed_to`) in which it was observed. The owner asked for this (2026-11-12) to decide whether `waitingOnHuman: unknown` on an idle structured worker can ever be treated as safe. Until then the rule stays strict.
 
 ```sh
 python3 tools/pm/orca_cleanup.py --exit-report
 ```
 
-prints, per settled worker, the `waitingOnHuman` values seen while it was live and bounds on the seconds from completion to exit: from the last patrol that saw it live to the first that saw it exited. The bounds are as coarse as the patrol interval.
+prints, per settled worker, the `waitingOnHuman` values seen while it was live and bounds on the seconds from completion to exit: from the start of the last observation that saw it live to the end of the first that saw it exited. A missing `completedAt` is filled from a later observation. The bounds are as coarse as the patrol interval.
 
 ## Report
 
