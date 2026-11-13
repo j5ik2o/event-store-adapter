@@ -2,7 +2,8 @@
 """The ESA patrol, run on Spark by the patrol automation instead of by the coordinator.
 
 It runs the cleanup (orca_cleanup.py), looks at the open PRs and the issues opened since the
-last patrol in the ESA repositories, and writes to the coordinator's Run inbox only when there
+last patrol in the ESA repositories, takes an inventory of the open PRs (left mergeable for a
+day or more, too many drafts and WIP PRs in one repository), and writes to the coordinator's Run inbox only when there
 is something to report. A quiet patrol sends nothing, so the coordinator is not woken.
 """
 import argparse
@@ -16,6 +17,14 @@ from orca_cleanup import PROJECTS, run, run_json
 
 STATE = Path.home() / '.local' / 'state' / 'esa-orca-cleanup' / 'patrol.json'
 LIMIT = 1000
+STALE_HOURS = 24
+WIP_THRESHOLD = 5
+PR_QUERY = """query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) {
+  pullRequests(states: OPEN, first: 100) { totalCount nodes {
+    number title isDraft updatedAt
+    reviewThreads(first: 100) { totalCount nodes { isResolved } }
+    commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 100) { totalCount nodes {
+      ... on CheckRun { completedAt } ... on StatusContext { createdAt } } } } } } } } } } }"""
 
 
 def complete(items):
@@ -46,6 +55,74 @@ def new_issues(since):
             return None
         found += [f"{repo}#{issue['number']} {issue['title']}" for issue in issues]
     return found
+
+
+def rollup_of(pr):
+    return (((pr['commits']['nodes'] or [{}])[0].get('commit') or {}).get('statusCheckRollup') or {})
+
+
+def complete_pr(pr):
+    """Whether every thread and every check of the PR was read (the query reads up to 100)."""
+    threads = pr['reviewThreads']
+    contexts = rollup_of(pr).get('contexts') or {}
+    return (threads['totalCount'] <= len(threads['nodes'])
+            and contexts.get('totalCount', 0) <= len(contexts.get('nodes') or []))
+
+
+def ready_since(pr):
+    """When an open PR became mergeable (not a draft, every check passed, no unresolved
+    thread), taken as its last update or last check result; None when it is not mergeable."""
+    threads = pr['reviewThreads']
+    rollup = rollup_of(pr)
+    if pr['isDraft'] or rollup.get('state') != 'SUCCESS':
+        return None
+    if any(not t['isResolved'] for t in threads['nodes']):
+        return None
+    nodes = (rollup.get('contexts') or {}).get('nodes') or []
+    times = [pr['updatedAt']] + [n.get('completedAt') or n.get('createdAt') for n in nodes]
+    return max(t for t in times if t)
+
+
+def pr_health():
+    """{'repo': [{'number', 'title', 'wip', 'ready_since'}]} for every open PR, or None when a
+    repository cannot be read completely."""
+    found = {}
+    for repo in PROJECTS.values():
+        owner, name = repo.split('/')
+        data = run_json(['gh', 'api', 'graphql', '-f', f'query={PR_QUERY}', '-F', f'owner={owner}', '-F', f'name={name}'])
+        prs = ((((data or {}).get('data') or {}).get('repository') or {}).get('pullRequests'))
+        # An incomplete read is unread, not "not mergeable": the stored state must not change.
+        if prs is None or prs['totalCount'] > len(prs['nodes']) or not all(complete_pr(pr) for pr in prs['nodes']):
+            return None
+        found[repo] = [{'number': pr['number'], 'title': pr['title'],
+                        'wip': pr['isDraft'] or 'wip' in pr['title'].lower(), 'ready_since': ready_since(pr)}
+                       for pr in prs['nodes']]
+    return found
+
+
+def inventory_lines(health, reported, now):
+    """Lines for PRs left mergeable for STALE_HOURS or more and repositories with WIP_THRESHOLD
+    or more drafts and WIP PRs, each reported once per state; returns (lines, reported)."""
+    lines, keep = [], {}
+    for repo, prs in sorted(health.items()):
+        for pr in prs:
+            since = pr['ready_since']
+            if not since:
+                continue
+            hours = (now - datetime.fromisoformat(since.replace('Z', '+00:00'))).total_seconds() / 3600
+            if hours < STALE_HOURS:
+                continue
+            key = f"{repo}#{pr['number']}"
+            keep[key] = since
+            if reported.get(key) != since:
+                lines.append(f"放置: {key} {pr['title']}（マージ可能になってから {int(hours)} 時間）")
+        wip = sum(pr['wip'] for pr in prs)
+        if wip >= WIP_THRESHOLD:
+            key = f'{repo}:wip'
+            keep[key] = wip
+            if reported.get(key) != wip:
+                lines.append(f'WIP: {repo} のドラフト・WIP の PR が {wip} 件')
+    return lines, keep
 
 
 def report_lines(cleanup, prs, previous_prs, issues):
@@ -92,6 +169,13 @@ def main(argv=None):
     prs = open_prs()
     issues = new_issues(state['last_at']) if state.get('last_at') else []
     lines = report_lines(cleanup, prs, state.get('prs'), issues)
+    health = pr_health()
+    reported = state.get('inventory', {})
+    if health is None:
+        lines.append('PR の棚卸しを読めなかった')
+    else:
+        inventory, reported = inventory_lines(health, reported, datetime.now(timezone.utc))
+        lines += inventory
 
     args.log.parent.mkdir(parents=True, exist_ok=True)
     with args.log.open('a', encoding='utf-8') as log:
@@ -112,6 +196,8 @@ def main(argv=None):
             # Keep the previous PR set when this one could not be read, so a change is not lost.
             'prs': prs if prs is not None else state.get('prs'),
             'unsent': [] if sent is not None else outgoing,
+            # A stale PR or a WIP count is reported once until its state changes.
+            'inventory': reported,
         }
         args.state.parent.mkdir(parents=True, exist_ok=True)
         args.state.write_text(json.dumps(new_state, ensure_ascii=False))
