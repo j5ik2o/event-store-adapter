@@ -5,7 +5,7 @@ The session in this repository acts as the coordinator for work across the event
 
 ## Protected file: AGENTS.md
 
-`AGENTS.md` is designated as editable by humans only. Agents must not add, change, or delete it, and must not touch it even for a link-only fix. This direct instruction takes precedence over the general permission to fix links in a document. (Recorded here because the instruction "This file can only be edited by humans. AI must not edit it." was given directly by the current user.)
+`AGENTS.md` is designated as editable by Kato (加藤) only. Agents must not add, change, or delete it, and must not touch it even for a link-only fix. This direct instruction takes precedence over the general permission to fix links in a document. (Recorded here because the instruction "This file can only be edited by Kato. AI must not edit it." was given directly by the current user.)
 
 <a id="指揮役と作業者"></a>
 ## Coordinator and workers
