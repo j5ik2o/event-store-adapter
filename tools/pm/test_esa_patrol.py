@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 
 import esa_patrol
-from esa_patrol import complete, inventory_lines, ready_since, report_lines
+from esa_patrol import complete, complete_pr, inventory_lines, ready_since, report_lines
 
 
 def cleanup(**summary):
@@ -98,6 +98,26 @@ class ReadySinceTest(unittest.TestCase):
         self.assertIsNone(ready_since(pr(draft=True)))
         self.assertIsNone(ready_since(pr(state='FAILURE')))
         self.assertIsNone(ready_since(pr(resolved=(True, False))))
+
+    def test_a_pr_with_more_threads_or_checks_than_were_read_is_incomplete(self):
+        self.assertTrue(complete_pr(pr()))
+        cut_threads = pr()
+        cut_threads['reviewThreads']['totalCount'] = 101
+        cut_checks = pr()
+        cut_checks['commits']['nodes'][0]['commit']['statusCheckRollup']['contexts']['totalCount'] = 101
+        self.assertFalse(complete_pr(cut_threads))
+        self.assertFalse(complete_pr(cut_checks))
+
+    def test_an_incompletely_read_repository_makes_the_inventory_unread(self):
+        cut = dict(pr(), number=1, title='t')
+        cut['reviewThreads'] = {'totalCount': 101, 'nodes': [{'isResolved': True}]}
+        data = {'data': {'repository': {'pullRequests': {'totalCount': 1, 'nodes': [cut]}}}}
+        original = esa_patrol.run_json
+        esa_patrol.run_json = lambda args: data
+        try:
+            self.assertIsNone(esa_patrol.pr_health())
+        finally:
+            esa_patrol.run_json = original
 
 
 class InventoryTest(unittest.TestCase):

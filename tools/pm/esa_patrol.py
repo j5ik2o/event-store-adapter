@@ -57,18 +57,28 @@ def new_issues(since):
     return found
 
 
+def rollup_of(pr):
+    return (((pr['commits']['nodes'] or [{}])[0].get('commit') or {}).get('statusCheckRollup') or {})
+
+
+def complete_pr(pr):
+    """Whether every thread and every check of the PR was read (the query reads up to 100)."""
+    threads = pr['reviewThreads']
+    contexts = rollup_of(pr).get('contexts') or {}
+    return (threads['totalCount'] <= len(threads['nodes'])
+            and contexts.get('totalCount', 0) <= len(contexts.get('nodes') or []))
+
+
 def ready_since(pr):
     """When an open PR became mergeable (not a draft, every check passed, no unresolved
     thread), taken as its last update or last check result; None when it is not mergeable."""
     threads = pr['reviewThreads']
-    contexts = (((pr['commits']['nodes'] or [{}])[0].get('commit') or {}).get('statusCheckRollup') or {})
-    if pr['isDraft'] or contexts.get('state') != 'SUCCESS' or threads['totalCount'] > len(threads['nodes']):
+    rollup = rollup_of(pr)
+    if pr['isDraft'] or rollup.get('state') != 'SUCCESS':
         return None
     if any(not t['isResolved'] for t in threads['nodes']):
         return None
-    nodes = (contexts.get('contexts') or {}).get('nodes') or []
-    if (contexts.get('contexts') or {}).get('totalCount', 0) > len(nodes):
-        return None
+    nodes = (rollup.get('contexts') or {}).get('nodes') or []
     times = [pr['updatedAt']] + [n.get('completedAt') or n.get('createdAt') for n in nodes]
     return max(t for t in times if t)
 
@@ -81,7 +91,8 @@ def pr_health():
         owner, name = repo.split('/')
         data = run_json(['gh', 'api', 'graphql', '-f', f'query={PR_QUERY}', '-F', f'owner={owner}', '-F', f'name={name}'])
         prs = ((((data or {}).get('data') or {}).get('repository') or {}).get('pullRequests'))
-        if prs is None or prs['totalCount'] > len(prs['nodes']):
+        # An incomplete read is unread, not "not mergeable": the stored state must not change.
+        if prs is None or prs['totalCount'] > len(prs['nodes']) or not all(complete_pr(pr) for pr in prs['nodes']):
             return None
         found[repo] = [{'number': pr['number'], 'title': pr['title'],
                         'wip': pr['isDraft'] or 'wip' in pr['title'].lower(), 'ready_since': ready_since(pr)}
