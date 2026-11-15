@@ -1,0 +1,408 @@
+{
+  "engines": [
+    "format",
+    "lint",
+    "code-quality",
+    "ai-slop",
+    "security"
+  ],
+  "missingToolsAllowed": {
+    "ruff": "未導入のため Python の format/lint は動かない。今回の aislop 組み込みでは ruff を導入しないと決めた。",
+    "golangci-lint": "未導入のため Go の lint は動かない。今回の aislop 組み込みでは golangci-lint を導入しないと決めた。",
+    "pmd": "未導入のため Java の lint は動かない。今回の aislop 組み込みでは pmd を導入しないと決めた。"
+  },
+  "accepted": [
+    {
+      "reason": "既存の複雑度超過（tools 配下の既存スクリプト）。aislop 組み込み前からあるコードで、今回の変更対象外のため修正しない。",
+      "findings": [
+        {
+          "engine": "code-quality",
+          "rule": "complexity/file-too-large",
+          "file": "tools/conformance/reference_model.py",
+          "message": "File too large (limit: 400, flagged above 441 lines)"
+        },
+        {
+          "engine": "code-quality",
+          "rule": "complexity/file-too-large",
+          "file": "tools/conformance/validate.py",
+          "message": "File too large (limit: 400, flagged above 441 lines)"
+        },
+        {
+          "engine": "code-quality",
+          "rule": "complexity/file-too-large",
+          "file": "tools/interop/run.py",
+          "message": "File too large (limit: 400, flagged above 441 lines)"
+        },
+        {
+          "engine": "code-quality",
+          "rule": "complexity/function-too-long",
+          "file": "tools/interop/run.py",
+          "message": "Function too long (limit: 80, flagged above 88 lines)"
+        },
+        {
+          "engine": "code-quality",
+          "rule": "complexity/file-too-large",
+          "file": "tools/pm/orca_cleanup.py",
+          "message": "File too large (limit: 400, flagged above 441 lines)"
+        },
+        {
+          "engine": "code-quality",
+          "rule": "complexity/file-too-large",
+          "file": "tools/pm/thread_worktree_audit.py",
+          "message": "File too large (limit: 400, flagged above 441 lines)"
+        },
+        {
+          "engine": "code-quality",
+          "rule": "complexity/file-too-large",
+          "file": "tools/user-docs/check.py",
+          "message": "File too large (limit: 400, flagged above 441 lines)"
+        },
+        {
+          "engine": "code-quality",
+          "rule": "complexity/function-too-long",
+          "file": "tools/user-docs/check.py",
+          "message": "Function too long (limit: 80, flagged above 88 lines)"
+        }
+      ]
+    },
+    {
+      "reason": "既存の Python 製ツールの書き方（tools 配下）。aislop 組み込み前からあるコードで、今回の変更対象外のため修正しない。",
+      "findings": [
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/python-chained-dict-get",
+          "file": "tools/conformance/reference_model.py",
+          "message": "Chained `.get(..., {})` defaults hide missing-data cases."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/python-chained-dict-get",
+          "file": "tools/conformance/reference_model.py",
+          "message": "Chained `.get(..., {})` defaults hide missing-data cases."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/python-repetitive-dispatch",
+          "file": "tools/conformance/reference_model.py",
+          "message": "4 repeated branches dispatch on `kind`."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/python-chained-dict-get",
+          "file": "tools/conformance/validate.py",
+          "message": "Chained `.get(..., {})` defaults hide missing-data cases."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/python-chained-dict-get",
+          "file": "tools/conformance/validate.py",
+          "message": "Chained `.get(..., {})` defaults hide missing-data cases."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/python-chained-dict-get",
+          "file": "tools/conformance/validate.py",
+          "message": "Chained `.get(..., {})` defaults hide missing-data cases."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/python-chained-dict-get",
+          "file": "tools/conformance/validate.py",
+          "message": "Chained `.get(..., {})` defaults hide missing-data cases."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/python-chained-dict-get",
+          "file": "tools/conformance/validate.py",
+          "message": "Chained `.get(..., {})` defaults hide missing-data cases."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/python-chained-dict-get",
+          "file": "tools/conformance/validate.py",
+          "message": "Chained `.get(..., {})` defaults hide missing-data cases."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/python-chained-dict-get",
+          "file": "tools/conformance/validate.py",
+          "message": "Chained `.get(..., {})` defaults hide missing-data cases."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/python-chained-dict-get",
+          "file": "tools/conformance/validate.py",
+          "message": "Chained `.get(..., {})` defaults hide missing-data cases."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/python-chained-dict-get",
+          "file": "tools/conformance/validate.py",
+          "message": "Chained `.get(..., {})` defaults hide missing-data cases."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/python-chained-dict-get",
+          "file": "tools/pm/delegation_preflight.py",
+          "message": "Chained `.get(..., {})` defaults hide missing-data cases."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/python-chained-dict-get",
+          "file": "tools/pm/orca_cleanup.py",
+          "message": "Chained `.get(..., {})` defaults hide missing-data cases."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/python-chained-dict-get",
+          "file": "tools/pm/thread_worktree_audit.py",
+          "message": "Chained `.get(..., {})` defaults hide missing-data cases."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/python-chained-dict-get",
+          "file": "tools/pm/thread_worktree_audit.py",
+          "message": "Chained `.get(..., {})` defaults hide missing-data cases."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/python-chained-dict-get",
+          "file": "tools/pm/thread_worktree_audit.py",
+          "message": "Chained `.get(..., {})` defaults hide missing-data cases."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/python-chained-dict-get",
+          "file": "tools/pm/thread_worktree_audit.py",
+          "message": "Chained `.get(..., {})` defaults hide missing-data cases."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/python-chained-dict-get",
+          "file": "tools/spikes/dynamodb-emulators/probe.py",
+          "message": "Chained `.get(..., {})` defaults hide missing-data cases."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/python-chained-dict-get",
+          "file": "tools/spikes/dynamodb-emulators/probe.py",
+          "message": "Chained `.get(..., {})` defaults hide missing-data cases."
+        }
+      ]
+    },
+    {
+      "reason": "既存ツールにある装飾的な区切りコメント（tools 配下）。aislop 組み込み前からあるコードで、今回の変更対象外のため修正しない。",
+      "findings": [
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/narrative-comment",
+          "file": "tools/pm/orca_cleanup.py",
+          "message": "Narrative comment block (decorative separator)"
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/narrative-comment",
+          "file": "tools/pm/orca_cleanup.py",
+          "message": "Narrative comment block (decorative separator)"
+        }
+      ]
+    },
+    {
+      "reason": "誤検出。tools/release-notes/create-release-note-body.py:2 と tools/release-notes/create-release-note-header.py:2 の `# -*- coding: utf-8 -*-` は Python の encoding 宣言で、装飾的な区切りコメントではない。aislop が区切りコメントと誤認しただけなので修正しない。",
+      "findings": [
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/narrative-comment",
+          "file": "tools/release-notes/create-release-note-body.py",
+          "message": "Narrative comment block (decorative separator)"
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/narrative-comment",
+          "file": "tools/release-notes/create-release-note-header.py",
+          "message": "Narrative comment block (decorative separator)"
+        }
+      ]
+    },
+    {
+      "reason": "誤検出。tools/release-notes/create-release-note-header.py:27 の `print(header)` は、リリースノートの見出し行を標準出力へ書く処理そのもの（tools/release-notes/README.md:8,18）で、残骸のデバッグ出力ではない。aislop が残骸の print と誤認しただけなので修正しない。",
+      "findings": [
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/python-print-debug",
+          "file": "tools/release-notes/create-release-note-header.py",
+          "message": "`print()` in production code — usually a leftover debug statement."
+        }
+      ]
+    },
+    {
+      "reason": "誤検出。tools/pm/boundary_corpus.py:75 の `https://example.invalid` は `scope: synthetic` を付けた合成 fixture の URL で、実際の環境を指す固定 URL ではない。aislop が環境依存 URL と誤認しただけなので修正しない。",
+      "findings": [
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/hardcoded-url",
+          "file": "tools/pm/boundary_corpus.py",
+          "message": "Hardcoded environment URL in production code"
+        }
+      ]
+    },
+    {
+      "reason": "誤検出。tools/spikes/dynamodb-emulators/probe.py:352 の endpoint は、:350 の `docker port` 実行時出力から組み立てる値で、ファイル内で唯一の URL 候補であり固定 URL ではない。aislop が環境依存 URL と誤認しただけなので修正しない。",
+      "findings": [
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/hardcoded-url",
+          "file": "tools/spikes/dynamodb-emulators/probe.py",
+          "message": "Hardcoded environment URL in production code"
+        }
+      ]
+    },
+    {
+      "reason": "誤検出。tools/interop/drivers/jvm/Wire.java:39-40 の `System.out` は、JSON 1 行の応答をドライバのプロトコルとして書き出す処理そのもので、残骸のデバッグ出力ではない。aislop が残骸の console 出力と誤認しただけなので修正しない。",
+      "findings": [
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/console-leftover",
+          "file": "tools/interop/drivers/jvm/Wire.java",
+          "message": "System.out/System.err print left in production code"
+        }
+      ]
+    },
+    {
+      "reason": "既存の Java/Rust ドライバの書き方（tools/interop/drivers 配下）。aislop 組み込み前からあるコードで、今回の変更対象外のため修正しない。",
+      "findings": [
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/java-broad-throws",
+          "file": "tools/interop/drivers/jvm/Wire.java",
+          "message": "`apply` declares `throws Exception`, which hides the exceptions callers must handle"
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/java-broad-throws",
+          "file": "tools/interop/drivers/jvm/Wire.java",
+          "message": "`run` declares `throws Exception`, which hides the exceptions callers must handle"
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/rust-non-test-unwrap",
+          "file": "tools/interop/drivers/rust/main.rs",
+          "message": "`.unwrap()` in non-test code panics on None/Err. Surfaces as a hard crash for the caller."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/rust-non-test-unwrap",
+          "file": "tools/interop/drivers/rust/main.rs",
+          "message": "`.unwrap()` in non-test code panics on None/Err. Surfaces as a hard crash for the caller."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/rust-non-test-unwrap",
+          "file": "tools/interop/drivers/rust/main.rs",
+          "message": "`.unwrap()` in non-test code panics on None/Err. Surfaces as a hard crash for the caller."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/rust-non-test-unwrap",
+          "file": "tools/interop/drivers/rust/main.rs",
+          "message": "`.unwrap()` in non-test code panics on None/Err. Surfaces as a hard crash for the caller."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/rust-non-test-unwrap",
+          "file": "tools/interop/drivers/rust/main.rs",
+          "message": "`.unwrap()` in non-test code panics on None/Err. Surfaces as a hard crash for the caller."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/rust-non-test-unwrap",
+          "file": "tools/interop/drivers/rust/main.rs",
+          "message": "`.unwrap()` in non-test code panics on None/Err. Surfaces as a hard crash for the caller."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/rust-non-test-unwrap",
+          "file": "tools/interop/drivers/rust/main.rs",
+          "message": "`.unwrap()` in non-test code panics on None/Err. Surfaces as a hard crash for the caller."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/rust-non-test-unwrap",
+          "file": "tools/interop/drivers/rust/main.rs",
+          "message": "`.unwrap()` in non-test code panics on None/Err. Surfaces as a hard crash for the caller."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/rust-non-test-unwrap",
+          "file": "tools/interop/drivers/rust/main.rs",
+          "message": "`.unwrap()` in non-test code panics on None/Err. Surfaces as a hard crash for the caller."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/rust-non-test-unwrap",
+          "file": "tools/interop/drivers/rust/main.rs",
+          "message": "`.unwrap()` in non-test code panics on None/Err. Surfaces as a hard crash for the caller."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/rust-non-test-unwrap",
+          "file": "tools/interop/drivers/rust/main.rs",
+          "message": "`.unwrap()` in non-test code panics on None/Err. Surfaces as a hard crash for the caller."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/rust-non-test-unwrap",
+          "file": "tools/interop/drivers/rust/main.rs",
+          "message": "`.unwrap()` in non-test code panics on None/Err. Surfaces as a hard crash for the caller."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/rust-non-test-unwrap",
+          "file": "tools/interop/drivers/rust/main.rs",
+          "message": "`.unwrap()` in non-test code panics on None/Err. Surfaces as a hard crash for the caller."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/rust-non-test-unwrap",
+          "file": "tools/interop/drivers/rust/main.rs",
+          "message": "`.unwrap()` in non-test code panics on None/Err. Surfaces as a hard crash for the caller."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/rust-non-test-unwrap",
+          "file": "tools/interop/drivers/rust/main.rs",
+          "message": "`.unwrap()` in non-test code panics on None/Err. Surfaces as a hard crash for the caller."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/rust-non-test-unwrap",
+          "file": "tools/interop/drivers/rust/main.rs",
+          "message": "`.unwrap()` in non-test code panics on None/Err. Surfaces as a hard crash for the caller."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/rust-non-test-unwrap",
+          "file": "tools/interop/drivers/rust/main.rs",
+          "message": "`.unwrap()` in non-test code panics on None/Err. Surfaces as a hard crash for the caller."
+        },
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/rust-non-test-unwrap",
+          "file": "tools/interop/drivers/rust/main.rs",
+          "message": "`.unwrap()` in non-test code panics on None/Err. Surfaces as a hard crash for the caller."
+        }
+      ]
+    },
+    {
+      "reason": "誤検出。tools/interop/drivers/js/driver.mjs:5 は tools/interop/build.py:158 が設定する INTEROP_JS_LIBRARY を起点に createRequire を作り、:7 で @aws-sdk/client-dynamodb を require する。そのパッケージは tools/interop/build.py:148-149 が pnpm で用意する外部ライブラリ（sources/js）側にあり、aislop 専用のルート package.json の依存ではない。ルート package.json を置いたことでスキャン対象になり、宣言の無い依存として報告されたが、このリポジトリの依存ではないため修正しない。",
+      "findings": [
+        {
+          "engine": "ai-slop",
+          "rule": "ai-slop/hallucinated-import",
+          "file": "tools/interop/drivers/js/driver.mjs",
+          "message": "Imports \"@aws-sdk/client-dynamodb\" but it's not declared in package.json"
+        }
+      ]
+    }
+  ]
+}
