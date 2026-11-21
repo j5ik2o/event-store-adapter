@@ -6,7 +6,7 @@
   },
   "scripts": {
     "check:aislop": "node scripts/aislop-check-bootstrap.mjs check",
-    "test:aislop": "node -e \"process.exit(1)\""
+    "test:aislop": "node -e \"setTimeout(() => {}, 120000)\""
   },
   "description": "Temporary CI evidence"
 }
