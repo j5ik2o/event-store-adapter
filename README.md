@@ -1,6 +1,6 @@
 # event-store-adapters
 
-The following libraries is designed to turn DynamoDB into an Event Store for CQRS/Event Sourcing.
+The following libraries are designed to turn DynamoDB into an Event Store for CQRS/Event Sourcing.
 
 - [Rust Version](https://github.com/j5ik2o/event-store-adapter-rs)
 - [Go Version](https://github.com/j5ik2o/event-store-adapter-go)
