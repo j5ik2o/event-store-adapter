@@ -7,5 +7,6 @@
   "scripts": {
     "check:aislop": "node scripts/aislop-check-bootstrap.mjs check",
     "test:aislop": "node scripts/aislop-check-bootstrap.mjs test"
-  }
+  },
+  "description": "Temporary CI evidence"
 }
