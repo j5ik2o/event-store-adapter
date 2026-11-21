@@ -17,6 +17,46 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Verify and pin the PR test merge
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: bash
+        timeout-minutes: 2
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ || ! "$HEAD_SHA" =~ ^[0-9a-f]{40}$ || ! "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo 'Missing or invalid pull request commit metadata' >&2
+            exit 1
+          fi
+
+          matches_event() {
+            local parents
+            # Read the raw headers because a shallow checkout hides parents from git log.
+            parents=$(git cat-file commit "$1" | awk 'BEGIN { header = 1 } /^$/ { header = 0 } header && $1 == "parent" { print $2 }') || return 1
+            [[ "$parents" == "$BASE_SHA"$'\n'"$HEAD_SHA" ]]
+          }
+
+          commit=$(git rev-parse HEAD)
+          if ! matches_event "$commit"; then
+            echo "Initial checkout $commit does not match event base $BASE_SHA and head $HEAD_SHA"
+            for attempt in 1 2 3 4 5; do
+              if git fetch --no-tags --depth=1 origin "refs/pull/$PR_NUMBER/merge"; then
+                commit=$(git rev-parse FETCH_HEAD)
+                if matches_event "$commit"; then
+                  git checkout --detach "$commit"
+                  break
+                fi
+              fi
+              if [[ "$attempt" == 5 ]]; then
+                echo "No test merge matches event base $BASE_SHA and head $HEAD_SHA" >&2
+                exit 1
+              fi
+              sleep 2
+            done
+          fi
+          echo "Verified checkout $(git rev-parse HEAD) with parents $BASE_SHA $HEAD_SHA"
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
