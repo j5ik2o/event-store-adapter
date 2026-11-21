@@ -1,0 +1,12 @@
+{
+  "name": "event-store-adapter",
+  "private": true,
+  "devDependencies": {
+    "aislop": "0.20.1"
+  },
+  "scripts": {
+    "check:aislop": "node scripts/aislop-check-bootstrap.mjs check",
+    "test:aislop": "node scripts/aislop-check-bootstrap.mjs test"
+  },
+  "description": "Temporary CI evidence"
+}
