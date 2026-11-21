@@ -3,6 +3,7 @@ name: aislop check
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
 
 permissions:
@@ -27,3 +28,24 @@ jobs:
       - name: Run aislop checker tests
         run: npm run test:aislop
         timeout-minutes: 15
+
+  required-ci:
+    name: ESA Required CI
+    needs: aislop-check
+    if: ${{ always() }}
+    permissions: {}
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Require successful CI
+        if: ${{ !cancelled() }}
+        env:
+          AISLOP_RESULT: ${{ needs.aislop-check.result }}
+        run: |
+          if [[ "$AISLOP_RESULT" != success ]]; then
+            echo "Required CI did not succeed (aislop-check=$AISLOP_RESULT)" >&2
+            exit 1
+          fi
+      - name: Reject workflow cancellation
+        if: ${{ cancelled() }}
+        run: exit 1
