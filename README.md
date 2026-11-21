@@ -13,3 +13,5 @@ The following libraries is designed to turn DynamoDB into an Event Store for CQR
 - [.NET Version](https://github.com/j5ik2o/event-store-adapter-dotnet)
 
 For development, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+<!-- Temporary documentation-only fixture for PR CI. -->
