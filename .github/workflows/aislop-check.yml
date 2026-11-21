@@ -17,6 +17,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          ref: refs/heads/j5ik2o/ci-gate-evidence-stale-merge
       - name: Verify and pin the PR test merge
         if: ${{ github.event_name == 'pull_request' }}
         shell: bash
