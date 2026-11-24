@@ -38,16 +38,21 @@ echo "Current base $base_ref@$base_sha, head $head_sha"
 commit=$(git rev-parse HEAD)
 refetches=${MERGE_REFETCHES:-4}
 for ((refetch = 0; ; refetch++)); do
-  if [[ "$(parents_of "$commit")" == "$expected" ]]; then
+  if [[ -n "$commit" && "$(parents_of "$commit")" == "$expected" ]]; then
     git checkout --quiet --detach "$commit"
     echo "Verified GitHub test merge $commit with parents $base_sha $head_sha"
     exit 0
   fi
-  echo "Candidate $commit has parents $(parents_of "$commit" | tr '\n' ' ')(re-fetch $refetch/$refetches)"
+  echo "Candidate ${commit:-unavailable} does not have parents $base_sha $head_sha (re-fetch $refetch/$refetches)"
   ((refetch < refetches)) || break
   sleep "${MERGE_RETRY_SECONDS:-5}"
-  if git fetch --no-tags --depth=1 origin "refs/pull/$PR_NUMBER/merge"; then
-    commit=$(git rev-parse FETCH_HEAD)
+  # The base can move while waiting, so compare each candidate with the base tip fetched with it.
+  commit=
+  if git fetch --no-tags --depth=1 origin "+refs/heads/$base_ref:refs/remotes/origin/$base_ref" \
+    "+refs/pull/$PR_NUMBER/merge:refs/remotes/pull/merge"; then
+    base_sha=$(git rev-parse "refs/remotes/origin/$base_ref^{commit}")
+    expected="$base_sha"$'\n'"$head_sha"
+    commit=$(git rev-parse refs/remotes/pull/merge)
   fi
 done
 
@@ -57,7 +62,7 @@ git fetch --no-tags "${unshallow[@]}" origin \
   "+refs/heads/$base_ref:refs/remotes/origin/$base_ref" "+refs/pull/$PR_NUMBER/head:refs/remotes/pull/head"
 fetched_head=$(git rev-parse refs/remotes/pull/head)
 [[ "$fetched_head" == "$head_sha" ]] || fail "Fetched head $fetched_head is not $head_sha; the run for the current head decides"
-# The base can move while the candidate is re-fetched, so build on the tip fetched now.
+# The base can also move after the last candidate, so build on the tip fetched now.
 base_sha=$(git rev-parse "refs/remotes/origin/$base_ref^{commit}")
 expected="$base_sha"$'\n'"$head_sha"
 echo "GitHub test merge stays old; building the test merge of $base_ref@$base_sha and $head_sha"

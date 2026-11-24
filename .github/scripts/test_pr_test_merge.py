@@ -143,6 +143,17 @@ class PullRequestTestMergeTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(parents, [moved, self.head])
 
+    def test_rejects_a_github_candidate_on_a_base_that_moved_during_re_fetch(self):
+        self.github_merge(self.old_base, self.head)
+        on_first_base = self.commit({"a": "2\n", "b": "3\n", "old": "x\n"}, self.base, self.head)
+        moved, hook = self.move_main_during_re_fetch({"a": "2\n", "b": "1\n", "old": "x\n", "c": "1\n"})
+        hook += f"; git --git-dir='{self.origin}' update-ref refs/pull/1/merge {on_first_base}"
+        result, head, parents = self.run_script(event_base=self.base, event_head=self.head,
+                                                FIXTURE_ON_SLEEP=hook)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotEqual(head, on_first_base)
+        self.assertEqual(parents, [moved, self.head])
+
     def test_fails_when_a_base_that_moves_during_re_fetch_conflicts(self):
         self.github_merge(self.old_base, self.head)
         _, hook = self.move_main_during_re_fetch({"a": "2\n", "b": "9\n", "old": "x\n"})
