@@ -2,7 +2,7 @@ name: aislop check
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, verify/pr-ci-base]
     types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
 
