@@ -81,3 +81,4 @@ When you change the conformance data, regenerate and check it in the order given
 - Do not edit `AGENTS.md`. It is designated as editable by Kato (加藤) only, and that applies even to link-only fixes (see [CLAUDE.md](CLAUDE.md)).
 - When you change an English `X.md` that has a Japanese `X.ja.md`, change both in the same change. The first line of a Japanese version links to its English original.
 - Changing the specification or the operations policy requires the repository owner's agreement, as stated in those documents.
+
