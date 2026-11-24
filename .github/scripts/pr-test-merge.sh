@@ -6,7 +6,7 @@
 # candidate from GitHub stays old, the test merge is built here instead. A conflict fails.
 #
 # Inputs: PR_NUMBER, EVENT_HEAD_SHA, GITHUB_REPOSITORY, GH_TOKEN (for gh api).
-# Optional: MERGE_ATTEMPTS (default 4), MERGE_RETRY_SECONDS (default 5).
+# Optional: MERGE_REFETCHES (default 4), MERGE_RETRY_SECONDS (default 5).
 set -euo pipefail
 
 fail() {
@@ -36,29 +36,31 @@ expected="$base_sha"$'\n'"$head_sha"
 echo "Current base $base_ref@$base_sha, head $head_sha"
 
 commit=$(git rev-parse HEAD)
-attempts=${MERGE_ATTEMPTS:-4}
-for ((attempt = 1; ; attempt++)); do
+refetches=${MERGE_REFETCHES:-4}
+for ((refetch = 0; ; refetch++)); do
   if [[ "$(parents_of "$commit")" == "$expected" ]]; then
     git checkout --quiet --detach "$commit"
     echo "Verified GitHub test merge $commit with parents $base_sha $head_sha"
     exit 0
   fi
-  echo "Candidate $commit has parents $(parents_of "$commit" | tr '\n' ' ')(attempt $attempt/$attempts)"
-  ((attempt < attempts)) || break
+  echo "Candidate $commit has parents $(parents_of "$commit" | tr '\n' ' ')(re-fetch $refetch/$refetches)"
+  ((refetch < refetches)) || break
   sleep "${MERGE_RETRY_SECONDS:-5}"
   if git fetch --no-tags --depth=1 origin "refs/pull/$PR_NUMBER/merge"; then
     commit=$(git rev-parse FETCH_HEAD)
   fi
 done
 
-echo "GitHub test merge stays old; building the test merge of $base_sha and $head_sha"
 unshallow=()
 [[ "$(git rev-parse --is-shallow-repository)" == true ]] && unshallow=(--unshallow)
 git fetch --no-tags "${unshallow[@]}" origin \
   "+refs/heads/$base_ref:refs/remotes/origin/$base_ref" "+refs/pull/$PR_NUMBER/head:refs/remotes/pull/head"
 fetched_head=$(git rev-parse refs/remotes/pull/head)
 [[ "$fetched_head" == "$head_sha" ]] || fail "Fetched head $fetched_head is not $head_sha; the run for the current head decides"
-git cat-file -e "$base_sha^{commit}" || fail "Base $base_sha is no longer in $base_ref"
+# The base can move while the candidate is re-fetched, so build on the tip fetched now.
+base_sha=$(git rev-parse "refs/remotes/origin/$base_ref^{commit}")
+expected="$base_sha"$'\n'"$head_sha"
+echo "GitHub test merge stays old; building the test merge of $base_ref@$base_sha and $head_sha"
 tree=$(git merge-tree --write-tree "$base_sha" "$head_sha") || fail "$head_sha conflicts with $base_ref@$base_sha"
 commit=$(GIT_AUTHOR_NAME=pr-ci GIT_AUTHOR_EMAIL=pr-ci@invalid GIT_AUTHOR_DATE='@0 +0000' \
   GIT_COMMITTER_NAME=pr-ci GIT_COMMITTER_EMAIL=pr-ci@invalid GIT_COMMITTER_DATE='@0 +0000' \

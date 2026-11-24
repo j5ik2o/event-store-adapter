@@ -31,6 +31,10 @@ class PullRequestTestMergeTest(unittest.TestCase):
         bin_dir.mkdir()
         (bin_dir / "gh").write_text('#!/bin/sh\nprintf "%s\\n" "$FIXTURE_PR"\n')
         (bin_dir / "gh").chmod(0o755)
+        # Runs between re-fetches of the candidate, so a test can change the remote meanwhile.
+        (bin_dir / "sleep").write_text('#!/bin/sh\necho >> "$FIXTURE_SLEEPS"\neval "$FIXTURE_ON_SLEEP"\n')
+        (bin_dir / "sleep").chmod(0o755)
+        self.sleeps = self.root / "sleeps"
         self.path = f"{bin_dir}{os.pathsep}{os.environ['PATH']}"
 
     def git(self, cwd, *args, **kwargs):
@@ -58,7 +62,7 @@ class PullRequestTestMergeTest(unittest.TestCase):
         self.set_ref("refs/pull/1/merge", merge)
         return merge
 
-    def run_script(self, *, event_base, event_head, api_head=None, checkout=None):
+    def run_script(self, *, event_base, event_head, api_head=None, checkout=None, **extra_env):
         """Check out the event's merge as actions/checkout does, then run the script."""
         runner = self.root / "runner"
         subprocess.run(["rm", "-rf", str(runner)], check=True)
@@ -69,8 +73,10 @@ class PullRequestTestMergeTest(unittest.TestCase):
         self.git(runner, "checkout", "-q", "--detach", "FETCH_HEAD")
         env = dict(os.environ, PATH=self.path, PR_NUMBER="1", GITHUB_REPOSITORY="fixture/repo",
                    EVENT_HEAD_SHA=event_head, BASE_SHA=event_base, HEAD_SHA=event_head,
-                   MERGE_ATTEMPTS="2", MERGE_RETRY_SECONDS="0", GH_TOKEN="fixture",
-                   FIXTURE_PR=f"open\tmain\t{api_head or self.head}")
+                   MERGE_REFETCHES="1", MERGE_RETRY_SECONDS="0", GH_TOKEN="fixture",
+                   FIXTURE_PR=f"open\tmain\t{api_head or self.head}",
+                   FIXTURE_SLEEPS=str(self.sleeps), FIXTURE_ON_SLEEP="")
+        env.update(extra_env)
         result = subprocess.run(["bash", str(SCRIPT)], cwd=runner, env=env,
                                 capture_output=True, text=True, timeout=60)
         head = self.git(runner, "rev-parse", "HEAD")
@@ -105,7 +111,45 @@ class PullRequestTestMergeTest(unittest.TestCase):
         self.github_merge(self.old_base, self.head)
         first = self.run_script(event_base=self.old_base, event_head=self.head)
         second = self.run_script(event_base=self.old_base, event_head=self.head)
+        for result, _, parents in (first, second):
+            self.assert_checks_current_merge(result, parents)
         self.assertEqual(first[1], second[1])
+
+    def test_re_fetches_the_candidate_four_times_by_default(self):
+        self.github_merge(self.old_base, self.head)
+        result, _, parents = self.run_script(event_base=self.base, event_head=self.head,
+                                             MERGE_REFETCHES="")
+        self.assert_checks_current_merge(result, parents)
+        self.assertEqual(len(self.sleeps.read_text().splitlines()), 4)
+
+    def test_uses_a_github_candidate_that_becomes_current(self):
+        self.github_merge(self.old_base, self.head)
+        current = self.commit({"a": "2\n", "b": "3\n", "old": "x\n"}, self.base, self.head)
+        result, head, parents = self.run_script(
+            event_base=self.base, event_head=self.head,
+            FIXTURE_ON_SLEEP=f"git --git-dir='{self.origin}' update-ref refs/pull/1/merge {current}")
+        self.assert_checks_current_merge(result, parents)
+        self.assertEqual(head, current)
+
+    def move_main_during_re_fetch(self, files):
+        moved = self.commit(files, self.base)
+        return moved, f"git --git-dir='{self.origin}' update-ref refs/heads/main {moved}"
+
+    def test_builds_on_a_base_that_moves_during_re_fetch(self):
+        self.github_merge(self.old_base, self.head)
+        moved, hook = self.move_main_during_re_fetch({"a": "2\n", "b": "1\n", "old": "x\n", "c": "1\n"})
+        result, _, parents = self.run_script(event_base=self.base, event_head=self.head,
+                                             FIXTURE_ON_SLEEP=hook)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(parents, [moved, self.head])
+
+    def test_fails_when_a_base_that_moves_during_re_fetch_conflicts(self):
+        self.github_merge(self.old_base, self.head)
+        _, hook = self.move_main_during_re_fetch({"a": "2\n", "b": "9\n", "old": "x\n"})
+        result, _, _ = self.run_script(event_base=self.base, event_head=self.head,
+                                       FIXTURE_ON_SLEEP=hook)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("conflicts with main@", result.stderr)
 
     def test_rejects_an_event_for_an_old_head(self):
         # GitHub built the event's merge for the old head, and the head has moved since.
@@ -152,6 +196,17 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn("needs: aislop-check\n", job[1])
         self.assertIn("if: ${{ always() }}\n", job[1])
         self.assertNotIn("event.action", self.workflow)
+
+    def test_the_required_check_fails_unless_the_ci_job_succeeds(self):
+        step = re.search(r"- name: Require successful CI\n(?:        .*\n)*?        run: \|\n((?:          .*\n)+)",
+                         self.workflow)
+        self.assertIsNotNone(step)
+        script = "\n".join(line[10:] for line in step[1].splitlines())
+        for result, code in (("success", 0), ("failure", 1), ("cancelled", 1), ("skipped", 1)):
+            with self.subTest(result=result):
+                run = subprocess.run(["bash", "-c", script], env=dict(os.environ, AISLOP_RESULT=result),
+                                     capture_output=True, text=True)
+                self.assertEqual(run.returncode, code, run.stderr)
 
 
 if __name__ == "__main__":
